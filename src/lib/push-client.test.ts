@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { activateBrowserPush, SERVICE_WORKER_ACTIVATION_MESSAGE } from "./push-client";
+import { activateBrowserPush, SERVICE_WORKER_ACTIVATION_MESSAGE, syncExistingBrowserPush } from "./push-client";
 
 const publicKey = "AQID";
 
@@ -27,7 +27,7 @@ describe("browser push-registrering", () => {
     const result = await resultPromise;
 
     expect(result.ok).toBe(true);
-    expect(order).toEqual(["register", "subscribe", "save"]);
+    expect(order).toEqual(["register", "getSubscription", "subscribe", "save"]);
   });
 
   it("subscribe kaldes med en aktiv registration", async () => {
@@ -98,41 +98,120 @@ describe("browser push-registrering", () => {
       applicationServerKey: Uint8Array.from([1, 2, 3])
     });
   });
+
+  it("eksisterende subscription genbruges uden ny subscribe", async () => {
+    const order: string[] = [];
+    const registration = makeRegistration(order, true);
+    const environment = makeEnvironment({ ready: Promise.resolve(registration) });
+
+    await activateBrowserPush({
+      publicKey,
+      saveSubscription: makeSaveSubscription(order),
+      environment
+    });
+
+    expect(registration.getSubscription).toHaveBeenCalledOnce();
+    expect(registration.subscribe).not.toHaveBeenCalled();
+    expect(order).toEqual(["getSubscription", "save"]);
+  });
+
+  it("baggrundssynk spørger ikke om permission", async () => {
+    const order: string[] = [];
+    const registration = makeRegistration(order, true);
+    const requestPermission = vi.fn(async () => "granted" as NotificationPermission);
+    const environment = makeEnvironment({ ready: Promise.resolve(registration), requestPermission });
+
+    const result = await syncExistingBrowserPush({
+      saveSubscription: makeSaveSubscription(order),
+      environment
+    });
+
+    expect(result.subscription).toBe(true);
+    expect(requestPermission).not.toHaveBeenCalled();
+  });
+
+  it("iPhone uden standalone får installationsvejledning", async () => {
+    const result = await activateBrowserPush({
+      publicKey,
+      saveSubscription: makeSaveSubscription([]),
+      environment: makeEnvironment({
+        ready: Promise.resolve(makeRegistration([])),
+        userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
+        standalone: false
+      })
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      needsInstall: true,
+      message: "På iPhone skal Vagtbytte føjes til hjemmeskærmen, før push-notifikationer kan aktiveres."
+    });
+  });
+
+  it("standalone iPhone kan abonnere", async () => {
+    const order: string[] = [];
+    const registration = makeRegistration(order);
+
+    const result = await activateBrowserPush({
+      publicKey,
+      saveSubscription: makeSaveSubscription(order),
+      environment: makeEnvironment({
+        ready: Promise.resolve(registration),
+        userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
+        standalone: true
+      })
+    });
+
+    expect(result.ok).toBe(true);
+    expect(registration.subscribe).toHaveBeenCalledOnce();
+  });
 });
 
-function makeRegistration(order: string[]) {
+function makeRegistration(order: string[], existing = false) {
+  const subscriptionJson = {
+    toJSON() {
+      return {
+        endpoint: "https://push.test/sub",
+        keys: {
+          p256dh: "p256dh",
+          auth: "auth"
+        }
+      };
+    }
+  };
+  const getSubscription = vi.fn(async () => {
+    order.push("getSubscription");
+    return existing ? subscriptionJson : null;
+  });
   const subscribe = vi.fn(async () => {
     order.push("subscribe");
-    return {
-      toJSON() {
-        return {
-          endpoint: "https://push.test/sub",
-          keys: {
-            p256dh: "p256dh",
-            auth: "auth"
-          }
-        };
-      }
-    };
+    return subscriptionJson;
   });
 
   return {
     active: { state: "activated" },
+    getSubscription,
     subscribe,
-    pushManager: { subscribe }
+    pushManager: { getSubscription, subscribe }
   };
 }
 
 function makeEnvironment({
   ready,
-  onRegister
+  onRegister,
+  requestPermission,
+  userAgent = "Vitest",
+  standalone = false
 }: {
   ready: Promise<ReturnType<typeof makeRegistration>>;
   onRegister?: () => void;
+  requestPermission?: () => Promise<NotificationPermission>;
+  userAgent?: string;
+  standalone?: boolean;
 }) {
   return {
     navigator: {
-      userAgent: "Vitest",
+      userAgent,
       serviceWorker: {
         async register(scriptUrl: string, options: { scope: string }) {
           expect(scriptUrl).toBe("/sw.js");
@@ -146,13 +225,18 @@ function makeEnvironment({
       PushManager: function PushManager() {
         return undefined;
       },
-      atob: decodeBase64
+      atob: decodeBase64,
+      matchMedia() {
+        return { matches: standalone };
+      }
     },
     notification: {
-      async requestPermission() {
+      permission: "granted" as NotificationPermission,
+      requestPermission: requestPermission ?? (async function requestPermission() {
         return "granted" as NotificationPermission;
-      }
-    }
+      })
+    },
+    isStandalone: standalone
   };
 }
 

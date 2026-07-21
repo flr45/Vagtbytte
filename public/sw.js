@@ -18,6 +18,9 @@ self.addEventListener("push", (event) => {
   const options = {
     body: data.body || "Der er en ny besked i Vagtbytte.",
     icon: "/icon.svg",
+    badge: "/icon-192.png",
+    tag: data.tag || data.notificationId || undefined,
+    renotify: data.urgency === "high",
     data: {
       notificationId: data.notificationId || null,
       link: data.link || "/"

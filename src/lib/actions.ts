@@ -1317,6 +1317,39 @@ export async function sendTestNotificationAction(): Promise<ActionState> {
   return { ok: true, message: "Testnotifikationen er oprettet." };
 }
 
+export async function sendTestPushToCurrentDeviceAction(endpoint: string): Promise<ActionState> {
+  const user = await requireUser();
+  const subscription = await prisma.pushSubscription.findUnique({ where: { endpoint } });
+  if (!subscription || subscription.userId !== user.id || subscription.revokedAt) {
+    return { ok: false, message: "Denne enhed er ikke registreret til push." };
+  }
+
+  const notification = await createNotification(prisma, {
+    recipientUserId: user.id,
+    type: "TEST",
+    title: "Testnotifikation",
+    body: "Dette er en testbesked fra Vagtbytte.",
+    link: roleHome[user.role],
+    uniqueKey: `test-device:${subscription.id}:${Date.now()}`,
+    publishNow: true
+  });
+  const result = await sendPushForNotification(prisma, notification.id, { endpoint });
+
+  await prisma.auditLog.create({
+    data: {
+      actorUserId: user.id,
+      actorRole: user.role,
+      action: "TEST_PUSH_SENT_TO_DEVICE",
+      description: "Testpush blev sendt til aktuel enhed"
+    }
+  });
+
+  revalidatePath(roleHome[user.role]);
+  return result.sent > 0
+    ? { ok: true, message: "Testpush er sendt til denne enhed." }
+    : { ok: false, message: "Testpush kunne ikke sendes til denne enhed." };
+}
+
 export async function approveReturnByVcAction(
   _state: ActionState,
   formData: FormData

@@ -31,8 +31,29 @@ async function pushSender(input) {
         auth: input.auth
       }
     },
-    JSON.stringify({ title: input.title, body: input.body, link: input.link })
+    JSON.stringify({
+      notificationId: input.notificationId,
+      title: input.title,
+      body: input.body,
+      link: input.link,
+      tag: input.tag,
+      urgency: input.urgency ?? "normal"
+    }),
+    { TTL: 60 * 60, urgency: input.urgency ?? "normal" }
   );
+}
+
+function pushUrgencyForNotificationType(type) {
+  return [
+    "TRANSFER_CREATED",
+    "TRANSFER_RECEIVER_ACCEPTED",
+    "RETURN_CREATED",
+    "RETURN_ORIGINAL_ACCEPTED",
+    "TRANSFER_ACTIVATION_REMINDER",
+    "RETURN_EXECUTION_REMINDER"
+  ].includes(type)
+    ? "high"
+    : "normal";
 }
 
 async function shouldCancelScheduledNotification(prisma, notificationId) {
@@ -107,12 +128,15 @@ async function sendPushForNotification(prisma, notificationId) {
   for (const subscription of subscriptions) {
     try {
       await pushSender({
+        notificationId: notification.id,
         endpoint: subscription.endpoint,
         p256dh: subscription.p256dh,
         auth: subscription.auth,
         title: notification.title,
         body: notification.body,
-        link: notification.link
+        link: notification.link,
+        tag: notification.uniqueKey,
+        urgency: pushUrgencyForNotificationType(notification.type)
       });
       await prisma.pushDelivery.create({
         data: {

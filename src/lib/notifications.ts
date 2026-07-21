@@ -58,6 +58,8 @@ export type PushPayload = {
   title: string;
   body: string;
   link: string;
+  tag?: string;
+  urgency?: "very-low" | "low" | "normal" | "high";
 };
 
 type PushSender = (input: PushPayload) => Promise<void>;
@@ -68,7 +70,11 @@ export function setPushSenderForTests(sender: PushSender | null) {
   pushSenderForTests = sender;
 }
 
-export async function sendPushForNotification(repo: NotificationRepo, notificationId: string) {
+export async function sendPushForNotification(
+  repo: NotificationRepo,
+  notificationId: string,
+  options: { endpoint?: string } = {}
+) {
   const notification = await repo.notification.findUnique({
     where: { id: notificationId },
     include: { recipient: { include: { pushSubscriptions: true } } }
@@ -78,7 +84,9 @@ export async function sendPushForNotification(repo: NotificationRepo, notificati
     return { sent: 0, failed: 0 };
   }
 
-  const subscriptions = notification.recipient.pushSubscriptions.filter((sub) => !sub.revokedAt);
+  const subscriptions = notification.recipient.pushSubscriptions.filter(
+    (sub) => !sub.revokedAt && (!options.endpoint || sub.endpoint === options.endpoint)
+  );
 
   if (subscriptions.length === 0) {
     await repo.pushDelivery.create({
@@ -105,7 +113,9 @@ export async function sendPushForNotification(repo: NotificationRepo, notificati
         auth: subscription.auth,
         title: notification.title,
         body: notification.body,
-        link: notification.link
+        link: notification.link,
+        tag: notification.uniqueKey,
+        urgency: pushUrgencyForNotificationType(notification.type)
       });
       sent += 1;
       await repo.pushDelivery.create({
@@ -260,6 +270,18 @@ export function isPermanentPushError(error: unknown) {
   return statusCode === 404 || statusCode === 410;
 }
 
+export function pushUrgencyForNotificationType(type: NotificationType): "normal" | "high" {
+  const highUrgencyTypes: NotificationType[] = [
+    "TRANSFER_CREATED",
+    "TRANSFER_RECEIVER_ACCEPTED",
+    "RETURN_CREATED",
+    "RETURN_ORIGINAL_ACCEPTED",
+    "TRANSFER_ACTIVATION_REMINDER",
+    "RETURN_EXECUTION_REMINDER"
+  ];
+  return highUrgencyTypes.includes(type) ? "high" : "normal";
+}
+
 function configureVapid() {
   const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   const privateKey = process.env.VAPID_PRIVATE_KEY;
@@ -296,7 +318,13 @@ async function pushSender(input: PushPayload) {
       notificationId: input.notificationId,
       title: input.title,
       body: input.body,
-      link: input.link
-    })
+      link: input.link,
+      tag: input.tag,
+      urgency: input.urgency ?? "normal"
+    }),
+    {
+      TTL: 60 * 60,
+      urgency: input.urgency ?? "normal"
+    }
   );
 }

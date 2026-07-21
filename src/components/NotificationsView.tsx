@@ -1,4 +1,4 @@
-import type { Notification, PushSubscription } from "@prisma/client";
+import type { Notification } from "@prisma/client";
 import {
   dismissReadNotificationsAction,
   markAllNotificationsReadAction,
@@ -10,15 +10,23 @@ import { hasValidCaseLink, notificationTypeLabel } from "@/lib/vc-dashboard";
 import { formatDateTime } from "./TransferSummary";
 import { PushManager } from "./PushManager";
 
+type SafePushDevice = {
+  id: string;
+  deviceName: string | null;
+  lastUsedAt: Date | null;
+};
+
 export function NotificationsView({
   notifications,
   devices,
-  publicKey
+  publicKey,
+  latestDelivery
 }: {
   title: string;
   notifications: Notification[];
-  devices: PushSubscription[];
+  devices: SafePushDevice[];
   publicKey?: string;
+  latestDelivery?: { status: string; at: string | null } | null;
 }) {
   const unread = notifications.filter((item) => !item.readAt);
   const read = notifications.filter((item) => item.readAt).slice(0, 25);
@@ -36,7 +44,6 @@ export function NotificationsView({
           </button>
         </form>
       </section>
-      <PushManager publicKey={publicKey} />
       <section className="grid gap-2">
         <h2 className="text-xl font-bold">Ulæste beskeder</h2>
         {unread.length === 0 ? (
@@ -69,6 +76,7 @@ export function NotificationsView({
       </details>
       <section className="grid gap-3 rounded-lg border border-brand-line bg-white p-4">
         <h2 className="text-xl font-bold">Notifikationsindstillinger</h2>
+        <PushManager latestDelivery={latestDelivery} publicKey={publicKey} serverDeviceCount={devices.length} />
         <p className="text-sm text-zinc-600">
           På iPhone kan push kræve, at siden først er installeret på hjemmeskærmen.
         </p>

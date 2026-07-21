@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { createTransferAction, lookupTransferParticipantsAction } from "@/lib/actions";
+import { formatDateTimeLocalForConfirmation } from "@/lib/copenhagen-datetime";
 import { ActionMessage } from "./ActionMessage";
 import { SubmitButton } from "./SubmitButton";
 
@@ -57,10 +58,11 @@ export function TransferCreateForm({ defaultEmployeeNumber }: { defaultEmployeeN
             <p className="font-semibold">
               Overtager: {lookupState.receiver.name} - {lookupState.receiver.employeeNumber}
             </p>
+            <p className="font-semibold">Start: {formatDateTimeLocalForConfirmation(values.requestedStartAt)}</p>
             <p className="font-semibold">
               Forventet tilbagelevering:{" "}
               {values.expectedEndMode === "SPECIFIC_TIME"
-                ? values.expectedEndAt
+                ? formatDateTimeLocalForConfirmation(values.expectedEndAt)
                 : values.expectedEndMode === "UNTIL_SHIFT_END"
                   ? "Til vagtens slutning"
                   : "Ikke valgt"}

@@ -1,10 +1,25 @@
 import { z } from "zod";
+import { parseCopenhagenDateTimeLocal } from "./copenhagen-datetime";
 import { normalizeLoginIdentifier } from "./login-identifiers";
 import { passwordSchema } from "./passwords";
 
 const expectedEndModeSchema = z.enum(["SPECIFIC_TIME", "UNTIL_SHIFT_END"], {
   required_error: "Vælg forventet tilbagelevering"
 });
+
+const copenhagenDateTimeLocalSchema = z
+  .string({ required_error: "Tidspunkt skal udfyldes" })
+  .transform((value, context) => {
+    try {
+      return parseCopenhagenDateTimeLocal(value);
+    } catch (error) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: error instanceof Error ? error.message : "Tidspunkt skal udfyldes korrekt."
+      });
+      return z.NEVER;
+    }
+  });
 
 export const loginSchema = z.object({
   identifier: z.string().trim().min(1, "Udfyld medarbejdernummer eller brugernavn"),
@@ -45,10 +60,10 @@ const transferBaseSchema = z
   .object({
     giverEmployeeNumber: z.string().trim().min(1, "Medarbejdernummer A skal udfyldes"),
     receiverEmployeeNumber: z.string().trim().min(1, "Medarbejdernummer B skal udfyldes"),
-    requestedStartAt: z.coerce.date({ invalid_type_error: "Starttidspunkt skal udfyldes" }),
+    requestedStartAt: copenhagenDateTimeLocalSchema,
     expectedEndMode: expectedEndModeSchema,
     expectedEndAt: z
-      .union([z.coerce.date(), z.literal("")])
+      .union([copenhagenDateTimeLocalSchema, z.literal("")])
       .optional()
       .transform((value) => (value === "" || value === undefined ? null : value)),
     comment: z.string().trim().max(500, "Kommentaren må højst være 500 tegn").optional()
@@ -95,7 +110,7 @@ export const vcTransferRejectSchema = vcTransferDecisionSchema.refine(
 
 export const returnRequestCreateSchema = z.object({
   transferId: z.string().min(1),
-  requestedReturnAt: z.coerce.date({ invalid_type_error: "Ønsket tilbageleveringstidspunkt skal udfyldes" }),
+  requestedReturnAt: copenhagenDateTimeLocalSchema,
   comment: z.string().trim().max(500, "Kommentaren må højst være 500 tegn").optional()
 });
 

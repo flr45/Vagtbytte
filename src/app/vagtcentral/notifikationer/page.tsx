@@ -6,7 +6,7 @@ import { NotificationsView } from "@/components/NotificationsView";
 
 export default async function VcNotificationsPage() {
   const user = await requireRole(UserRole.VC);
-  const [notifications, devices] = await Promise.all([
+  const [notifications, devices, latestDelivery] = await Promise.all([
     prisma.notification.findMany({
       where: { recipientUserId: user.id, publishedAt: { not: null }, cancelledAt: null, dismissedAt: null },
       orderBy: { createdAt: "desc" },
@@ -14,7 +14,13 @@ export default async function VcNotificationsPage() {
     }),
     prisma.pushSubscription.findMany({
       where: { userId: user.id, revokedAt: null },
-      orderBy: { updatedAt: "desc" }
+      orderBy: { updatedAt: "desc" },
+      select: { id: true, deviceName: true, lastUsedAt: true }
+    }),
+    prisma.pushDelivery.findFirst({
+      where: { notification: { recipientUserId: user.id, type: "TEST" } },
+      orderBy: { createdAt: "desc" },
+      select: { status: true, sentAt: true, failedAt: true, createdAt: true }
     })
   ]);
 
@@ -23,6 +29,16 @@ export default async function VcNotificationsPage() {
       <TopBar title="Notifikationer" />
       <NotificationsView
         devices={devices}
+        latestDelivery={
+          latestDelivery
+            ? {
+                status: latestDelivery.status,
+                at: (latestDelivery.sentAt ?? latestDelivery.failedAt ?? latestDelivery.createdAt).toLocaleString("da-DK", {
+                  timeZone: "Europe/Copenhagen"
+                })
+              }
+            : null
+        }
         notifications={notifications}
         publicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY}
         title="Vagtcentralens notifikationer"

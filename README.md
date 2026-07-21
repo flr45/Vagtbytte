@@ -57,6 +57,10 @@ npm run dev
 
 Åbn derefter `http://localhost:3000`.
 
+## Tidszoner
+
+Alle tidspunkter fra `datetime-local`-felter fortolkes som dansk lokal tid i `Europe/Copenhagen` og gemmes derefter som UTC i databasen. Eksisterende produktionstidspunkter flyttes ikke automatisk, fordi det ikke kan afgøres sikkert, hvilke sager der er oprettet før tidszonefejlen blev rettet.
+
 ## Testlogin til lokal udvikling
 
 Hvis du bruger værdierne fra `.env.example`:

@@ -6,6 +6,7 @@ import {
   setPushSenderForTests,
   markAllRead,
   markRead,
+  pushUrgencyForNotificationType,
   sanitizePushError
 } from "./notifications";
 
@@ -120,6 +121,12 @@ describe("push-enheder", () => {
     await sendPushForNotification(repo, "notification-1");
 
     expect(ids).toEqual(["notification-1"]);
+  });
+
+  it("handlingspush sendes med high urgency", () => {
+    expect(pushUrgencyForNotificationType("TRANSFER_CREATED")).toBe("high");
+    expect(pushUrgencyForNotificationType("TRANSFER_ACTIVATION_REMINDER")).toBe("high");
+    expect(pushUrgencyForNotificationType("TEST")).toBe("normal");
   });
 });
 

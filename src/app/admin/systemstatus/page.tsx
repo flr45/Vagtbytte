@@ -17,13 +17,34 @@ export default async function AdminSystemStatusPage() {
     databaseOk = false;
   }
 
-  const [activeUsers, activePushDevices, latestWorkerHeartbeat] = await Promise.all([
+  const [activeUsers, activePushDevices, latestWorkerHeartbeat, pushStatusCounts, latestPushDeliveries] = await Promise.all([
     prisma.user.count({ where: { isActive: true } }),
     prisma.pushSubscription.count({ where: { revokedAt: null } }),
     prisma.auditLog.findFirst({
       where: { action: "NOTIFICATION_WORKER_HEARTBEAT" },
       orderBy: { createdAt: "desc" },
       select: { createdAt: true }
+    }),
+    prisma.pushDelivery.groupBy({
+      by: ["status"],
+      _count: { status: true }
+    }),
+    prisma.pushDelivery.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: {
+        status: true,
+        sentAt: true,
+        failedAt: true,
+        createdAt: true,
+        lastError: true,
+        notification: {
+          select: {
+            type: true,
+            recipient: { select: { role: true } }
+          }
+        }
+      }
     })
   ]);
   const workerLastActive = latestWorkerHeartbeat?.createdAt ?? null;
@@ -53,6 +74,45 @@ export default async function AdminSystemStatusPage() {
           <StatusCard label="Aktive brugere" value={String(activeUsers)} ok />
           <StatusCard label="Aktive push-enheder" value={String(activePushDevices)} ok />
           <StatusCard label="Build-version" value={buildVersion} ok />
+        </section>
+        <section className="rounded-lg border border-brand-line bg-white p-5 shadow-sm">
+          <h2 className="text-xl font-bold">Pushlevering</h2>
+          <div className="mt-3 grid gap-2 sm:grid-cols-4">
+            {["SENT", "FAILED", "PERMANENT_FAILURE", "NO_ACTIVE_DEVICE"].map((status) => (
+              <StatusCard
+                key={status}
+                label={status}
+                ok={status === "SENT" || status === "NO_ACTIVE_DEVICE"}
+                value={String(pushStatusCounts.find((item) => item.status === status)?._count.status ?? 0)}
+              />
+            ))}
+          </div>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[640px] text-left text-sm">
+              <thead className="border-b border-brand-line text-zinc-600">
+                <tr>
+                  <th className="py-2 pr-3">Tidspunkt</th>
+                  <th className="py-2 pr-3">Status</th>
+                  <th className="py-2 pr-3">Modtagerrolle</th>
+                  <th className="py-2 pr-3">Type</th>
+                  <th className="py-2 pr-3">Fejl</th>
+                </tr>
+              </thead>
+              <tbody>
+                {latestPushDeliveries.map((delivery) => (
+                  <tr className="border-b border-brand-line" key={`${delivery.status}-${delivery.createdAt.toISOString()}`}>
+                    <td className="py-2 pr-3">
+                      {formatDateTime(delivery.sentAt ?? delivery.failedAt ?? delivery.createdAt)}
+                    </td>
+                    <td className="py-2 pr-3 font-semibold">{delivery.status}</td>
+                    <td className="py-2 pr-3">{delivery.notification.recipient.role}</td>
+                    <td className="py-2 pr-3">{delivery.notification.type}</td>
+                    <td className="py-2 pr-3">{delivery.lastError ?? "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       </main>
     </>
