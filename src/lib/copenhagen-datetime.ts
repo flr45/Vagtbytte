@@ -11,6 +11,16 @@ const copenhagenFormatter = new Intl.DateTimeFormat("en-CA", {
   hour12: false
 });
 
+const localDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: COPENHAGEN_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false
+});
+
 export function parseCopenhagenDateTimeLocal(value: unknown) {
   if (typeof value !== "string") {
     throw new Error("Tidspunkt skal udfyldes korrekt.");
@@ -69,6 +79,32 @@ export function formatDateTimeLocalForConfirmation(value: string) {
   } catch {
     return value || "Ikke valgt";
   }
+}
+
+export function calculateCopenhagenShiftEnd(startAt: Date) {
+  const parts = Object.fromEntries(localDateFormatter.formatToParts(startAt).map((part) => [part.type, part.value]));
+  const year = Number(parts.year);
+  const month = Number(parts.month);
+  const day = Number(parts.day);
+  const hour = Number(parts.hour);
+  const minute = Number(parts.minute);
+  const localMinutes = hour * 60 + minute;
+
+  if (localMinutes < 7 * 60) {
+    return parseCopenhagenDateTimeLocal(`${parts.year}-${parts.month}-${parts.day}T07:00`);
+  }
+  if (localMinutes < 15 * 60) {
+    return parseCopenhagenDateTimeLocal(`${parts.year}-${parts.month}-${parts.day}T15:00`);
+  }
+  if (localMinutes < 23 * 60) {
+    return parseCopenhagenDateTimeLocal(`${parts.year}-${parts.month}-${parts.day}T23:00`);
+  }
+
+  const nextDay = new Date(Date.UTC(year, month - 1, day + 1));
+  const nextYear = String(nextDay.getUTCFullYear()).padStart(4, "0");
+  const nextMonth = String(nextDay.getUTCMonth() + 1).padStart(2, "0");
+  const nextDate = String(nextDay.getUTCDate()).padStart(2, "0");
+  return parseCopenhagenDateTimeLocal(`${nextYear}-${nextMonth}-${nextDate}T07:00`);
 }
 
 function matchesCopenhagenLocalTime(

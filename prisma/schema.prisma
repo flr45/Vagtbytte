@@ -108,6 +108,7 @@ model ShiftTransfer {
   requestedStartAt                 DateTime
   expectedEndMode                  ExpectedEndMode @default(UNTIL_SHIFT_END)
   expectedEndAt                    DateTime?
+  calculatedShiftEndAt             DateTime?
   comment                          String?
   status                           TransferStatus  @default(AWAITING_RECEIVER)
   createdAt                        DateTime        @default(now())
@@ -134,6 +135,7 @@ model ShiftTransfer {
   @@index([giverUserId])
   @@index([receiverUserId])
   @@index([status])
+  @@index([calculatedShiftEndAt])
   @@index([createdAt])
   @@index([activationConfirmedByUserId])
   @@index([returnExecutionConfirmedByUserId])

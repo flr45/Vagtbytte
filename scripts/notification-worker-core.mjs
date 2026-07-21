@@ -238,7 +238,99 @@ async function sendPushForNotification(prisma, notificationId) {
   }
 }
 
+async function createPublishedNotification(prisma, input, now) {
+  const existing = await prisma.notification.findUnique({ where: { uniqueKey: input.uniqueKey } });
+  if (existing) {
+    return existing;
+  }
+
+  const notification = await prisma.notification.create({
+    data: {
+      recipientUserId: input.recipientUserId,
+      shiftTransferId: input.shiftTransferId,
+      type: input.type,
+      title: input.title,
+      body: input.body,
+      link: input.link,
+      uniqueKey: input.uniqueKey,
+      publishedAt: now
+    }
+  });
+  await sendPushForNotification(prisma, notification.id);
+  return notification;
+}
+
+export async function completeDueShiftEndTransfers(prisma, now = new Date()) {
+  const transfers = await prisma.shiftTransfer.findMany({
+    where: {
+      status: "VC_APPROVED_ACTIVE",
+      expectedEndMode: "UNTIL_SHIFT_END",
+      calculatedShiftEndAt: { lte: now }
+    },
+    take: 100
+  });
+
+  let completed = 0;
+  for (const transfer of transfers) {
+    const result = await prisma.$transaction(async (tx) => {
+      const updated = await tx.shiftTransfer.updateMany({
+        where: {
+          id: transfer.id,
+          status: "VC_APPROVED_ACTIVE",
+          expectedEndMode: "UNTIL_SHIFT_END",
+          completedAt: null
+        },
+        data: {
+          status: "COMPLETED",
+          completedAt: transfer.calculatedShiftEndAt ?? now
+        }
+      });
+
+      if (updated.count !== 1) {
+        return false;
+      }
+
+      await tx.notification.updateMany({
+        where: { shiftTransferId: transfer.id, publishedAt: null, cancelledAt: null },
+        data: { cancelledAt: now }
+      });
+      await tx.auditLog.create({
+        data: {
+          action: "SHIFT_END_TRANSFER_COMPLETED",
+          targetUserId: transfer.receiverUserId,
+          description: `Vagtoverdragelse ${transfer.transferNumber} blev afsluttet ved vagtens slutning`
+        }
+      });
+      return true;
+    });
+
+    if (!result) {
+      continue;
+    }
+
+    completed += 1;
+    for (const recipientUserId of [transfer.giverUserId, transfer.receiverUserId]) {
+      await createPublishedNotification(
+        prisma,
+        {
+          recipientUserId,
+          shiftTransferId: transfer.id,
+          type: "RETURN_COMPLETED",
+          title: "Vagtoverdragelsen er afsluttet ved vagtens slutning",
+          body: "Vagtoverdragelsen er automatisk afsluttet ved næste faste vagtskifte.",
+          link: `/brandmand/anmodninger/${transfer.id}`,
+          uniqueKey: `transfer:${transfer.id}:shift-end-completed:${recipientUserId}`
+        },
+        now
+      );
+    }
+  }
+
+  return { completed };
+}
+
 export async function publishDueNotifications(prisma, now = new Date()) {
+  const shiftEnd = await completeDueShiftEndTransfers(prisma, now);
   const dueNotifications = await prisma.notification.findMany({
     where: { publishedAt: null, cancelledAt: null, scheduledFor: { lte: now } },
     orderBy: { scheduledFor: "asc" },
@@ -266,5 +358,5 @@ export async function publishDueNotifications(prisma, now = new Date()) {
     published += 1;
   }
 
-  return { published, cancelled };
+  return { published, cancelled, completedShiftEndTransfers: shiftEnd.completed };
 }

@@ -17,9 +17,18 @@ export default async function FirefighterPage() {
       orderBy: { createdAt: "desc" }
     })
   ]);
-  const activeRequestsToMe = requestsToMe.filter((transfer) => transfer.status !== "CANCELLED");
-  const activeMyCreatedRequests = myCreatedRequests.filter((transfer) => transfer.status !== "CANCELLED");
-  const cancelledTransfers = [...requestsToMe, ...myCreatedRequests].filter((transfer) => transfer.status === "CANCELLED");
+  const activeStatuses = new Set([
+    "AWAITING_RECEIVER",
+    "RECEIVER_ACCEPTED_AWAITING_VC",
+    "VC_APPROVED_AWAITING_ACTIVATION",
+    "VC_APPROVED_ACTIVE",
+    "RETURN_AWAITING_ORIGINAL",
+    "RETURN_ACCEPTED_AWAITING_VC",
+    "RETURN_APPROVED_AWAITING_EXECUTION"
+  ]);
+  const activeRequestsToMe = requestsToMe.filter((transfer) => activeStatuses.has(transfer.status));
+  const activeMyCreatedRequests = myCreatedRequests.filter((transfer) => activeStatuses.has(transfer.status));
+  const previousTransfers = [...requestsToMe, ...myCreatedRequests].filter((transfer) => !activeStatuses.has(transfer.status));
 
   return (
     <>
@@ -54,6 +63,7 @@ export default async function FirefighterPage() {
             requestedStartAt: transfer.requestedStartAt,
             expectedEndMode: transfer.expectedEndMode,
             expectedEndAt: transfer.expectedEndAt,
+            calculatedShiftEndAt: transfer.calculatedShiftEndAt,
             comment: transfer.comment,
             receiverResponseComment: transfer.receiverResponseComment,
             vcDecision: transfer.vcDecision,
@@ -74,6 +84,7 @@ export default async function FirefighterPage() {
             requestedStartAt: transfer.requestedStartAt,
             expectedEndMode: transfer.expectedEndMode,
             expectedEndAt: transfer.expectedEndAt,
+            calculatedShiftEndAt: transfer.calculatedShiftEndAt,
             comment: transfer.comment,
             receiverResponseComment: transfer.receiverResponseComment,
             vcDecision: transfer.vcDecision,
@@ -88,15 +99,16 @@ export default async function FirefighterPage() {
           <summary className="cursor-pointer text-xl font-bold">Tidligere sager</summary>
           <div className="mt-3">
             <TransferList
-              emptyText="Der er ingen tidligere annullerede sager."
-              title="Annullerede vagtoverdragelser"
-              transfers={cancelledTransfers.map((transfer) => ({
+              emptyText="Der er ingen tidligere sager."
+              title="Tidligere vagtoverdragelser"
+              transfers={previousTransfers.map((transfer) => ({
                 id: transfer.id,
                 transferNumber: transfer.transferNumber,
                 status: transfer.status,
                 requestedStartAt: transfer.requestedStartAt,
                 expectedEndMode: transfer.expectedEndMode,
                 expectedEndAt: transfer.expectedEndAt,
+                calculatedShiftEndAt: transfer.calculatedShiftEndAt,
                 comment: transfer.comment,
                 receiverResponseComment: transfer.receiverResponseComment,
                 vcDecision: transfer.vcDecision,

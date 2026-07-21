@@ -293,9 +293,12 @@ export function isExpectedEndOverdue(expectedEndAt: Date | null, now = new Date(
   return Boolean(expectedEndAt && expectedEndAt < now);
 }
 
-export function expectedEndLabel(input: { expectedEndMode: ExpectedEndMode; expectedEndAt: Date | null }, formatter: (date: Date) => string) {
+export function expectedEndLabel(
+  input: { expectedEndMode: ExpectedEndMode; expectedEndAt: Date | null; calculatedShiftEndAt?: Date | null },
+  formatter: (date: Date) => string
+) {
   if (input.expectedEndMode === "UNTIL_SHIFT_END") {
-    return "Til vagtens slutning";
+    return input.calculatedShiftEndAt ? `Til vagtens slutning - ${formatter(input.calculatedShiftEndAt)}` : "Til vagtens slutning";
   }
   return input.expectedEndAt ? formatter(input.expectedEndAt) : "Mangler tidspunkt";
 }

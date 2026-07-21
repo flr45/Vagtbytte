@@ -10,6 +10,7 @@ type PushSubscriptionJson = {
 
 type ReadyRegistration = {
   active?: unknown;
+  scope?: string;
   pushManager: {
     getSubscription(): Promise<{
       toJSON(): PushSubscriptionJson;
@@ -243,6 +244,7 @@ export async function syncExistingBrowserPush({
         permission,
         active: Boolean(registration.active),
         serviceWorkerState: registration.active ? "activated" : "Ikke aktiv",
+        serviceWorkerScope: registration.scope,
         subscription: false,
         serverRegistration: false,
         invalidSubscription: false
@@ -260,6 +262,7 @@ export async function syncExistingBrowserPush({
           permission,
           active: true,
           serviceWorkerState: "activated",
+          serviceWorkerScope: registration.scope,
           subscription: false,
           serverRegistration: false,
           invalidSubscription: true,
@@ -281,6 +284,7 @@ export async function syncExistingBrowserPush({
       permission,
       active: true,
       serviceWorkerState: "activated",
+      serviceWorkerScope: registration.scope,
       subscription: true,
       serverRegistration: true,
       invalidSubscription: false,

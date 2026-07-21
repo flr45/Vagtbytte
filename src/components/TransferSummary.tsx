@@ -9,6 +9,7 @@ export type TransferSummaryItem = {
   requestedStartAt: Date;
   expectedEndMode: ExpectedEndMode;
   expectedEndAt: Date | null;
+  calculatedShiftEndAt?: Date | null;
   comment: string | null;
   receiverResponseComment: string | null;
   vcDecision?: string | null;

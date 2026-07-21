@@ -17,7 +17,14 @@ export default async function AdminSystemStatusPage() {
     databaseOk = false;
   }
 
-  const [activeUsers, activePushDevices, latestWorkerHeartbeat, pushStatusCounts, latestPushDeliveries] = await Promise.all([
+  const [
+    activeUsers,
+    activePushDevices,
+    latestWorkerHeartbeat,
+    pushStatusCounts,
+    latestPushDeliveries,
+    latestOrdinaryPushDelivery
+  ] = await Promise.all([
     prisma.user.count({ where: { isActive: true } }),
     prisma.pushSubscription.count({ where: { revokedAt: null } }),
     prisma.auditLog.findFirst({
@@ -41,6 +48,24 @@ export default async function AdminSystemStatusPage() {
         notification: {
           select: {
             type: true,
+            recipient: { select: { role: true } }
+          }
+        }
+      }
+    }),
+    prisma.pushDelivery.findFirst({
+      where: { notification: { type: { not: "TEST" } } },
+      orderBy: { createdAt: "desc" },
+      select: {
+        status: true,
+        sentAt: true,
+        failedAt: true,
+        createdAt: true,
+        lastError: true,
+        notification: {
+          select: {
+            type: true,
+            publishedAt: true,
             recipient: { select: { role: true } }
           }
         }
@@ -77,6 +102,20 @@ export default async function AdminSystemStatusPage() {
         </section>
         <section className="rounded-lg border border-brand-line bg-white p-5 shadow-sm">
           <h2 className="text-xl font-bold">Pushlevering</h2>
+          <div className="mt-3 rounded-md bg-zinc-50 p-3 text-sm text-zinc-700">
+            <p className="font-bold text-zinc-950">Seneste almindelige push</p>
+            {latestOrdinaryPushDelivery ? (
+              <div className="mt-2 grid gap-1 break-words">
+                <p>Type: {latestOrdinaryPushDelivery.notification.type}</p>
+                <p>Modtagerrolle: {latestOrdinaryPushDelivery.notification.recipient.role}</p>
+                <p>Publiceret: {latestOrdinaryPushDelivery.notification.publishedAt ? formatDateTime(latestOrdinaryPushDelivery.notification.publishedAt) : "Nej"}</p>
+                <p>Status: {latestOrdinaryPushDelivery.status}</p>
+                <p>Fejl: {latestOrdinaryPushDelivery.lastError ?? "-"}</p>
+              </div>
+            ) : (
+              <p className="mt-2">Ingen almindelig push registreret endnu.</p>
+            )}
+          </div>
           <div className="mt-3 grid gap-2 sm:grid-cols-4">
             {["SENT", "FAILED", "PERMANENT_FAILURE", "NO_ACTIVE_DEVICE"].map((status) => (
               <StatusCard

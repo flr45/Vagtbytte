@@ -5,6 +5,7 @@ import {
   endpointHost,
   publicKeyFingerprint,
   sendPushForNotification,
+  createNotification,
   setPushSenderForTests,
   markAllRead,
   markRead,
@@ -168,6 +169,27 @@ describe("push-enheder", () => {
     expect(pushUrgencyForNotificationType("TRANSFER_ACTIVATION_REMINDER")).toBe("high");
     expect(pushUrgencyForNotificationType("TEST")).toBe("normal");
   });
+
+  it("publicerede almindelige notifikationer sender push ved oprettelse", async () => {
+    const repo = makePushRepo([
+      { id: "sub-1", endpoint: "https://push.test/ok", p256dh: "key", auth: "auth", revokedAt: null }
+    ]);
+    setPushSenderForTests(async () => undefined);
+
+    await createNotification(repo, {
+      recipientUserId: "receiver",
+      shiftTransferId: "transfer-1",
+      type: "TRANSFER_CREATED",
+      title: "Ny vagtoverdragelse",
+      body: "Kræver handling",
+      link: "/brandmand/anmodninger/transfer-1",
+      uniqueKey: "transfer:transfer-1:receiver",
+      publishNow: true
+    });
+
+    expect(repo.deliveries).toHaveLength(1);
+    expect(repo.deliveries[0].status).toBe("SENT");
+  });
 });
 
 type TestSubscription = {
@@ -181,20 +203,52 @@ type TestSubscription = {
 
 function makePushRepo(subscriptions: TestSubscription[]) {
   const deliveries: Array<{ status: string; pushSubscriptionId?: string | null; lastError?: string | null }> = [];
+  const notifications = new Map<string, {
+    id: string;
+    uniqueKey: string;
+    type?: "TRANSFER_CREATED" | "TEST";
+    title: string;
+    body: string;
+    link: string;
+    cancelledAt: Date | null;
+    publishedAt: Date | null;
+    recipient: { pushSubscriptions: TestSubscription[] };
+  }>();
+  notifications.set("notification-1", {
+    id: "notification-1",
+    uniqueKey: "notification-1",
+    type: "TEST",
+    title: "Titel",
+    body: "Besked",
+    link: "/brandmand/anmodninger/1",
+    cancelledAt: null,
+    publishedAt: new Date(),
+    recipient: { pushSubscriptions: subscriptions }
+  });
   const repo = {
     subscriptions,
     deliveries,
     notification: {
-      async findUnique() {
-        return {
-          id: "notification-1",
-          title: "Titel",
-          body: "Besked",
-          link: "/brandmand/anmodninger/1",
+      async findUnique({ where }: { where: { id?: string; uniqueKey?: string } }) {
+        if (where.id) {
+          return notifications.get(where.id) ?? null;
+        }
+        return [...notifications.values()].find((item) => item.uniqueKey === where.uniqueKey) ?? null;
+      },
+      async create({ data }: { data: { uniqueKey: string; type?: "TRANSFER_CREATED"; title: string; body: string; link: string; publishedAt: Date | null } }) {
+        const notification = {
+          id: `notification-${notifications.size + 1}`,
+          uniqueKey: data.uniqueKey,
+          type: data.type,
+          title: data.title,
+          body: data.body,
+          link: data.link,
           cancelledAt: null,
-          publishedAt: new Date(),
+          publishedAt: data.publishedAt,
           recipient: { pushSubscriptions: subscriptions }
         };
+        notifications.set(notification.id, notification);
+        return notification;
       }
     },
     pushDelivery: {

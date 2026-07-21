@@ -80,6 +80,7 @@ function serializeTransfer(
     requestedStartAt: transfer.requestedStartAt.toISOString(),
     expectedEndMode: transfer.expectedEndMode,
     expectedEndAt: transfer.expectedEndAt?.toISOString() ?? null,
+    calculatedShiftEndAt: transfer.calculatedShiftEndAt?.toISOString() ?? null,
     comment: transfer.comment,
     receiverRespondedAt: transfer.receiverRespondedAt?.toISOString() ?? null,
     receiverResponseComment: transfer.receiverResponseComment,

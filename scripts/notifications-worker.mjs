@@ -16,8 +16,10 @@ async function tick() {
         description: "Notifikations-worker var aktiv"
       }
     });
-    if (result.published || result.cancelled) {
-      console.log(`Publiceret: ${result.published}. Annulleret: ${result.cancelled}.`);
+    if (result.published || result.cancelled || result.completedShiftEndTransfers) {
+      console.log(
+        `Publiceret: ${result.published}. Annulleret: ${result.cancelled}. Vagtslut afsluttet: ${result.completedShiftEndTransfers ?? 0}.`
+      );
     }
   } catch (error) {
     console.error("Worker-fejl:", error instanceof Error ? error.message : String(error));

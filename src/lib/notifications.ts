@@ -20,12 +20,19 @@ export type NotificationInput = {
   publishNow?: boolean;
 };
 
-export async function createNotification(repo: NotificationRepo, input: NotificationInput) {
+export async function createNotification(
+  repo: NotificationRepo,
+  input: NotificationInput,
+  options: { sendPush?: boolean } = {}
+) {
   const now = new Date();
-  return repo.notification.upsert({
-    where: { uniqueKey: input.uniqueKey },
-    update: {},
-    create: {
+  const existing = await repo.notification.findUnique({ where: { uniqueKey: input.uniqueKey } });
+  if (existing) {
+    return existing;
+  }
+
+  const notification = await repo.notification.create({
+    data: {
       recipientUserId: input.recipientUserId,
       shiftTransferId: input.shiftTransferId,
       returnRequestId: input.returnRequestId,
@@ -38,6 +45,12 @@ export async function createNotification(repo: NotificationRepo, input: Notifica
       publishedAt: input.publishNow ?? !input.scheduledFor ? now : null
     }
   });
+
+  if (notification.publishedAt && options.sendPush !== false) {
+    await sendPushForNotification(repo, notification.id);
+  }
+
+  return notification;
 }
 
 export async function createNotifications(repo: NotificationRepo, inputs: NotificationInput[]) {

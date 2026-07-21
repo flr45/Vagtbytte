@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCopenhagenDateTimeLocal } from "./copenhagen-datetime";
+import { calculateCopenhagenShiftEnd, parseCopenhagenDateTimeLocal } from "./copenhagen-datetime";
 import { formatDateTime } from "@/components/TransferSummary";
 import { transferCreateSchema, returnRequestCreateSchema } from "./validation";
 
@@ -56,5 +56,29 @@ describe("datetime-local i dansk tid", () => {
 
   it("ikke-eksisterende tidspunkt ved skift til sommertid afvises", () => {
     expect(() => parseCopenhagenDateTimeLocal("2026-03-29T02:30")).toThrow("findes ikke");
+  });
+});
+
+describe("faste vagtslut i dansk tid", () => {
+  const cases = [
+    ["2026-07-21T08:30", "2026-07-21T13:00:00.000Z"],
+    ["2026-07-21T14:50", "2026-07-21T13:00:00.000Z"],
+    ["2026-07-21T18:30", "2026-07-21T21:00:00.000Z"],
+    ["2026-07-21T22:45", "2026-07-21T21:00:00.000Z"],
+    ["2026-07-21T23:30", "2026-07-22T05:00:00.000Z"],
+    ["2026-07-21T03:00", "2026-07-21T05:00:00.000Z"],
+    ["2026-07-21T15:00", "2026-07-21T21:00:00.000Z"],
+    ["2026-07-21T23:00", "2026-07-22T05:00:00.000Z"],
+    ["2026-07-21T07:00", "2026-07-21T13:00:00.000Z"]
+  ] as const;
+
+  it.each(cases)("beregner vagtslut for %s", (input, expectedIso) => {
+    expect(calculateCopenhagenShiftEnd(parseCopenhagenDateTimeLocal(input)).toISOString()).toBe(expectedIso);
+  });
+
+  it("håndterer vintertid", () => {
+    expect(calculateCopenhagenShiftEnd(parseCopenhagenDateTimeLocal("2026-01-21T23:30")).toISOString()).toBe(
+      "2026-01-22T06:00:00.000Z"
+    );
   });
 });

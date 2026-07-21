@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { UserRole, type TransferStatus } from "@prisma/client";
 import { prisma } from "./prisma";
+import { calculateCopenhagenShiftEnd } from "./copenhagen-datetime";
 import { hashPassword, verifyPassword } from "./passwords";
 import { normalizeLoginIdentifier } from "./login-identifiers";
 import {
@@ -516,6 +517,10 @@ export async function createTransferAction(
       requestedStartAt: parsed.data.requestedStartAt,
       expectedEndMode: parsed.data.expectedEndMode,
       expectedEndAt: parsed.data.expectedEndAt,
+      calculatedShiftEndAt:
+        parsed.data.expectedEndMode === "UNTIL_SHIFT_END"
+          ? calculateCopenhagenShiftEnd(parsed.data.requestedStartAt)
+          : null,
       comment: optionalText(parsed.data.comment),
       status: "AWAITING_RECEIVER"
     }
@@ -1519,7 +1524,7 @@ export async function sendTestNotificationAction(): Promise<ActionState> {
     return { ok: false, message: "Vent lidt, før du sender en ny testnotifikation." };
   }
 
-  const notification = await createNotification(prisma, {
+  await createNotification(prisma, {
     recipientUserId: user.id,
     type: "TEST",
     title: "Testnotifikation",
@@ -1528,7 +1533,6 @@ export async function sendTestNotificationAction(): Promise<ActionState> {
     uniqueKey: `test:${user.id}:${Date.now()}`,
     publishNow: true
   });
-  await sendPushForNotification(prisma, notification.id);
 
   await prisma.auditLog.create({
     data: {
@@ -1550,15 +1554,19 @@ export async function sendTestPushToCurrentDeviceAction(endpoint: string): Promi
     return { ok: false, message: "Denne enhed er ikke registreret til push." };
   }
 
-  const notification = await createNotification(prisma, {
-    recipientUserId: user.id,
-    type: "TEST",
-    title: "Testnotifikation",
-    body: "Dette er en testbesked fra Vagtbytte.",
-    link: roleHome[user.role],
-    uniqueKey: `test-device:${subscription.id}:${Date.now()}`,
-    publishNow: true
-  });
+  const notification = await createNotification(
+    prisma,
+    {
+      recipientUserId: user.id,
+      type: "TEST",
+      title: "Testnotifikation",
+      body: "Dette er en testbesked fra Vagtbytte.",
+      link: roleHome[user.role],
+      uniqueKey: `test-device:${subscription.id}:${Date.now()}`,
+      publishNow: true
+    },
+    { sendPush: false }
+  );
   const result = await sendPushForNotification(prisma, notification.id, { endpoint });
 
   await prisma.auditLog.create({

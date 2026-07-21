@@ -35,6 +35,8 @@ export function PushManager({
   const [displayModeStandalone, setDisplayModeStandalone] = useState(false);
   const [navigatorStandalone, setNavigatorStandalone] = useState(false);
   const [serviceWorkerState, setServiceWorkerState] = useState("Ikke aktiv");
+  const [serviceWorkerScope, setServiceWorkerScope] = useState("Ikke registreret");
+  const [manifestFound, setManifestFound] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const activatePush = useCallback(
@@ -72,6 +74,7 @@ export function PushManager({
       const standaloneByNavigator = Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
       setDisplayModeStandalone(standaloneByDisplayMode);
       setNavigatorStandalone(standaloneByNavigator);
+      setManifestFound(Boolean(document.querySelector('link[rel="manifest"]')));
       setInstallMessage(
         standaloneByDisplayMode || standaloneByNavigator ? null : iphoneInstallMessage(navigator.userAgent)
       );
@@ -82,6 +85,7 @@ export function PushManager({
       });
       setServiceWorkerActive(result.active);
       setServiceWorkerState(result.serviceWorkerState ?? (result.active ? "activated" : "Ikke aktiv"));
+      setServiceWorkerScope(result.serviceWorkerScope ?? "Ikke registreret");
       setHasSubscription(result.subscription);
       setServerRegistrationActive(Boolean(result.serverRegistration));
       setInvalidSubscription(Boolean(result.invalidSubscription));
@@ -174,10 +178,14 @@ export function PushManager({
       <div className="grid gap-1 rounded-md bg-zinc-50 p-3 text-sm text-zinc-700">
         <p>Browserpermission: {permissionLabel(permission)}</p>
         <p>display-mode standalone: {displayModeStandalone ? "Ja" : "Nej"}</p>
+        <p>Standalone: {displayModeStandalone || navigatorStandalone ? "Ja" : "Nej"}</p>
         <p>navigator.standalone: {navigatorStandalone ? "Ja" : "Nej"}</p>
+        <p>display-mode: {displayModeStandalone ? "standalone" : "andet"}</p>
+        <p>Manifest fundet: {manifestFound ? "Ja" : "Nej"}</p>
         <p>Notification.permission: {permission}</p>
         <p>Service worker: {serviceWorkerActive ? "Aktiv" : "Ikke aktiv"}</p>
         <p>Service worker state: {serviceWorkerState}</p>
+        <p>Service worker scope: {serviceWorkerScope}</p>
         <p>Lokal subscription endpoint: {endpoint ? "Findes" : "Findes ikke"}</p>
         <p>Pushsubscription på denne enhed: {hasSubscription ? "Aktiv" : "Mangler"}</p>
         <p>Serverregistrering: {serverRegistrationActive ? "Findes" : "Findes ikke"}</p>

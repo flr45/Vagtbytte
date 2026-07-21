@@ -33,6 +33,7 @@ export type VcDashboardTransfer = {
   requestedStartAt: string;
   expectedEndMode: "SPECIFIC_TIME" | "UNTIL_SHIFT_END";
   expectedEndAt: string | null;
+  calculatedShiftEndAt: string | null;
   comment: string | null;
   receiverRespondedAt: string | null;
   receiverResponseComment: string | null;
@@ -503,7 +504,8 @@ function currentReturnRequest(transfer: VcDashboardTransfer) {
 
 function expectedEndDisplay(transfer: VcDashboardTransfer) {
   if (transfer.expectedEndMode === "UNTIL_SHIFT_END") {
-    return "Til vagtens slutning";
+    const calculated = parseDate(transfer.calculatedShiftEndAt);
+    return calculated ? `Til vagtens slutning - ${formatDateTime(calculated)}` : "Til vagtens slutning";
   }
   const expectedEnd = parseDate(transfer.expectedEndAt);
   return expectedEnd ? formatDateTime(expectedEnd) : "Mangler tidspunkt";

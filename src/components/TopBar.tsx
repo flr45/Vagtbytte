@@ -17,10 +17,10 @@ export async function TopBar({ title }: { title: string }) {
         : roleHome.ADMIN;
 
   return (
-    <header className="border-b border-brand-line bg-white">
-      <div className="mx-auto flex min-h-16 w-full max-w-5xl items-center justify-between gap-3 px-4">
-        <p className="text-lg font-bold">{title}</p>
-        <div className="flex items-center gap-2">
+    <header className="border-b border-brand-line bg-white pt-[env(safe-area-inset-top)]">
+      <div className="mx-auto grid w-full max-w-5xl gap-3 px-[max(1rem,env(safe-area-inset-left))] py-3 pr-[max(1rem,env(safe-area-inset-right))] sm:min-h-16 sm:grid-cols-[1fr_auto] sm:items-center">
+        <p className="min-w-0 break-words text-lg font-bold">{title}</p>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           {user ? (
             <a
               className="focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-zinc-300 px-3 text-sm font-bold text-zinc-900"
@@ -36,7 +36,8 @@ export async function TopBar({ title }: { title: string }) {
               href={notificationPath}
               aria-label="Notifikationer"
             >
-              Klokke
+              <span aria-hidden="true">🔔</span>
+              <span className="sr-only">Notifikationer</span>
               {unreadCount > 0 ? (
                 <span className="ml-2 rounded-full bg-brand-red px-2 py-0.5 text-xs text-white">{unreadCount}</span>
               ) : null}
