@@ -21,8 +21,17 @@ async function tick() {
 await tick();
 const timer = setInterval(tick, intervalMs);
 
-process.on("SIGINT", async () => {
+async function shutdown(signal) {
+  console.log(`Notifikations-worker lukker ned (${signal}).`);
   clearInterval(timer);
   await prisma.$disconnect();
   process.exit(0);
+}
+
+process.on("SIGINT", () => {
+  void shutdown("SIGINT");
+});
+
+process.on("SIGTERM", () => {
+  void shutdown("SIGTERM");
 });

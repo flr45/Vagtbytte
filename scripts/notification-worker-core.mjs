@@ -144,7 +144,13 @@ export async function publishDueNotifications(prisma, now = new Date()) {
       continue;
     }
 
-    await prisma.notification.update({ where: { id: notification.id }, data: { publishedAt: now } });
+    const claimed = await prisma.notification.updateMany({
+      where: { id: notification.id, publishedAt: null, cancelledAt: null },
+      data: { publishedAt: now }
+    });
+    if (claimed.count !== 1) {
+      continue;
+    }
     await sendPushForNotification(prisma, notification.id);
     published += 1;
   }

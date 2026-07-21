@@ -16,7 +16,9 @@ npm install
 cp .env.example .env
 ```
 
-Ret eventuelt værdierne i `.env`. Til lokal udvikling bruges SQLite med `DATABASE_URL="file:./dev.db"`.
+Ret eventuelt værdierne i `.env`. Efter produktionsklargøringen bruger Prisma PostgreSQL.
+Til lokal udvikling skal `DATABASE_URL` derfor pege på en lokal eller ekstern PostgreSQL-database.
+SQLite-data fra de første lokale udviklingsfaser flyttes ikke automatisk.
 
 ## Miljøvariabler
 
@@ -31,6 +33,10 @@ Ret eventuelt værdierne i `.env`. Til lokal udvikling bruges SQLite med `DATABA
 - `VAPID_PRIVATE_KEY`
 - `VAPID_SUBJECT`
 - `NOTIFICATIONS_DISABLE_PUSH`
+- `BOOTSTRAP_ADMIN_USERNAME`
+- `BOOTSTRAP_ADMIN_PASSWORD`
+- `BOOTSTRAP_VC_USERNAME`
+- `BOOTSTRAP_VC_PASSWORD`
 
 Den rigtige `.env` skal blive lokalt og må ikke committes.
 
@@ -72,7 +78,7 @@ Admin kan ikke udgive sig for at være brandmand og får ikke adgang til vagtcen
 
 - Next.js med App Router og TypeScript
 - Tailwind CSS
-- SQLite-database via Prisma til lokal udvikling
+- PostgreSQL-database via Prisma
 - Brugere, roller, sessioner, loginforsøg og revisionslog
 - Sikker adgangskode-hashing
 - HTTP-only sessionscookie med SameSite og Secure i produktion
@@ -142,6 +148,103 @@ npm run notifications:worker
 
 Hvis push fejler eller ikke er aktiveret, fortsætter sagerne uændret inde i systemet. Produktionshosting og permanent worker opsættes senere.
 
+## Render og PostgreSQL
+
+Første online testversion oprettes med `render.yaml` i projektets rod.
+Blueprintet opretter:
+
+- `vagtbytte-db`: PostgreSQL-database
+- `vagtbytte-web`: Next.js webservice
+- `vagtbytte-worker`: separat worker til notifikationer
+
+Webservice bruger:
+
+```bash
+npm install && npm run build
+npm run db:deploy
+npm run start
+```
+
+Worker bruger:
+
+```bash
+npm install && npx prisma generate
+npm run notifications:worker
+```
+
+Render skal have disse miljøvariabler udfyldt:
+
+- `DATABASE_URL`: sættes fra Render-databasen med `fromDatabase`
+- `AUTH_SECRET`: lang hemmelig session-nøgle, kun webservice
+- `NEXT_PUBLIC_VAPID_PUBLIC_KEY`: offentlig VAPID-nøgle
+- `VAPID_PRIVATE_KEY`: privat VAPID-nøgle, må aldrig være offentlig
+- `VAPID_SUBJECT`: fx `mailto:drift@example.dk`
+- `NOTIFICATIONS_DISABLE_PUSH=false`
+- `NODE_ENV=production`
+
+Worker-planen i blueprintet er `starter`, fordi Render typisk ikke tilbyder en
+gratis permanent worker. Planen kan ændres manuelt i Render-dashboardet.
+
+### Migrationer i produktion
+
+Produktion bruger kun:
+
+```bash
+npm run db:deploy
+```
+
+Det kører `prisma migrate deploy`. Brug ikke `prisma migrate dev` eller
+`prisma migrate reset` i produktion.
+
+Den gamle SQLite-historik ligger i `prisma/migrations_sqlite_archive`.
+Den nye PostgreSQL-historik starter med `prisma/migrations/20260721190000_init_postgresql`.
+Produktionsdatabasen er tom, og lokal SQLite-data overføres ikke automatisk.
+
+### Første admin og VC
+
+Der seedes ikke testbrugere i produktion. Opret første admin og VC manuelt fra
+Render Shell efter migration:
+
+```bash
+npm run production:bootstrap
+```
+
+Kommandoen kræver:
+
+- `BOOTSTRAP_ADMIN_USERNAME`
+- `BOOTSTRAP_ADMIN_PASSWORD`
+- `BOOTSTRAP_VC_USERNAME`
+- `BOOTSTRAP_VC_PASSWORD`
+
+Den nægter at køre, hvis der allerede findes en admin eller VC. Begge konti får
+`mustChangePassword=true`, og adgangskoder logges ikke.
+
+### Health check og drift
+
+Render bruger `/api/health` som health check. Endpointet returnerer kun:
+
+```json
+{ "status": "ok" }
+```
+
+Det afslører ikke databaseadresse, miljøvariabler eller brugeroplysninger.
+
+Efter deploy kontrolleres:
+
+- webservice logs: Render-dashboard > `vagtbytte-web` > Logs
+- worker logs: Render-dashboard > `vagtbytte-worker` > Logs
+- database: Render-dashboard > `vagtbytte-db`
+- health check: åbn `https://DIN-RENDER-URL/api/health`
+
+Rollback sker fra Render-dashboardet ved at vælge en tidligere deploy for
+webservice og worker. Databasemigrationer skal vurderes særskilt før rollback.
+
+### Push på telefon
+
+Push kræver HTTPS, VAPID-nøgler og at brugeren aktiverer notifikationer fra
+notifikationssiden. På iPhone kræver webpush normalt, at webappen først er
+installeret på hjemmeskærmen.
+
 ## Kvalitetstjek
 
 ```bash
@@ -150,4 +253,4 @@ npm run lint
 npm run build
 ```
 
-Næste større trin er samlet historik, sikkerhedsgennemgang og driftshærdning.
+Næste større trin er første Render-deploy og manuel bootstrap af produktionskonti.

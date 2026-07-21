@@ -170,10 +170,13 @@ export async function publishDueNotifications(repo: NotificationRepo, now = new 
       continue;
     }
 
-    await repo.notification.update({
-      where: { id: notification.id },
+    const claimed = await repo.notification.updateMany({
+      where: { id: notification.id, publishedAt: null, cancelledAt: null },
       data: { publishedAt: now }
     });
+    if (claimed.count !== 1) {
+      continue;
+    }
     await sendPushForNotification(repo, notification.id);
     published += 1;
   }

@@ -1,0 +1,56 @@
+databases:
+  - name: vagtbytte-db
+    databaseName: vagtbytte
+    user: vagtbytte
+    plan: basic-256mb
+
+services:
+  - type: web
+    name: vagtbytte-web
+    runtime: node
+    branch: main
+    plan: starter
+    buildCommand: npm install && npm run build
+    preDeployCommand: npm run db:deploy
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vagtbytte-db
+          property: connectionString
+      - key: AUTH_SECRET
+        sync: false
+      - key: NEXT_PUBLIC_VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
+      - key: NOTIFICATIONS_DISABLE_PUSH
+        value: "false"
+      - key: NODE_ENV
+        value: production
+
+  - type: worker
+    name: vagtbytte-worker
+    runtime: node
+    branch: main
+    plan: starter
+    buildCommand: npm install && npx prisma generate
+    startCommand: npm run notifications:worker
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vagtbytte-db
+          property: connectionString
+      - key: NEXT_PUBLIC_VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
+      - key: NOTIFICATIONS_DISABLE_PUSH
+        value: "false"
+      - key: NODE_ENV
+        value: production
