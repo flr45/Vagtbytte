@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  BRANDFIGHTER
+  VC
+  ADMIN
+}
+
+model User {
+  id                 String     @id @default(cuid())
+  name               String
+  role               UserRole
+  employeeNumber     String?    @unique
+  loginIdentifier    String     @unique
+  passwordHash       String
+  isActive           Boolean    @default(true)
+  mustChangePassword Boolean    @default(false)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  lastLoginAt        DateTime?
+  sessions           Session[]
+  auditLogs          AuditLog[] @relation("ActorAuditLogs")
+  targetedAuditLogs  AuditLog[] @relation("TargetAuditLogs")
+
+  @@index([role])
+  @@index([isActive])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  tokenHash    String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  lastSeenAt   DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id           String    @id @default(cuid())
+  actorUserId  String?
+  actorRole    UserRole?
+  action       String
+  targetUserId String?
+  description  String
+  createdAt    DateTime  @default(now())
+  actor        User?     @relation("ActorAuditLogs", fields: [actorUserId], references: [id], onDelete: SetNull)
+  target       User?     @relation("TargetAuditLogs", fields: [targetUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId])
+  @@index([targetUserId])
+  @@index([createdAt])
+}
+
+model LoginAttempt {
+  id              String   @id @default(cuid())
+  identifier      String
+  ipAddress       String?
+  wasSuccessful   Boolean
+  failureReason   String?
+  createdAt       DateTime @default(now())
+
+  @@index([identifier, createdAt])
+  @@index([ipAddress, createdAt])
+}
