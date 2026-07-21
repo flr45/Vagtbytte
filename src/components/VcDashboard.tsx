@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import type { AvailabilityStatus, TransferStatus } from "@prisma/client";
 import { availabilityStatusLabel } from "@/lib/availability";
-import { statusLabel } from "@/lib/transfer-rules";
 import {
   formatCountdown,
   formatShortCountdown,
@@ -452,145 +451,200 @@ function ActionCard({
         : parseDate(returnRequest?.requestedReturnAt);
   const priority = getVcPriority(deadline, now);
   const border = {
-    green: "border-l-emerald-500 bg-emerald-50/40",
-    yellow: "border-l-amber-400 bg-amber-50/60",
-    red: "border-l-red-600 bg-red-50/30",
+    green: "border-l-emerald-500",
+    yellow: "border-l-amber-400",
+    red: "border-l-red-600",
     critical: "vc-card-pulse border-l-red-800"
   } satisfies Record<VcPriority, string>;
+  const priorityTone = {
+    green: "bg-emerald-50 text-emerald-900 ring-emerald-100",
+    yellow: "bg-amber-100 text-amber-950 ring-amber-200",
+    red: "bg-red-100 text-red-900 ring-red-200",
+    critical: "bg-red-700 text-white ring-red-800"
+  } satisfies Record<VcPriority, string>;
+  const label =
+    type === "TRANSFER"
+      ? "Ny vagtoverdragelse"
+      : type === "RETURN"
+        ? "Tilbagelevering"
+        : type === "ACTIVATION"
+          ? "Vagtskifte skal bekræftes"
+          : type === "RETURN_EXECUTION"
+            ? "Tilbagelevering skal bekræftes"
+            : "Forventet tilbagelevering";
 
   return (
-    <article className={`fade-in grid gap-4 rounded-2xl border border-white/70 border-l-8 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)] ${border[priority]}`}>
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+    <article className={`fade-in grid gap-4 rounded-2xl border border-zinc-100 border-l-8 bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.08)] sm:p-5 ${border[priority]}`}>
+      <div className="flex flex-col gap-3 rounded-xl bg-zinc-50 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-sm font-bold uppercase text-zinc-600">
-            {type === "TRANSFER"
-              ? "Ny vagtoverdragelse"
-              : type === "RETURN"
-                ? "Tilbagelevering"
-                : type === "ACTIVATION"
-                  ? "Vagtskifte skal bekræftes"
-                  : type === "RETURN_EXECUTION"
-                    ? "Tilbagelevering skal bekræftes"
-                    : "Forventet tilbagelevering"}
-          </p>
-          <h2 className="mt-1 text-2xl font-bold">{transfer.transferNumber}</h2>
+          <p className="text-xs font-black uppercase text-zinc-500">{label}</p>
+          <h2 className="mt-1 text-xl font-black text-zinc-950">{transfer.transferNumber}</h2>
         </div>
         <div className="flex flex-wrap gap-2">
           <StatusBadge status={transfer.status} />
-          <span className="rounded-full bg-zinc-100 px-3 py-1 text-sm font-bold text-zinc-800">
+          <span className={`rounded-full px-3 py-1 text-sm font-black ring-1 ${priorityTone[priority]}`}>
             {priorityLabel(priority, deadline, now)}
           </span>
         </div>
       </div>
-      <div className="grid w-fit gap-1 rounded-2xl border border-zinc-100 bg-white/80 px-4 py-3 shadow-sm">
-        <p className="text-xs font-bold uppercase text-zinc-500">
-          {deadline && deadline.getTime() <= now.getTime() ? "Handling" : "Handling om"}
-        </p>
-        <p className="text-2xl font-black text-zinc-950">{formatShortCountdown(deadline, now)}</p>
-      </div>
+      <TimeOverview transfer={transfer} returnRequest={returnRequest} deadline={deadline} now={now} type={type} />
+      <PeopleAndStatus transfer={transfer} returnRequest={returnRequest} type={type} />
       {type === "TRANSFER" || type === "ACTIVATION" ? (
-        <TransferDetails deadline={deadline} now={now} transfer={transfer} />
+        <TransferDetails transfer={transfer} />
       ) : type === "EXPECTED_END" ? (
-        <ExpectedEndDetails deadline={deadline} now={now} transfer={transfer} />
+        <ExpectedEndDetails transfer={transfer} />
       ) : (
-        <ReturnDetails deadline={deadline} now={now} returnRequest={returnRequest} transfer={transfer} />
+        <ReturnDetails returnRequest={returnRequest} />
       )}
-      {type === "TRANSFER" ? (
-        <VcTransferDecisionForms
-          confirmationText={`Vil du godkende denne vagtoverdragelse?\n${transfer.giverNameSnapshot} til ${transfer.receiverNameSnapshot}\nStart: ${formatDateTime(parseDate(transfer.requestedStartAt) ?? new Date())}`}
-          direct
-          transferId={transfer.id}
-        />
-      ) : type === "ACTIVATION" ? (
-        <VcTransferActivationForm
-          confirmationText={`Vil du bekræfte, at vagtskiftet er udført?\n${transfer.giverNameSnapshot} til ${transfer.receiverNameSnapshot}\nTidspunkt: ${formatDateTime(parseDate(transfer.requestedStartAt) ?? new Date())}`}
-          transferId={transfer.id}
-        />
-      ) : type === "RETURN_EXECUTION" && returnRequest ? (
-        <VcReturnExecutionForm
-          confirmationText={`Vil du bekræfte, at tilbageleveringen er udført?\n${transfer.receiverNameSnapshot} tilbageleverer til ${transfer.giverNameSnapshot}\nTidspunkt: ${formatDateTime(parseDate(returnRequest.requestedReturnAt) ?? new Date())}`}
-          returnRequestId={returnRequest.id}
-        />
-      ) : type === "EXPECTED_END" ? (
-        <VcExpectedReturnExecutionForm
-          confirmationText={`Vil du bekræfte, at vagten er tilbageleveret?\n${transfer.receiverNameSnapshot} tilbageleverer til ${transfer.giverNameSnapshot}\nTidspunkt: ${formatDateTime(parseDate(transfer.expectedEndAt) ?? new Date())}`}
-          transferId={transfer.id}
-        />
-      ) : type === "RETURN" && returnRequest ? (
-        <VcReturnDecisionForms
-          confirmationText={`Vil du godkende denne tilbagelevering?\n${transfer.receiverNameSnapshot} tilbageleverer til ${transfer.giverNameSnapshot}\nTidspunkt: ${formatDateTime(parseDate(returnRequest.requestedReturnAt) ?? new Date())}`}
-          direct
-          returnRequestId={returnRequest.id}
-        />
-      ) : null}
-      <Link className="app-button-secondary w-full text-sm sm:w-fit" href={`/vagtcentral/sager/${transfer.id}`}>
-        Detaljer
-      </Link>
+      <div className="grid gap-3 border-t border-zinc-100 pt-4">
+        <h3 className="text-sm font-black uppercase text-zinc-500">Handlinger</h3>
+        {type === "TRANSFER" ? (
+          <VcTransferDecisionForms
+            confirmationText={`Vil du godkende denne vagtoverdragelse?\n${transfer.giverNameSnapshot} til ${transfer.receiverNameSnapshot}\nStart: ${formatDateTime(parseDate(transfer.requestedStartAt) ?? new Date())}`}
+            direct
+            transferId={transfer.id}
+          />
+        ) : type === "ACTIVATION" ? (
+          <VcTransferActivationForm
+            confirmationText={`Vil du bekræfte, at vagtskiftet er udført?\n${transfer.giverNameSnapshot} til ${transfer.receiverNameSnapshot}\nTidspunkt: ${formatDateTime(parseDate(transfer.requestedStartAt) ?? new Date())}`}
+            transferId={transfer.id}
+          />
+        ) : type === "RETURN_EXECUTION" && returnRequest ? (
+          <VcReturnExecutionForm
+            confirmationText={`Vil du bekræfte, at tilbageleveringen er udført?\n${transfer.receiverNameSnapshot} tilbageleverer til ${transfer.giverNameSnapshot}\nTidspunkt: ${formatDateTime(parseDate(returnRequest.requestedReturnAt) ?? new Date())}`}
+            returnRequestId={returnRequest.id}
+          />
+        ) : type === "EXPECTED_END" ? (
+          <VcExpectedReturnExecutionForm
+            confirmationText={`Vil du bekræfte, at vagten er tilbageleveret?\n${transfer.receiverNameSnapshot} tilbageleverer til ${transfer.giverNameSnapshot}\nTidspunkt: ${formatDateTime(parseDate(transfer.expectedEndAt) ?? new Date())}`}
+            transferId={transfer.id}
+          />
+        ) : type === "RETURN" && returnRequest ? (
+          <VcReturnDecisionForms
+            confirmationText={`Vil du godkende denne tilbagelevering?\n${transfer.receiverNameSnapshot} tilbageleverer til ${transfer.giverNameSnapshot}\nTidspunkt: ${formatDateTime(parseDate(returnRequest.requestedReturnAt) ?? new Date())}`}
+            direct
+            returnRequestId={returnRequest.id}
+          />
+        ) : null}
+        <Link className="app-button-secondary w-full text-sm sm:w-fit" href={`/vagtcentral/sager/${transfer.id}`}>
+          Detaljer og historik
+        </Link>
+      </div>
     </article>
   );
 }
 
-function TransferDetails({ transfer, deadline, now }: { transfer: VcDashboardTransfer; deadline: Date | null; now: Date }) {
-  return (
-    <div className="grid gap-3 text-sm text-zinc-700 md:grid-cols-2">
-      <Detail label="Status" value={statusLabel(transfer.status)} />
-      <Detail label="Afgiver" value={`${transfer.giverNameSnapshot} - ${transfer.giverEmployeeNumberSnapshot}`} />
-      <Detail label="Overtager" value={`${transfer.receiverNameSnapshot} - ${transfer.receiverEmployeeNumberSnapshot}`} />
-      <Detail label="Ønsket start" value={deadline ? formatDateTime(deadline) : "Mangler tidspunkt"} />
-      <Detail label="Nedtælling" value={formatCountdown(deadline, now)} strong />
-      <Detail label="Forventet tilbagelevering" value={expectedEndDisplay(transfer)} />
-      <Detail label="Kommentar fra A" value={transfer.comment || "Ingen kommentar"} />
-      <Detail label="B accepterede" value={transfer.receiverRespondedAt ? formatDateTime(parseDate(transfer.receiverRespondedAt) ?? new Date()) : "Ikke registreret"} />
-      <Detail label="Kommentar fra B" value={transfer.receiverResponseComment || "Ingen kommentar"} />
-      <Detail label="Afventet VC" value={transfer.receiverRespondedAt ? formatCountdown(parseDate(transfer.receiverRespondedAt), now).replace("Overskredet med", "") : "Ikke registreret"} />
-      <p className="rounded-md bg-amber-50 p-3 font-semibold text-amber-950 md:col-span-2">
-        Overdragelsen er ikke gyldig, før vagtcentralen godkender den.
-      </p>
-    </div>
-  );
-}
-
-function ExpectedEndDetails({ transfer, deadline, now }: { transfer: VcDashboardTransfer; deadline: Date | null; now: Date }) {
-  return (
-    <div className="grid gap-3 text-sm text-zinc-700 md:grid-cols-2">
-      <Detail label="Afgiver" value={`${transfer.giverNameSnapshot} - ${transfer.giverEmployeeNumberSnapshot}`} />
-      <Detail label="Overtager" value={`${transfer.receiverNameSnapshot} - ${transfer.receiverEmployeeNumberSnapshot}`} />
-      <Detail label="Forventet tilbagelevering" value={deadline ? formatDateTime(deadline) : "Mangler tidspunkt"} />
-      <Detail label="Nedtælling" value={formatCountdown(deadline, now)} strong />
-      <Detail label="Aktuel status" value={statusLabel(transfer.status)} />
-      <p className="rounded-md bg-red-50 p-3 font-semibold text-red-950 md:col-span-2">
-        A og B har accepteret tilbageleveringen i den oprindelige sag. Bekræft udførelsen, når vagten er tilbageleveret.
-      </p>
-    </div>
-  );
-}
-
-function ReturnDetails({
+function TimeOverview({
   transfer,
   returnRequest,
   deadline,
-  now
+  now,
+  type
 }: {
   transfer: VcDashboardTransfer;
   returnRequest?: VcDashboardReturnRequest;
   deadline: Date | null;
   now: Date;
+  type: "TRANSFER" | "RETURN" | "EXPECTED_END" | "ACTIVATION" | "RETURN_EXECUTION";
+}) {
+  const awaitingSince =
+    type === "TRANSFER"
+      ? parseDate(transfer.receiverRespondedAt)
+      : type === "RETURN"
+        ? parseDate(returnRequest?.originalRespondedAt)
+        : type === "ACTIVATION"
+          ? parseDate(transfer.vcDecidedAt ?? transfer.updatedAt)
+          : type === "EXPECTED_END"
+            ? parseDate(transfer.activatedAt)
+            : parseDate(returnRequest?.vcDecidedAt ?? returnRequest?.updatedAt);
+  const expected =
+    type === "RETURN" || type === "RETURN_EXECUTION"
+      ? deadline
+      : type === "EXPECTED_END"
+        ? deadline
+        : parseDate(transfer.expectedEndAt) ?? parseDate(transfer.calculatedShiftEndAt);
+
+  return (
+    <section className="grid gap-2">
+      <h3 className="text-sm font-black uppercase text-zinc-500">Tidsoversigt</h3>
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <Metric label="Ønsket start" value={formatDateTime(parseDate(transfer.requestedStartAt) ?? new Date())} />
+        <Metric label="Forventet tilbagelevering" value={expected ? formatDateTime(expected) : expectedEndDisplay(transfer)} />
+        <Metric label="Nedtælling" strong value={formatCountdown(deadline, now)} />
+        <Metric label="Afventet VC" value={awaitingSince ? formatElapsed(awaitingSince, now) : "Ikke registreret"} />
+      </div>
+    </section>
+  );
+}
+
+function PeopleAndStatus({
+  transfer,
+  returnRequest,
+  type
+}: {
+  transfer: VcDashboardTransfer;
+  returnRequest?: VcDashboardReturnRequest;
+  type: "TRANSFER" | "RETURN" | "EXPECTED_END" | "ACTIVATION" | "RETURN_EXECUTION";
 }) {
   return (
-    <div className="grid gap-3 text-sm text-zinc-700 md:grid-cols-2">
-      <Detail label="Afgiver" value={`${transfer.giverNameSnapshot} - ${transfer.giverEmployeeNumberSnapshot}`} />
-      <Detail label="Overtager" value={`${transfer.receiverNameSnapshot} - ${transfer.receiverEmployeeNumberSnapshot}`} />
-      <Detail label="Tilbageleveres til" value={`${transfer.giverNameSnapshot} - ${transfer.giverEmployeeNumberSnapshot}`} />
-      <Detail label="Oprindelig overdragelse" value={formatDateTime(parseDate(transfer.requestedStartAt) ?? new Date())} />
-      <Detail label="Ønsket tilbagelevering" value={deadline ? formatDateTime(deadline) : "Mangler tidspunkt"} />
-      <Detail label="Nedtælling" value={formatCountdown(deadline, now)} strong />
-      <Detail label="Kommentar fra B" value={returnRequest?.comment || "Ingen kommentar"} />
-      <Detail label="A accepterede" value={returnRequest?.originalRespondedAt ? formatDateTime(parseDate(returnRequest.originalRespondedAt) ?? new Date()) : "Ikke registreret"} />
-      <Detail label="Kommentar fra A" value={returnRequest?.originalResponseComment || "Ingen kommentar"} />
-      <p className="rounded-md bg-amber-50 p-3 font-semibold text-amber-950 md:col-span-2">
-        Den oprindelige overdragelse fortsætter, indtil vagtcentralen godkender tilbageleveringen.
-      </p>
-    </div>
+    <section className="grid gap-3 lg:grid-cols-2">
+      <div className="rounded-xl border border-zinc-100 bg-white p-4">
+        <h3 className="text-sm font-black uppercase text-zinc-500">Overdragelse</h3>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+          <PersonBlock label="Afgiver" name={transfer.giverNameSnapshot} number={transfer.giverEmployeeNumberSnapshot} />
+          <PersonBlock label="Overtager" name={transfer.receiverNameSnapshot} number={transfer.receiverEmployeeNumberSnapshot} />
+        </div>
+      </div>
+      <div className="rounded-xl border border-zinc-100 bg-white p-4">
+        <h3 className="text-sm font-black uppercase text-zinc-500">Statusforløb</h3>
+        <StatusTimeline transfer={transfer} returnRequest={returnRequest} type={type} />
+      </div>
+    </section>
+  );
+}
+
+function TransferDetails({ transfer }: { transfer: VcDashboardTransfer }) {
+  return (
+    <section className="grid gap-3">
+      <CommentsPanel
+        items={[
+          { label: "Kommentar fra A", value: transfer.comment },
+          { label: "Kommentar fra B", value: transfer.receiverResponseComment }
+        ]}
+      />
+      <InfoBar text="Overdragelsen er ikke gyldig, før vagtcentralen godkender den." />
+    </section>
+  );
+}
+
+function ExpectedEndDetails({ transfer }: { transfer: VcDashboardTransfer }) {
+  return (
+    <section className="grid gap-3">
+      <CommentsPanel
+        items={[
+          { label: "Kommentar fra A", value: transfer.comment },
+          { label: "Kommentar fra B", value: transfer.receiverResponseComment }
+        ]}
+      />
+      <InfoBar
+        tone="red"
+        text="A og B har accepteret tilbageleveringen i den oprindelige sag. Bekræft udførelsen, når vagten er tilbageleveret."
+      />
+    </section>
+  );
+}
+
+function ReturnDetails({ returnRequest }: { returnRequest?: VcDashboardReturnRequest }) {
+  return (
+    <section className="grid gap-3">
+      <CommentsPanel
+        items={[
+          { label: "Kommentar fra B", value: returnRequest?.comment },
+          { label: "Kommentar fra A", value: returnRequest?.originalResponseComment }
+        ]}
+      />
+      <InfoBar text="Den oprindelige overdragelse fortsætter, indtil vagtcentralen godkender tilbageleveringen." />
+    </section>
   );
 }
 
@@ -658,13 +712,100 @@ function EmptyState({ text }: { text: string }) {
   );
 }
 
-function Detail({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+function Metric({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
   return (
-    <div className="rounded-md bg-zinc-50 p-3">
+    <div className="rounded-xl border border-zinc-100 bg-white p-3">
       <p className="text-xs font-bold uppercase text-zinc-500">{label}</p>
-      <p className={`mt-1 ${strong ? "text-lg font-bold text-zinc-950" : "font-semibold text-zinc-800"}`}>{value}</p>
+      <p className={`mt-1 leading-tight ${strong ? "text-lg font-black text-zinc-950" : "font-bold text-zinc-800"}`}>{value}</p>
     </div>
   );
+}
+
+function PersonBlock({ label, name, number }: { label: string; name: string; number: string }) {
+  return (
+    <div className="rounded-xl bg-zinc-50 p-3">
+      <p className="text-xs font-black uppercase text-zinc-500">{label}</p>
+      <p className="mt-1 text-base font-black text-zinc-950">{name}</p>
+      <p className="mt-0.5 text-sm font-semibold text-zinc-600">{number}</p>
+    </div>
+  );
+}
+
+function StatusTimeline({
+  transfer,
+  returnRequest,
+  type
+}: {
+  transfer: VcDashboardTransfer;
+  returnRequest?: VcDashboardReturnRequest;
+  type: "TRANSFER" | "RETURN" | "EXPECTED_END" | "ACTIVATION" | "RETURN_EXECUTION";
+}) {
+  const steps =
+    type === "RETURN" || type === "RETURN_EXECUTION"
+      ? [
+          { label: "Oprettet", at: parseDate(returnRequest?.createdAt), done: Boolean(returnRequest?.createdAt) },
+          { label: "A accepterede", at: parseDate(returnRequest?.originalRespondedAt), done: Boolean(returnRequest?.originalRespondedAt) },
+          { label: "Afventer VC", at: null, done: type === "RETURN" },
+          { label: "Godkendt", at: parseDate(returnRequest?.vcDecidedAt), done: Boolean(returnRequest?.vcDecidedAt) }
+        ]
+      : [
+          { label: "Oprettet", at: parseDate(transfer.requestedStartAt), done: true },
+          { label: "B accepterede", at: parseDate(transfer.receiverRespondedAt), done: Boolean(transfer.receiverRespondedAt) },
+          { label: "Afventer VC", at: null, done: transfer.status === "RECEIVER_ACCEPTED_AWAITING_VC" },
+          { label: "Godkendt", at: parseDate(transfer.vcDecidedAt), done: Boolean(transfer.vcDecidedAt) || transfer.status === "VC_APPROVED_ACTIVE" }
+        ];
+
+  const firstPendingIndex = steps.findIndex((step) => !step.done);
+  const currentIndex = firstPendingIndex === -1 ? steps.length - 1 : firstPendingIndex;
+
+  return (
+    <ol className="mt-3 grid gap-2">
+      {steps.map((step, index) => {
+        const isCurrent = index === currentIndex || (step.done && index === steps.length - 1);
+        return (
+          <li className="grid grid-cols-[auto_1fr_auto] items-center gap-2 text-sm" key={`${step.label}-${index}`}>
+            <span
+              className={`size-2.5 rounded-full ${
+                isCurrent ? "bg-brand-red" : step.done ? "bg-emerald-500" : "bg-zinc-300"
+              }`}
+            />
+            <span className={isCurrent ? "font-black text-zinc-950" : step.done ? "font-semibold text-zinc-700" : "font-semibold text-zinc-400"}>
+              {step.label}
+            </span>
+            <span className="text-xs font-semibold text-zinc-500">{step.at ? formatShortTime(step.at) : ""}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function CommentsPanel({ items }: { items: Array<{ label: string; value?: string | null }> }) {
+  return (
+    <section className="rounded-xl border border-zinc-100 bg-white p-4">
+      <h3 className="text-sm font-black uppercase text-zinc-500">Kommentarer</h3>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        {items.map((item) => (
+          <div className="rounded-xl bg-zinc-50 p-3" key={item.label}>
+            <p className="text-xs font-black uppercase text-zinc-500">{item.label}</p>
+            <p className="mt-1 text-sm font-semibold text-zinc-800">{item.value?.trim() || "Ingen kommentar"}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function InfoBar({ text, tone = "amber" }: { text: string; tone?: "amber" | "red" }) {
+  const className =
+    tone === "red"
+      ? "rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-950"
+      : "rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-950";
+  return <p className={className}>{text}</p>;
+}
+
+function formatElapsed(from: Date, now: Date) {
+  return formatCountdown(from, now).replace("Overskredet med ", "").replace("Om ", "");
 }
 
 function currentReturnRequest(transfer: VcDashboardTransfer) {

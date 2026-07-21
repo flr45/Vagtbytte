@@ -36,22 +36,30 @@ export function VcTransferDecisionForms({
           }
         }}
       >
+        <div>
+          <h4 className="text-lg font-black text-emerald-950">Godkend vagtoverdragelse</h4>
+          <p className="mt-1 text-sm font-semibold text-emerald-800">Kommentar er valgfri</p>
+        </div>
         <input name="transferId" type="hidden" value={transferId} />
-        <CommentField label="Kommentar ved godkendelse" />
+        <CommentField label="Kommentar" />
         <ActionMessage message={approveState.message} ok={approveState.ok} />
         <SubmitButton pendingText="Godkender...">Godkend vagtoverdragelse</SubmitButton>
       </form>
       <form
         action={rejectAction}
-        className="grid gap-3 rounded-md border border-zinc-300 bg-white p-4"
+        className="grid gap-3 rounded-2xl border border-red-100 bg-white p-4"
         onSubmit={(event) => {
           if (!window.confirm("Vil du afvise denne vagtoverdragelse?")) {
             event.preventDefault();
           }
         }}
       >
+        <div>
+          <h4 className="text-lg font-black text-red-950">Afvis vagtoverdragelse</h4>
+          <p className="mt-1 text-sm font-semibold text-red-800">Begrundelse er påkrævet</p>
+        </div>
         <input name="transferId" type="hidden" value={transferId} />
-        <CommentField label="Begrundelse ved afvisning" required />
+        <CommentField label="Begrundelse" required />
         <ActionMessage message={rejectState.message} ok={rejectState.ok} />
         <button
           className="app-button-danger w-full sm:w-auto"
