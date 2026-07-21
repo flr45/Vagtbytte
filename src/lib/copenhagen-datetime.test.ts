@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { calculateCopenhagenShiftEnd, parseCopenhagenDateTimeLocal } from "./copenhagen-datetime";
+import {
+  calculateCopenhagenShiftEnd,
+  calculateCopenhagenShiftWindow,
+  parseCopenhagenDateTimeLocal
+} from "./copenhagen-datetime";
 import { formatDateTime } from "@/components/TransferSummary";
 import { transferCreateSchema, returnRequestCreateSchema } from "./validation";
 
@@ -81,4 +85,27 @@ describe("faste vagtslut i dansk tid", () => {
       "2026-01-22T06:00:00.000Z"
     );
   });
+
+  it("beregner aktuelt vagttidsrum", () => {
+    expect(shiftWindowIso("2026-07-21T18:42")).toEqual({
+      start: "2026-07-21T13:00:00.000Z",
+      end: "2026-07-21T21:00:00.000Z"
+    });
+    expect(shiftWindowIso("2026-07-21T23:01")).toEqual({
+      start: "2026-07-21T21:00:00.000Z",
+      end: "2026-07-22T05:00:00.000Z"
+    });
+    expect(shiftWindowIso("2026-07-22T06:59")).toEqual({
+      start: "2026-07-21T21:00:00.000Z",
+      end: "2026-07-22T05:00:00.000Z"
+    });
+  });
 });
+
+function shiftWindowIso(input: string) {
+  const window = calculateCopenhagenShiftWindow(parseCopenhagenDateTimeLocal(input));
+  return {
+    start: window.start.toISOString(),
+    end: window.end.toISOString()
+  };
+}

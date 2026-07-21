@@ -67,6 +67,8 @@ export type VcDashboardAvailability = {
   availableUntil: string;
   status: AvailabilityStatus;
   assignedAt: string | null;
+  assignedShiftStart: string | null;
+  assignedShiftEnd: string | null;
   acknowledgedAt: string | null;
   cancelledAt: string | null;
   expiredAt: string | null;
@@ -74,6 +76,7 @@ export type VcDashboardAvailability = {
 
 export function VcDashboard({
   serverNow,
+  currentAssignments,
   availableFirefighters,
   previousAvailabilities,
   awaitingTransfers,
@@ -82,6 +85,7 @@ export function VcDashboard({
   recentlyHandled
 }: {
   serverNow: string;
+  currentAssignments: VcDashboardAvailability[];
   availableFirefighters: VcDashboardAvailability[];
   previousAvailabilities: VcDashboardAvailability[];
   awaitingTransfers: VcDashboardTransfer[];
@@ -131,6 +135,7 @@ export function VcDashboard({
   return (
     <main className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-6">
       <StatusBar status={dashboardStatus} nextDeadline={sortedTasks[0]?.deadlineAt ?? null} now={now} />
+      <CurrentAssignmentsSection assignments={currentAssignments} />
       <AvailabilitySection availabilities={availableFirefighters} previousAvailabilities={previousAvailabilities} />
       <section className="grid gap-4">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
@@ -169,6 +174,69 @@ export function VcDashboard({
         transfers={recentlyHandled}
       />
     </main>
+  );
+}
+
+function CurrentAssignmentsSection({ assignments }: { assignments: VcDashboardAvailability[] }) {
+  const sortedAssignments = [...assignments].sort((a, b) => {
+    const aConfirmed = Boolean(a.acknowledgedAt);
+    const bConfirmed = Boolean(b.acknowledgedAt);
+    if (aConfirmed !== bConfirmed) {
+      return aConfirmed ? 1 : -1;
+    }
+    return (parseDate(a.assignedAt)?.getTime() ?? 0) - (parseDate(b.assignedAt)?.getTime() ?? 0);
+  });
+
+  return (
+    <section className="grid gap-4">
+      <div>
+        <h1 className="text-3xl font-bold">Aktuelt tildelt ({sortedAssignments.length})</h1>
+        <p className="text-sm font-semibold text-zinc-600">Brandfolk tildelt i dette vagttidsrum.</p>
+      </div>
+      {sortedAssignments.length === 0 ? (
+        <EmptyState text="Ingen er tildelt vagt lige nu." />
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2">
+          {sortedAssignments.map((assignment) => (
+            <article
+              className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]"
+              key={assignment.id}
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 className="text-xl font-black text-emerald-950">{assignment.userName}</h2>
+                  <dl className="mt-3 grid gap-2 text-sm font-semibold text-emerald-950">
+                    <div>
+                      <dt className="text-xs font-black uppercase text-emerald-700">Tildelt</dt>
+                      <dd className="text-lg font-black">{formatShortTime(parseDate(assignment.assignedAt))}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-black uppercase text-emerald-700">Status</dt>
+                      <dd className="text-base font-black">
+                        {assignment.acknowledgedAt ? "Bekræftet" : "Afventer bekræftelse"}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+                <span
+                  className={`w-fit rounded-full px-3 py-1 text-sm font-black ${
+                    assignment.acknowledgedAt ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-950"
+                  }`}
+                >
+                  <span aria-hidden="true">{assignment.acknowledgedAt ? "●" : "●"}</span>{" "}
+                  {assignment.acknowledgedAt ? "Bekræftet" : "Afventer"}
+                </span>
+              </div>
+              {assignment.acknowledgedAt ? (
+                <p className="mt-3 text-sm font-semibold text-emerald-800">
+                  Bekræftet {formatDateTime(parseDate(assignment.acknowledgedAt) ?? new Date(assignment.acknowledgedAt))}
+                </p>
+              ) : null}
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

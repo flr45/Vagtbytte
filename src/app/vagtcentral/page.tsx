@@ -1,12 +1,32 @@
 import { AvailabilityStatus, UserRole } from "@prisma/client";
 import { requireRole } from "@/lib/auth";
+import { calculateAssignedShiftWindow } from "@/lib/availability";
 import { prisma } from "@/lib/prisma";
 import { TopBar } from "@/components/TopBar";
 import { VcDashboard, type VcDashboardTransfer } from "@/components/VcDashboard";
 
 export default async function VagtcentralPage() {
   await requireRole(UserRole.VC);
-  const [availableFirefighters, previousAvailabilities, awaitingApproval, activeTransfers, returnApprovals, recentlyHandled] = await Promise.all([
+  const now = new Date();
+  const currentShift = calculateAssignedShiftWindow(now);
+  const [
+    currentAssignments,
+    availableFirefighters,
+    previousAvailabilities,
+    awaitingApproval,
+    activeTransfers,
+    returnApprovals,
+    recentlyHandled
+  ] = await Promise.all([
+    prisma.availability.findMany({
+      where: {
+        status: { in: [AvailabilityStatus.ASSIGNED, AvailabilityStatus.ACKNOWLEDGED] },
+        assignedShiftStart: currentShift.start,
+        assignedShiftEnd: currentShift.end
+      },
+      orderBy: [{ status: "desc" }, { assignedAt: "asc" }, { user: { name: "asc" } }],
+      include: { user: true }
+    }),
     prisma.availability.findMany({
       where: { status: AvailabilityStatus.AVAILABLE },
       orderBy: [{ availableFrom: "asc" }, { user: { name: "asc" } }],
@@ -66,10 +86,11 @@ export default async function VagtcentralPage() {
         activeTransfers={activeTransfers.map(serializeTransfer)}
         awaitingTransfers={awaitingApproval.map(serializeTransfer)}
         availableFirefighters={availableFirefighters.map(serializeAvailability)}
+        currentAssignments={currentAssignments.map(serializeAvailability)}
         previousAvailabilities={previousAvailabilities.map(serializeAvailability)}
         recentlyHandled={recentlyHandled.map(serializeTransfer)}
         returnTransfers={returnApprovals.map(serializeTransfer)}
-        serverNow={new Date().toISOString()}
+        serverNow={now.toISOString()}
       />
     </>
   );
@@ -88,6 +109,8 @@ function serializeAvailability(
     availableUntil: availability.availableUntil.toISOString(),
     status: availability.status,
     assignedAt: availability.assignedAt?.toISOString() ?? null,
+    assignedShiftStart: availability.assignedShiftStart?.toISOString() ?? null,
+    assignedShiftEnd: availability.assignedShiftEnd?.toISOString() ?? null,
     acknowledgedAt: availability.acknowledgedAt?.toISOString() ?? null,
     cancelledAt: availability.cancelledAt?.toISOString() ?? null,
     expiredAt: availability.expiredAt?.toISOString() ?? null

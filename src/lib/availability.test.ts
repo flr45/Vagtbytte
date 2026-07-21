@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import { UserRole } from "@prisma/client";
 import {
   availabilityStatusLabel,
+  calculateAssignedShiftWindow,
   calculateAvailabilityUntil,
   canAcknowledgeAvailability,
   canAssignAvailability,
   canCancelAvailability,
-  canCreateAvailability
+  canCreateAvailability,
+  isCurrentAvailabilityAssignment
 } from "./availability";
 
 describe("til rådighed", () => {
@@ -106,5 +108,53 @@ describe("til rådighed", () => {
   it("viser ingen tekniske statusnavne", () => {
     expect(availabilityStatusLabel("AVAILABLE")).toBe("Til rådighed");
     expect(availabilityStatusLabel("ACKNOWLEDGED")).toBe("Tildeling bekræftet");
+  });
+
+  it("viser kun aktuelle tildelinger i det nuværende tidsrum", () => {
+    const now = new Date("2026-07-21T18:00:00.000Z");
+    const shift = calculateAssignedShiftWindow(now);
+    expect(
+      isCurrentAvailabilityAssignment(
+        {
+          status: "ASSIGNED",
+          availableFrom: new Date("2026-07-21T17:00:00.000Z"),
+          availableUntil: new Date("2026-07-21T21:00:00.000Z"),
+          assignedShiftStart: shift.start,
+          assignedShiftEnd: shift.end
+        },
+        now
+      )
+    ).toBe(true);
+    expect(
+      isCurrentAvailabilityAssignment(
+        {
+          status: "ACKNOWLEDGED",
+          availableFrom: new Date("2026-07-21T17:00:00.000Z"),
+          availableUntil: new Date("2026-07-21T21:00:00.000Z"),
+          assignedShiftStart: shift.start,
+          assignedShiftEnd: shift.end
+        },
+        now
+      )
+    ).toBe(true);
+    expect(
+      isCurrentAvailabilityAssignment(
+        {
+          status: "ASSIGNED",
+          availableFrom: new Date("2026-07-21T17:00:00.000Z"),
+          availableUntil: new Date("2026-07-21T21:00:00.000Z"),
+          assignedShiftStart: shift.start,
+          assignedShiftEnd: shift.end
+        },
+        new Date("2026-07-21T21:00:00.000Z")
+      )
+    ).toBe(false);
+  });
+
+  it("beregner tildelingens vagttidsrum", () => {
+    const shift = calculateAssignedShiftWindow(new Date("2026-07-21T16:42:00.000Z"));
+
+    expect(shift.start.toISOString()).toBe("2026-07-21T13:00:00.000Z");
+    expect(shift.end.toISOString()).toBe("2026-07-21T21:00:00.000Z");
   });
 });

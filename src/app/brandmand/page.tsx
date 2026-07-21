@@ -1,7 +1,7 @@
 import { AvailabilityStatus, UserRole } from "@prisma/client";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
-import { availabilityStatusLabel } from "@/lib/availability";
+import { availabilityStatusLabel, calculateAssignedShiftWindow } from "@/lib/availability";
 import { prisma } from "@/lib/prisma";
 import { AvailabilityActiveForm, AvailabilityCreateForm } from "@/components/AvailabilityForms";
 import { TopBar } from "@/components/TopBar";
@@ -9,7 +9,9 @@ import { formatDateTime, TransferList } from "@/components/TransferSummary";
 
 export default async function FirefighterPage() {
   const user = await requireRole(UserRole.BRANDFIGHTER);
-  const [requestsToMe, myCreatedRequests, activeAvailability, availabilityHistory] = await Promise.all([
+  const now = new Date();
+  const currentShift = calculateAssignedShiftWindow(now);
+  const [requestsToMe, myCreatedRequests, activeAvailability, currentAssignment, availabilityHistory] = await Promise.all([
     prisma.shiftTransfer.findMany({
       where: { receiverUserId: user.id },
       orderBy: { createdAt: "desc" }
@@ -21,6 +23,15 @@ export default async function FirefighterPage() {
     prisma.availability.findFirst({
       where: { userId: user.id, status: AvailabilityStatus.AVAILABLE },
       orderBy: { createdAt: "desc" }
+    }),
+    prisma.availability.findFirst({
+      where: {
+        userId: user.id,
+        status: { in: [AvailabilityStatus.ASSIGNED, AvailabilityStatus.ACKNOWLEDGED] },
+        assignedShiftStart: currentShift.start,
+        assignedShiftEnd: currentShift.end
+      },
+      orderBy: { assignedAt: "desc" }
     }),
     prisma.availability.findMany({
       where: {
@@ -67,6 +78,46 @@ export default async function FirefighterPage() {
             Opret vagtoverdragelse
           </Link>
         </section>
+        {currentAssignment ? (
+          <section
+            className={`app-card grid gap-4 ${
+              currentAssignment.acknowledgedAt ? "border-emerald-100 bg-emerald-50" : "border-amber-200 bg-amber-50"
+            }`}
+          >
+            <div>
+              <p
+                className={`text-sm font-bold uppercase ${
+                  currentAssignment.acknowledgedAt ? "text-emerald-700" : "text-amber-800"
+                }`}
+              >
+                {currentAssignment.acknowledgedAt ? "● Bekræftet" : "● Afventer bekræftelse"}
+              </p>
+              <h2
+                className={`mt-1 text-2xl font-black ${
+                  currentAssignment.acknowledgedAt ? "text-emerald-950" : "text-amber-950"
+                }`}
+              >
+                Du er tildelt en vagt
+              </h2>
+              <dl className="mt-3 grid gap-2">
+                <div>
+                  <dt className="text-xs font-black uppercase text-zinc-600">Tildelt</dt>
+                  <dd className="text-xl font-black">{formatShortTime(currentAssignment.assignedAt ?? currentAssignment.availableFrom)}</dd>
+                </div>
+              </dl>
+              {currentAssignment.acknowledgedAt ? (
+                <p className="mt-3 text-lg font-black text-emerald-900">
+                  Bekræftet kl. {formatShortTime(currentAssignment.acknowledgedAt)}
+                </p>
+              ) : (
+                <p className="mt-3 text-sm font-semibold text-amber-900">Tryk for at bekræfte.</p>
+              )}
+            </div>
+            <Link className="app-button-secondary w-full sm:w-fit" href={`/brandmand/til-raadighed/${currentAssignment.id}`}>
+              {currentAssignment.acknowledgedAt ? "Åbn tildeling" : "Tryk for at bekræfte"}
+            </Link>
+          </section>
+        ) : null}
         {activeAvailability ? (
           <AvailabilityActiveForm
             availabilityId={activeAvailability.id}

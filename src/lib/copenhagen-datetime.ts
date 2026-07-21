@@ -107,6 +107,50 @@ export function calculateCopenhagenShiftEnd(startAt: Date) {
   return parseCopenhagenDateTimeLocal(`${nextYear}-${nextMonth}-${nextDate}T07:00`);
 }
 
+export function calculateCopenhagenShiftWindow(now: Date) {
+  const parts = Object.fromEntries(localDateFormatter.formatToParts(now).map((part) => [part.type, part.value]));
+  const year = Number(parts.year);
+  const month = Number(parts.month);
+  const day = Number(parts.day);
+  const hour = Number(parts.hour);
+  const minute = Number(parts.minute);
+  const localMinutes = hour * 60 + minute;
+
+  if (localMinutes < 7 * 60) {
+    const previousDay = new Date(Date.UTC(year, month - 1, day - 1));
+    const previousYear = String(previousDay.getUTCFullYear()).padStart(4, "0");
+    const previousMonth = String(previousDay.getUTCMonth() + 1).padStart(2, "0");
+    const previousDate = String(previousDay.getUTCDate()).padStart(2, "0");
+    return {
+      start: parseCopenhagenDateTimeLocal(`${previousYear}-${previousMonth}-${previousDate}T23:00`),
+      end: parseCopenhagenDateTimeLocal(`${parts.year}-${parts.month}-${parts.day}T07:00`)
+    };
+  }
+
+  if (localMinutes < 15 * 60) {
+    return {
+      start: parseCopenhagenDateTimeLocal(`${parts.year}-${parts.month}-${parts.day}T07:00`),
+      end: parseCopenhagenDateTimeLocal(`${parts.year}-${parts.month}-${parts.day}T15:00`)
+    };
+  }
+
+  if (localMinutes < 23 * 60) {
+    return {
+      start: parseCopenhagenDateTimeLocal(`${parts.year}-${parts.month}-${parts.day}T15:00`),
+      end: parseCopenhagenDateTimeLocal(`${parts.year}-${parts.month}-${parts.day}T23:00`)
+    };
+  }
+
+  const nextDay = new Date(Date.UTC(year, month - 1, day + 1));
+  const nextYear = String(nextDay.getUTCFullYear()).padStart(4, "0");
+  const nextMonth = String(nextDay.getUTCMonth() + 1).padStart(2, "0");
+  const nextDate = String(nextDay.getUTCDate()).padStart(2, "0");
+  return {
+    start: parseCopenhagenDateTimeLocal(`${parts.year}-${parts.month}-${parts.day}T23:00`),
+    end: parseCopenhagenDateTimeLocal(`${nextYear}-${nextMonth}-${nextDate}T07:00`)
+  };
+}
+
 function matchesCopenhagenLocalTime(
   date: Date,
   wanted: { year: number; month: number; day: number; hour: number; minute: number }

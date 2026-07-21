@@ -38,7 +38,8 @@ import {
   canAcknowledgeAvailability,
   canAssignAvailability,
   canCancelAvailability,
-  canCreateAvailability
+  canCreateAvailability,
+  calculateAssignedShiftWindow
 } from "./availability";
 import { requirePasswordChangeUser, requireRole, requireUser, roleHome, signIn, signOut } from "./auth";
 import {
@@ -248,10 +249,17 @@ export async function assignAvailabilityByVcAction(
   }
 
   const now = new Date();
+  const assignedShift = calculateAssignedShiftWindow(now);
   const assigned = await prisma.$transaction(async (tx) => {
     const claimed = await tx.availability.updateMany({
       where: { id: parsed.data.availabilityId, status: AvailabilityStatus.AVAILABLE },
-      data: { status: AvailabilityStatus.ASSIGNED, assignedBy: vc.id, assignedAt: now }
+      data: {
+        status: AvailabilityStatus.ASSIGNED,
+        assignedBy: vc.id,
+        assignedAt: now,
+        assignedShiftStart: assignedShift.start,
+        assignedShiftEnd: assignedShift.end
+      }
     });
     if (claimed.count !== 1) {
       return null;

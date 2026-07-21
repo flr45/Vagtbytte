@@ -108,24 +108,27 @@ model User {
 }
 
 model Availability {
-  id             String             @id @default(cuid())
-  userId         String
-  availableFrom  DateTime
-  availableUntil DateTime
-  status         AvailabilityStatus @default(AVAILABLE)
-  assignedBy     String?
-  assignedAt     DateTime?
-  acknowledgedAt DateTime?
-  cancelledAt    DateTime?
-  expiredAt      DateTime?
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-  user           User               @relation("AvailabilityUser", fields: [userId], references: [id], onDelete: Cascade)
-  assignedByUser User?              @relation("AvailabilityAssignedBy", fields: [assignedBy], references: [id], onDelete: SetNull)
-  notifications  Notification[]
+  id                 String             @id @default(cuid())
+  userId             String
+  availableFrom      DateTime
+  availableUntil     DateTime
+  status             AvailabilityStatus @default(AVAILABLE)
+  assignedBy         String?
+  assignedAt         DateTime?
+  assignedShiftStart DateTime?
+  assignedShiftEnd   DateTime?
+  acknowledgedAt     DateTime?
+  cancelledAt        DateTime?
+  expiredAt          DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  user               User               @relation("AvailabilityUser", fields: [userId], references: [id], onDelete: Cascade)
+  assignedByUser     User?              @relation("AvailabilityAssignedBy", fields: [assignedBy], references: [id], onDelete: SetNull)
+  notifications      Notification[]
 
   @@index([status])
   @@index([availableUntil])
+  @@index([assignedShiftStart, assignedShiftEnd])
   @@index([userId])
   @@index([assignedBy])
 }

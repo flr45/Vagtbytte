@@ -1,11 +1,34 @@
 import type { AvailabilityStatus, UserRole } from "@prisma/client";
-import { calculateCopenhagenShiftEnd } from "./copenhagen-datetime";
+import { calculateCopenhagenShiftEnd, calculateCopenhagenShiftWindow } from "./copenhagen-datetime";
 
 export const ACTIVE_AVAILABILITY_STATUSES: AvailabilityStatus[] = ["AVAILABLE"];
 export const PREVIOUS_AVAILABILITY_STATUSES: AvailabilityStatus[] = ["ASSIGNED", "ACKNOWLEDGED", "CANCELLED", "EXPIRED"];
 
 export function calculateAvailabilityUntil(availableFrom: Date) {
   return calculateCopenhagenShiftEnd(availableFrom);
+}
+
+export function calculateAssignedShiftWindow(assignedAt: Date) {
+  return calculateCopenhagenShiftWindow(assignedAt);
+}
+
+export function isCurrentAvailabilityAssignment(
+  availability: {
+    status: AvailabilityStatus;
+    availableFrom: Date;
+    availableUntil: Date;
+    assignedShiftStart?: Date | null;
+    assignedShiftEnd?: Date | null;
+  },
+  now = new Date()
+) {
+  const startsAt = availability.assignedShiftStart ?? availability.availableFrom;
+  const endsAt = availability.assignedShiftEnd ?? availability.availableUntil;
+  return (
+    ["ASSIGNED", "ACKNOWLEDGED"].includes(availability.status) &&
+    startsAt.getTime() <= now.getTime() &&
+    endsAt.getTime() > now.getTime()
+  );
 }
 
 export function canCreateAvailability(input: {
