@@ -1,6 +1,7 @@
 import { logoutAction } from "@/lib/actions";
 import { getCurrentUser, roleHome } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { BellIcon, HomeIcon, LogOutIcon } from "./Icons";
 
 export async function TopBar({ title }: { title: string }) {
   const user = await getCurrentUser();
@@ -22,29 +23,27 @@ export async function TopBar({ title }: { title: string }) {
         <p className="min-w-0 break-words text-lg font-bold">{title}</p>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {user ? (
-            <a
-              className="focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-zinc-300 px-3 text-sm font-bold text-zinc-900"
-              href={roleHome[user.role]}
-            >
-              <span aria-hidden="true">⌂</span>
+            <a className="app-button-secondary min-h-11 px-3 text-sm" href={roleHome[user.role]}>
+              <HomeIcon className="size-4" />
               Forside
             </a>
           ) : null}
           {user?.role !== "ADMIN" ? (
             <a
-              className="focus-ring relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-zinc-300 px-3 text-sm font-bold text-zinc-900"
+              className="app-button-secondary relative min-h-11 min-w-11 px-3 text-sm"
               href={notificationPath}
               aria-label="Notifikationer"
             >
-              <span aria-hidden="true">🔔</span>
+              <BellIcon className="size-4" />
               <span className="sr-only">Notifikationer</span>
               {unreadCount > 0 ? (
-                <span className="ml-2 rounded-full bg-brand-red px-2 py-0.5 text-xs text-white">{unreadCount}</span>
+                <span className="ml-1 rounded-full bg-brand-red px-2 py-0.5 text-xs text-white">{unreadCount}</span>
               ) : null}
             </a>
           ) : null}
           <form action={logoutAction}>
-            <button className="focus-ring min-h-11 rounded-md border border-zinc-300 px-4 text-sm font-semibold text-zinc-900">
+            <button className="app-button-secondary min-h-11 px-3 text-sm">
+              <LogOutIcon className="size-4" />
               Log ud
             </button>
           </form>

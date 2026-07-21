@@ -30,21 +30,21 @@ export function formatDateTime(date: Date) {
 
 export function StatusBadge({ status }: { status: TransferStatus }) {
   const tone: Record<TransferStatus, string> = {
-    AWAITING_RECEIVER: "bg-amber-50 text-amber-900",
-    RECEIVER_ACCEPTED_AWAITING_VC: "bg-emerald-50 text-emerald-900",
-    RECEIVER_REJECTED: "bg-red-50 text-red-900",
-    VC_REJECTED: "bg-red-50 text-red-900",
-    VC_APPROVED_AWAITING_ACTIVATION: "bg-amber-50 text-amber-900",
-    VC_APPROVED_ACTIVE: "bg-emerald-50 text-emerald-900",
-    RETURN_AWAITING_ORIGINAL: "bg-amber-50 text-amber-900",
-    RETURN_ACCEPTED_AWAITING_VC: "bg-emerald-50 text-emerald-900",
-    RETURN_APPROVED_AWAITING_EXECUTION: "bg-amber-50 text-amber-900",
-    COMPLETED: "bg-zinc-100 text-zinc-700",
-    CANCELLED: "bg-zinc-100 text-zinc-700"
+    AWAITING_RECEIVER: "border-amber-200 bg-amber-50 text-amber-900",
+    RECEIVER_ACCEPTED_AWAITING_VC: "border-sky-200 bg-sky-50 text-sky-900",
+    RECEIVER_REJECTED: "border-red-200 bg-red-50 text-red-900",
+    VC_REJECTED: "border-red-200 bg-red-50 text-red-900",
+    VC_APPROVED_AWAITING_ACTIVATION: "border-emerald-200 bg-emerald-50 text-emerald-900",
+    VC_APPROVED_ACTIVE: "border-emerald-200 bg-emerald-50 text-emerald-900",
+    RETURN_AWAITING_ORIGINAL: "border-amber-200 bg-amber-50 text-amber-900",
+    RETURN_ACCEPTED_AWAITING_VC: "border-sky-200 bg-sky-50 text-sky-900",
+    RETURN_APPROVED_AWAITING_EXECUTION: "border-emerald-200 bg-emerald-50 text-emerald-900",
+    COMPLETED: "border-zinc-200 bg-zinc-100 text-zinc-700",
+    CANCELLED: "border-zinc-200 bg-zinc-100 text-zinc-700"
   };
 
   return (
-    <span className={`inline-flex w-fit rounded-full px-3 py-1 text-sm font-semibold ${tone[status]}`}>
+    <span className={`inline-flex w-fit rounded-full border px-3 py-1 text-sm font-bold shadow-sm transition-colors ${tone[status]}`}>
       {statusLabel(status)}
     </span>
   );
@@ -70,7 +70,7 @@ export function TransferList({
         <div className="grid gap-3">
           {transfers.map((transfer) => (
             <Link
-              className="focus-ring grid gap-3 rounded-lg border border-brand-line bg-white p-4 shadow-sm"
+              className="focus-ring app-card-interactive fade-in grid gap-3"
               href={`/brandmand/anmodninger/${transfer.id}`}
               key={transfer.id}
             >

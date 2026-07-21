@@ -533,6 +533,7 @@ export async function createTransferAction(
       actorRole: user.role,
       action: "TRANSFER_CREATED",
       targetUserId: result.receiver.id,
+      shiftTransferId: transfer.id,
       description: `Vagtoverdragelse ${transfer.transferNumber} blev oprettet`
     }
   });
@@ -569,6 +570,7 @@ async function respondToTransfer(input: {
         actorRole: user.role,
         action: "TRANSFER_RESPONSE_REJECTED",
         targetUserId: transfer.receiverUserId,
+        shiftTransferId: transfer.id,
         description: permission.message
       }
     });
@@ -598,6 +600,7 @@ async function respondToTransfer(input: {
           ? "TRANSFER_ACCEPTED_BY_RECEIVER"
           : "TRANSFER_REJECTED_BY_RECEIVER",
       targetUserId: transfer.giverUserId,
+      shiftTransferId: transfer.id,
       description:
         input.status === "RECEIVER_ACCEPTED_AWAITING_VC"
           ? `Vagtoverdragelse ${transfer.transferNumber} blev accepteret af modtager`
@@ -701,6 +704,7 @@ export async function cancelTransferAction(_state: ActionState, formData: FormDa
           actorRole: user.role,
           action: "TRANSFER_CANCEL_REJECTED",
           targetUserId: transfer.receiverUserId,
+          shiftTransferId: transfer.id,
           description: permission.message
         }
       });
@@ -734,6 +738,7 @@ export async function cancelTransferAction(_state: ActionState, formData: FormDa
         actorRole: user.role,
         action: "TRANSFER_CANCELLED",
         targetUserId: transfer.receiverUserId,
+        shiftTransferId: transfer.id,
         description: `Vagtoverdragelse ${transfer.transferNumber} blev annulleret`
       }
     });
@@ -776,6 +781,7 @@ async function decideTransferByVc(input: {
         actorUserId: vc.id,
         actorRole: vc.role,
         action: "VC_TRANSFER_DECISION_REJECTED",
+        shiftTransferId: transfer.id,
         description: permission.message
       }
     });
@@ -806,6 +812,7 @@ async function decideTransferByVc(input: {
       actorRole: vc.role,
       action: input.approve ? "TRANSFER_VC_APPROVED" : "TRANSFER_VC_REJECTED",
       targetUserId: transfer.giverUserId,
+      shiftTransferId: transfer.id,
       description: input.approve
         ? `Godkendt af Vagtcentralen: ${transfer.transferNumber}`
         : `Afvist af Vagtcentralen: ${transfer.transferNumber}`
@@ -904,6 +911,7 @@ export async function createReturnRequestAction(
         actorUserId: user.id,
         actorRole: user.role,
         action: "RETURN_CREATE_REJECTED",
+        shiftTransferId: transfer.id,
         description: permission.message
       }
     });
@@ -939,6 +947,8 @@ export async function createReturnRequestAction(
       actorRole: user.role,
       action: "RETURN_CREATED",
       targetUserId: transfer.giverUserId,
+      shiftTransferId: transfer.id,
+      returnRequestId: returnRequest.id,
       description: `Tilbagelevering ${returnRequest.returnNumber} blev oprettet`
     }
   });
@@ -976,6 +986,8 @@ async function respondToReturnRequest(input: {
         actorUserId: user.id,
         actorRole: user.role,
         action: "RETURN_RESPONSE_REJECTED",
+        shiftTransferId: returnRequest.transferId,
+        returnRequestId: returnRequest.id,
         description: permission.message
       }
     });
@@ -1005,6 +1017,8 @@ async function respondToReturnRequest(input: {
       actorRole: user.role,
       action: input.accept ? "RETURN_ACCEPTED_BY_ORIGINAL" : "RETURN_REJECTED_BY_ORIGINAL",
       targetUserId: returnRequest.currentHolderUserId,
+      shiftTransferId: returnRequest.transferId,
+      returnRequestId: returnRequest.id,
       description: input.accept
         ? `Tilbagelevering ${returnRequest.returnNumber} blev accepteret`
         : `Tilbagelevering ${returnRequest.returnNumber} blev afvist`
@@ -1085,6 +1099,8 @@ async function decideReturnByVc(input: {
         actorUserId: vc.id,
         actorRole: vc.role,
         action: "VC_RETURN_DECISION_REJECTED",
+        shiftTransferId: returnRequest.transferId,
+        returnRequestId: returnRequest.id,
         description: permission.message
       }
     });
@@ -1123,6 +1139,8 @@ async function decideReturnByVc(input: {
       actorRole: vc.role,
       action: input.approve ? "RETURN_VC_APPROVED_AWAITING_EXECUTION" : "RETURN_VC_REJECTED",
       targetUserId: returnRequest.originalUserId,
+      shiftTransferId: returnRequest.transferId,
+      returnRequestId: returnRequest.id,
       description: input.approve
         ? `Tilbagelevering ${returnRequest.returnNumber} blev godkendt og afventer gennemførelse`
         : `Tilbagelevering ${returnRequest.returnNumber} blev afvist af vagtcentralen`
@@ -1183,6 +1201,7 @@ export async function confirmTransferActivationAction(
       actorRole: vc.role,
       action: "TRANSFER_ACTIVATION_CONFIRMED",
       targetUserId: transfer.receiverUserId,
+      shiftTransferId: transfer.id,
       description: `Vagtskifte ${transfer.transferNumber} blev bekræftet udført`
     }
   });
@@ -1247,6 +1266,8 @@ export async function confirmReturnExecutionAction(
       actorRole: vc.role,
       action: "RETURN_EXECUTION_CONFIRMED",
       targetUserId: returnRequest.originalUserId,
+      shiftTransferId: returnRequest.transferId,
+      returnRequestId: returnRequest.id,
       description: `Tilbagelevering ${returnRequest.returnNumber} blev bekræftet udført`
     }
   });
@@ -1302,6 +1323,7 @@ export async function confirmExpectedReturnExecutionAction(
           actorRole: vc.role,
           action: "EXPECTED_RETURN_EXECUTION_REJECTED",
           targetUserId: transfer.receiverUserId,
+          shiftTransferId: transfer.id,
           description: permission.message
         }
       });
@@ -1335,6 +1357,7 @@ export async function confirmExpectedReturnExecutionAction(
         actorRole: vc.role,
         action: "EXPECTED_RETURN_EXECUTION_CONFIRMED",
         targetUserId: transfer.giverUserId,
+        shiftTransferId: transfer.id,
         description: `Aftalt tilbagelevering for ${transfer.transferNumber} blev bekræftet udført`
       }
     });

@@ -26,15 +26,15 @@ export type TransferValidationResult =
 
 export function statusLabel(status: TransferStatus) {
   const labels: Record<TransferStatus, string> = {
-    AWAITING_RECEIVER: "Afventer modtager",
-    RECEIVER_ACCEPTED_AWAITING_VC: "Accepteret - afventer vagtcentralen",
-    RECEIVER_REJECTED: "Afvist af modtager",
-    VC_REJECTED: "Afvist af vagtcentralen",
-    VC_APPROVED_AWAITING_ACTIVATION: "Godkendt - afventer gennemførelse",
-    VC_APPROVED_ACTIVE: "Aktiv vagtoverdragelse",
-    RETURN_AWAITING_ORIGINAL: "Tilbagelevering afventer oprindelig brandmand",
-    RETURN_ACCEPTED_AWAITING_VC: "Tilbagelevering accepteret - afventer vagtcentralen",
-    RETURN_APPROVED_AWAITING_EXECUTION: "Tilbagelevering godkendt - afventer gennemførelse",
+    AWAITING_RECEIVER: "Afventer B",
+    RECEIVER_ACCEPTED_AWAITING_VC: "Afventer VC",
+    RECEIVER_REJECTED: "Afvist",
+    VC_REJECTED: "Afvist af VC",
+    VC_APPROVED_AWAITING_ACTIVATION: "Godkendt",
+    VC_APPROVED_ACTIVE: "Aktiv",
+    RETURN_AWAITING_ORIGINAL: "Afventer A",
+    RETURN_ACCEPTED_AWAITING_VC: "Afventer VC",
+    RETURN_APPROVED_AWAITING_EXECUTION: "Godkendt",
     COMPLETED: "Afsluttet",
     CANCELLED: "Annulleret"
   };

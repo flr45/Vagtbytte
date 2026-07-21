@@ -97,7 +97,7 @@ describe("vagtoverdragelse - oprettelse", () => {
   });
 
   it("forventet sluttid ændrer ikke automatisk status", () => {
-    expect(statusLabel(TransferStatus.AWAITING_RECEIVER)).toBe("Afventer modtager");
+    expect(statusLabel(TransferStatus.AWAITING_RECEIVER)).toBe("Afventer B");
   });
 });
 
@@ -264,12 +264,12 @@ describe("vagtoverdragelse - svar", () => {
 
   it("accept ændrer status til afventer VC", () => {
     expect(statusLabel(TransferStatus.RECEIVER_ACCEPTED_AWAITING_VC)).toBe(
-      "Accepteret - afventer vagtcentralen"
+      "Afventer VC"
     );
   });
 
   it("afvisning sender ikke sagen videre til VC", () => {
-    expect(statusLabel(TransferStatus.RECEIVER_REJECTED)).toBe("Afvist af modtager");
+    expect(statusLabel(TransferStatus.RECEIVER_REJECTED)).toBe("Afvist");
   });
 });
 
@@ -309,9 +309,7 @@ describe("del 3 - vagtcentral", () => {
   });
 
   it("godkendelse afventer nu separat bekræftelse af gennemførelse", () => {
-    expect(statusLabel(TransferStatus.VC_APPROVED_AWAITING_ACTIVATION)).toBe(
-      "Godkendt - afventer gennemførelse"
-    );
+    expect(statusLabel(TransferStatus.VC_APPROVED_AWAITING_ACTIVATION)).toBe("Godkendt");
     expect(canVcConfirmTransferActivation({ role: UserRole.VC, status: TransferStatus.VC_APPROVED_AWAITING_ACTIVATION }).ok).toBe(
       true
     );
@@ -446,9 +444,7 @@ describe("del 3 - tilbagelevering", () => {
   });
 
   it("godkendt tilbagelevering afventer separat bekræftelse af gennemførelse", () => {
-    expect(statusLabel(TransferStatus.RETURN_APPROVED_AWAITING_EXECUTION)).toBe(
-      "Tilbagelevering godkendt - afventer gennemførelse"
-    );
+    expect(statusLabel(TransferStatus.RETURN_APPROVED_AWAITING_EXECUTION)).toBe("Godkendt");
     expect(
       canVcConfirmReturnExecution({
         role: UserRole.VC,
@@ -469,14 +465,14 @@ describe("del 3 - tilbagelevering", () => {
   });
 
   it("afvist tilbagelevering efterlader den oprindelige overdragelse aktiv", () => {
-    expect(statusLabel(TransferStatus.VC_APPROVED_ACTIVE)).toBe("Aktiv vagtoverdragelse");
+    expect(statusLabel(TransferStatus.VC_APPROVED_ACTIVE)).toBe("Aktiv");
   });
 
   it("forventet sluttid medfører ingen automatisk ændring", () => {
     expect(isExpectedEndOverdue(new Date("2026-01-01T00:00:00.000Z"), new Date("2026-01-02T00:00:00.000Z"))).toBe(
       true
     );
-    expect(statusLabel(TransferStatus.VC_APPROVED_ACTIVE)).toBe("Aktiv vagtoverdragelse");
+    expect(statusLabel(TransferStatus.VC_APPROVED_ACTIVE)).toBe("Aktiv");
   });
 
   it("afsluttede sager kan ikke ændres", () => {

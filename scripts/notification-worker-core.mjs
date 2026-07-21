@@ -298,6 +298,7 @@ export async function completeDueShiftEndTransfers(prisma, now = new Date()) {
         data: {
           action: "SHIFT_END_TRANSFER_COMPLETED",
           targetUserId: transfer.receiverUserId,
+          shiftTransferId: transfer.id,
           description: `Vagtoverdragelse ${transfer.transferNumber} blev afsluttet ved vagtens slutning`
         }
       });

@@ -21,6 +21,7 @@ import {
   VcTransferDecisionForms
 } from "./VcDecisionForms";
 import { formatDateTime, StatusBadge } from "./TransferSummary";
+import { CheckIcon, InboxIcon } from "./Icons";
 
 export type VcDashboardTransfer = {
   id: string;
@@ -114,15 +115,13 @@ export function VcDashboard({
       <section className="grid gap-4">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Kræver handling</h1>
-            <p className="text-sm text-zinc-600">Vagtoverdragelser og tilbageleveringer sorteret efter tidsfrist.</p>
+            <h1 className="text-3xl font-bold">Handlinger</h1>
+            <p className="text-sm text-zinc-600">Det vigtigste først.</p>
           </div>
           <p className="text-sm font-semibold text-zinc-700">{sortedTasks.length} opgave(r)</p>
         </div>
         {sortedTasks.length === 0 ? (
-          <p className="rounded-lg border border-brand-line bg-white p-5 text-sm text-zinc-600">
-            Ingen sager afventer behandling i vagtcentralen.
-          </p>
+          <EmptyState text="Der er ingen sager, der kræver handling." />
         ) : (
           <div className="grid gap-4">
             {sortedTasks.map((task) => (
@@ -252,7 +251,6 @@ function StatusBar({
     red: "border-red-700 bg-red-700 text-white",
     critical: "vc-pulse border-red-900 bg-red-800 text-white"
   } satisfies Record<VcPriority, string>;
-  const icon = status.priority === "green" ? "✓" : status.priority === "yellow" ? "!" : "!";
   const countdown = nextDeadline ? formatCountdown(nextDeadline, now).replace(/^Om /, "") : "";
   const message =
     status.livePrefix && countdown ? `${status.text} - ${status.livePrefix} ${countdown}` : status.text;
@@ -260,16 +258,14 @@ function StatusBar({
   return (
     <section
       aria-live={status.ariaLive}
-      className={`flex min-h-24 items-center gap-4 rounded-lg border px-5 py-4 shadow-sm ${tone[status.priority]}`}
+      className={`flex min-h-24 items-center gap-4 rounded-2xl border px-5 py-4 shadow-lg ${tone[status.priority]}`}
     >
-      <span aria-hidden="true" className="grid size-12 shrink-0 place-items-center rounded-full bg-white/20 text-3xl font-bold">
-        {icon}
+      <span aria-hidden="true" className="grid size-12 shrink-0 place-items-center rounded-full bg-white/20">
+        <CheckIcon className="size-6" />
       </span>
       <div>
         <p className="text-2xl font-bold">{message}</p>
-        <p className="mt-1 text-sm font-semibold opacity-90">
-          Kun sager, der afventer vagtcentralen, tæller med her.
-        </p>
+        <p className="mt-1 text-sm font-semibold opacity-90">VC-opgaver lige nu.</p>
       </div>
     </section>
   );
@@ -303,7 +299,7 @@ function ActionCard({
   } satisfies Record<VcPriority, string>;
 
   return (
-    <article className={`grid gap-4 rounded-lg border border-brand-line border-l-8 bg-white p-5 shadow-sm ${border[priority]}`}>
+    <article className={`fade-in grid gap-4 rounded-2xl border border-white/70 border-l-8 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)] ${border[priority]}`}>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="text-sm font-bold uppercase text-zinc-600">
@@ -361,8 +357,8 @@ function ActionCard({
           returnRequestId={returnRequest.id}
         />
       ) : null}
-      <Link className="focus-ring w-fit rounded-md px-2 py-2 text-sm font-semibold text-zinc-700" href={`/vagtcentral/sager/${transfer.id}`}>
-        Åbn detaljer og historik
+      <Link className="app-button-secondary w-full text-sm sm:w-fit" href={`/vagtcentral/sager/${transfer.id}`}>
+        Detaljer
       </Link>
     </article>
   );
@@ -447,7 +443,7 @@ function CompactTransferSection({
     <section className="grid gap-3">
       <h2 className="text-xl font-bold">{title}</h2>
       {transfers.length === 0 ? (
-        <p className="rounded-lg border border-brand-line bg-white p-4 text-sm text-zinc-600">{emptyText}</p>
+        <EmptyState text={emptyText} />
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           {transfers.map((transfer) => {
@@ -455,7 +451,7 @@ function CompactTransferSection({
             const activeReturn = currentReturnRequest(transfer);
             return (
               <Link
-                className="focus-ring grid gap-2 rounded-lg border border-brand-line bg-white p-4 shadow-sm"
+                className="focus-ring app-card-interactive grid gap-2"
                 href={`/vagtcentral/sager/${transfer.id}`}
                 key={transfer.id}
               >
@@ -484,6 +480,15 @@ function CompactTransferSection({
         </div>
       )}
     </section>
+  );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return (
+    <div className="app-card grid place-items-center gap-3 py-8 text-center text-sm text-zinc-600">
+      <InboxIcon className="size-9 text-zinc-400" />
+      <p>{text}</p>
+    </div>
   );
 }
 

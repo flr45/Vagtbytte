@@ -29,7 +29,7 @@ export function VcTransferDecisionForms({
     <div className={direct ? "grid gap-3 lg:grid-cols-2" : "grid gap-4"}>
       <form
         action={approveAction}
-        className="grid gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-4"
+        className="grid gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4"
         onSubmit={(event) => {
           if (!window.confirm(confirmationText)) {
             event.preventDefault();
@@ -54,7 +54,7 @@ export function VcTransferDecisionForms({
         <CommentField label="Begrundelse ved afvisning" required />
         <ActionMessage message={rejectState.message} ok={rejectState.ok} />
         <button
-          className="focus-ring inline-flex min-h-12 w-full items-center justify-center rounded-md border border-brand-red px-5 text-base font-semibold text-brand-red sm:w-auto"
+          className="app-button-danger w-full sm:w-auto"
           type="submit"
         >
           Afvis vagtoverdragelse
@@ -80,7 +80,7 @@ export function VcReturnDecisionForms({
     <div className={direct ? "grid gap-3 lg:grid-cols-2" : "grid gap-4"}>
       <form
         action={approveAction}
-        className="grid gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-4"
+        className="grid gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4"
         onSubmit={(event) => {
           if (!window.confirm(confirmationText)) {
             event.preventDefault();
@@ -105,7 +105,7 @@ export function VcReturnDecisionForms({
         <CommentField label="Begrundelse ved afvisning" required />
         <ActionMessage message={rejectState.message} ok={rejectState.ok} />
         <button
-          className="focus-ring inline-flex min-h-12 w-full items-center justify-center rounded-md border border-brand-red px-5 text-base font-semibold text-brand-red sm:w-auto"
+          className="app-button-danger w-full sm:w-auto"
           type="submit"
         >
           Afvis tilbagelevering
@@ -127,7 +127,7 @@ export function VcTransferActivationForm({
   return (
     <form
       action={action}
-      className="grid gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-4"
+      className="grid gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4"
       onSubmit={(event) => {
         if (!window.confirm(confirmationText)) {
           event.preventDefault();
@@ -153,7 +153,7 @@ export function VcReturnExecutionForm({
   return (
     <form
       action={action}
-      className="grid gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-4"
+      className="grid gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4"
       onSubmit={(event) => {
         if (!window.confirm(confirmationText)) {
           event.preventDefault();
@@ -179,7 +179,7 @@ export function VcExpectedReturnExecutionForm({
   return (
     <form
       action={action}
-      className="grid gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-4"
+      className="grid gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4"
       onSubmit={(event) => {
         if (!window.confirm(confirmationText)) {
           event.preventDefault();
@@ -198,7 +198,7 @@ function CommentField({ label, required = false }: { label: string; required?: b
     <label className="grid gap-2 text-sm font-semibold text-zinc-800">
       {label}
       <textarea
-        className="focus-ring min-h-24 rounded-md border border-zinc-300 bg-white px-3 py-2 text-base"
+        className="focus-ring min-h-24 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-base shadow-sm"
         maxLength={500}
         name="comment"
         required={required}

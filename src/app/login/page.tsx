@@ -15,14 +15,10 @@ export default async function LoginPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center px-4 py-10">
-      <section className="w-full max-w-md rounded-lg border border-brand-line bg-white p-6 shadow-sm">
-        <p className="text-sm font-semibold uppercase tracking-wide text-brand-red">
-          Vagtoverdragelse
-        </p>
+      <section className="app-card w-full max-w-md">
+        <p className="text-sm font-bold uppercase tracking-wide text-brand-red">Vagtbytte</p>
         <h1 className="mt-2 text-3xl font-bold">Log ind</h1>
-        <p className="mt-3 text-base text-zinc-700">
-          Brug din personlige konto eller vagtcentralens fælles login.
-        </p>
+        <p className="mt-3 text-base text-zinc-700">Fortsæt til din vagt.</p>
         <div className="mt-6">
           <LoginForm />
         </div>

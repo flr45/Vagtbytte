@@ -13,7 +13,7 @@ export function SubmitButton({
 
   return (
     <button
-      className="focus-ring inline-flex min-h-12 w-full items-center justify-center rounded-md bg-brand-red px-5 text-base font-semibold text-white disabled:cursor-wait disabled:opacity-70 sm:w-auto"
+      className="app-button-primary w-full sm:w-auto"
       disabled={pending}
       type="submit"
     >

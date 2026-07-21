@@ -263,18 +263,22 @@ model Session {
 }
 
 model AuditLog {
-  id           String    @id @default(cuid())
-  actorUserId  String?
-  actorRole    UserRole?
-  action       String
-  targetUserId String?
-  description  String
-  createdAt    DateTime  @default(now())
-  actor        User?     @relation("ActorAuditLogs", fields: [actorUserId], references: [id], onDelete: SetNull)
-  target       User?     @relation("TargetAuditLogs", fields: [targetUserId], references: [id], onDelete: SetNull)
+  id              String    @id @default(cuid())
+  actorUserId     String?
+  actorRole       UserRole?
+  action          String
+  targetUserId    String?
+  shiftTransferId String?
+  returnRequestId String?
+  description     String
+  createdAt       DateTime  @default(now())
+  actor           User?     @relation("ActorAuditLogs", fields: [actorUserId], references: [id], onDelete: SetNull)
+  target          User?     @relation("TargetAuditLogs", fields: [targetUserId], references: [id], onDelete: SetNull)
 
   @@index([actorUserId])
   @@index([targetUserId])
+  @@index([shiftTransferId])
+  @@index([returnRequestId])
   @@index([createdAt])
 }
 

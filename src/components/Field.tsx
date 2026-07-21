@@ -18,7 +18,7 @@ export function Field({
       {label}
       <input
         autoComplete={autoComplete}
-        className="focus-ring min-h-12 rounded-md border border-zinc-300 bg-white px-3 text-base"
+        className="focus-ring min-h-12 rounded-xl border border-zinc-200 bg-white px-4 text-base shadow-sm"
         defaultValue={defaultValue}
         name={name}
         required={required}

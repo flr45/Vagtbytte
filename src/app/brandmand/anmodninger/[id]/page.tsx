@@ -4,7 +4,9 @@ import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canCancelTransfer, canViewTransfer, expectedEndLabel } from "@/lib/transfer-rules";
+import { caseHistoryWhere } from "@/lib/case-history";
 import { TopBar } from "@/components/TopBar";
+import { CaseHistory } from "@/components/CaseHistory";
 import { CancelTransferForm } from "@/components/CancelTransferForm";
 import { ReturnRequestCreateForm, ReturnRequestResponseForms } from "@/components/ReturnRequestForms";
 import { TransferResponseForms } from "@/components/TransferResponseForms";
@@ -73,6 +75,11 @@ export default async function TransferDetailPage({
     hasOpenReturnRequest: Boolean(activeReturn),
     reason: transfer.status === "AWAITING_RECEIVER" ? null : "ui-preview"
   }).ok;
+  const historyEntries = await prisma.auditLog.findMany({
+    where: caseHistoryWhere(transfer.id),
+    orderBy: { createdAt: "asc" },
+    include: { actor: { select: { name: true, role: true } } }
+  });
 
   return (
     <>
@@ -81,7 +88,7 @@ export default async function TransferDetailPage({
         <Link className="focus-ring w-fit rounded-md px-2 py-2 text-sm font-semibold text-zinc-700" href="/brandmand">
           Tilbage
         </Link>
-        <section className="grid gap-5 rounded-lg border border-brand-line bg-white p-5 shadow-sm">
+        <section className="app-card grid gap-5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-zinc-600">Sag {transfer.transferNumber}</p>
@@ -89,7 +96,7 @@ export default async function TransferDetailPage({
             </div>
             <StatusBadge status={transfer.status} />
           </div>
-          <dl className="grid gap-4 rounded-md bg-brand-mist p-4">
+          <dl className="grid gap-4 rounded-2xl bg-brand-mist p-4">
             <Detail label="Afgiver" value={`${transfer.giverNameSnapshot} - ${transfer.giverEmployeeNumberSnapshot}`} />
             <Detail
               label="Overtager"
@@ -110,12 +117,12 @@ export default async function TransferDetailPage({
             {transfer.cancelledAt ? <Detail label="Annulleret" value={formatDateTime(transfer.cancelledAt)} /> : null}
             {transfer.cancellationReason ? <Detail label="Annulleringsbegrundelse" value={transfer.cancellationReason} /> : null}
           </dl>
-          <p className="rounded-md bg-amber-50 p-3 text-sm font-semibold text-amber-950">
-            Forventet tilbagelevering er kun en opgave for vagtcentralen. Vagten tilbageleveres ikke automatisk.
+          <p className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-950">
+            VC afslutter ikke sagen automatisk.
           </p>
           {isOverdue ? (
-            <p className="rounded-md bg-red-50 p-3 text-sm font-semibold text-red-950">
-              Forventet tilbageleveringstidspunkt er overskredet. Vagtoverdragelsen fortsætter, indtil en tilbagelevering er godkendt af vagtcentralen.
+            <p className="rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-950">
+              Tidspunktet er overskredet. Afventer VC.
             </p>
           ) : null}
           {canRespond ? <TransferResponseForms transferId={transfer.id} /> : null}
@@ -124,7 +131,7 @@ export default async function TransferDetailPage({
           ) : null}
           {canCancel ? <CancelTransferForm status={transfer.status} transferId={transfer.id} /> : null}
           {activeReturn ? (
-            <section className="grid gap-3 rounded-md border border-brand-line p-4">
+            <section className="grid gap-3 rounded-2xl border border-zinc-100 bg-zinc-50 p-4">
               <h2 className="text-xl font-bold">Aktiv tilbagelevering</h2>
               <dl className="grid gap-3">
                 <Detail label="Tilbagelevering" value={activeReturn.returnNumber} />
@@ -139,6 +146,7 @@ export default async function TransferDetailPage({
             </section>
           ) : null}
         </section>
+        <CaseHistory entries={historyEntries} />
       </main>
     </>
   );
@@ -148,7 +156,7 @@ function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <dt className="text-sm font-semibold text-zinc-600">{label}</dt>
-      <dd className="mt-1 text-base font-bold text-zinc-950">{value}</dd>
+      <dd className="mt-1 break-words text-base font-bold text-zinc-950">{value}</dd>
     </div>
   );
 }
