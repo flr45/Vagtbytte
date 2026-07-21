@@ -18,7 +18,7 @@ async function tick() {
     });
     if (result.published || result.cancelled || result.completedShiftEndTransfers) {
       console.log(
-        `Publiceret: ${result.published}. Annulleret: ${result.cancelled}. Vagtslut afsluttet: ${result.completedShiftEndTransfers ?? 0}.`
+        `Publiceret: ${result.published}. Annulleret: ${result.cancelled}. Vagtslut backfill: ${result.backfilledShiftEndTransfers ?? 0}. Afsluttet aktiv: ${result.completedShiftEndTransfersFromActive ?? 0}. Afsluttet afventer start: ${result.completedShiftEndTransfersFromAwaitingActivation ?? 0}. Fejl: ${result.shiftEndErrors ?? 0}.`
       );
     }
   } catch (error) {

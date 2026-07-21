@@ -69,6 +69,80 @@ function logWebPushError(error, endpoint) {
   return details;
 }
 
+function calculateCopenhagenShiftEnd(startAt) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Copenhagen",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  });
+  const parts = Object.fromEntries(formatter.formatToParts(startAt).map((part) => [part.type, part.value]));
+  const year = Number(parts.year);
+  const month = Number(parts.month);
+  const day = Number(parts.day);
+  const hour = Number(parts.hour);
+  const minute = Number(parts.minute);
+  const localMinutes = hour * 60 + minute;
+
+  if (localMinutes < 7 * 60) {
+    return parseCopenhagenLocalDateTime(parts.year, parts.month, parts.day, "07", "00");
+  }
+  if (localMinutes < 15 * 60) {
+    return parseCopenhagenLocalDateTime(parts.year, parts.month, parts.day, "15", "00");
+  }
+  if (localMinutes < 23 * 60) {
+    return parseCopenhagenLocalDateTime(parts.year, parts.month, parts.day, "23", "00");
+  }
+
+  const nextDay = new Date(Date.UTC(year, month - 1, day + 1));
+  return parseCopenhagenLocalDateTime(
+    String(nextDay.getUTCFullYear()).padStart(4, "0"),
+    String(nextDay.getUTCMonth() + 1).padStart(2, "0"),
+    String(nextDay.getUTCDate()).padStart(2, "0"),
+    "07",
+    "00"
+  );
+}
+
+function parseCopenhagenLocalDateTime(year, month, day, hour, minute) {
+  const wanted = {
+    year: Number(year),
+    month: Number(month),
+    day: Number(day),
+    hour: Number(hour),
+    minute: Number(minute)
+  };
+  const localAsUtc = Date.UTC(wanted.year, wanted.month - 1, wanted.day, wanted.hour, wanted.minute);
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Copenhagen",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  });
+
+  for (let offsetMinutes = -180; offsetMinutes <= 180; offsetMinutes += 15) {
+    const candidate = new Date(localAsUtc - offsetMinutes * 60 * 1000);
+    const parts = Object.fromEntries(formatter.formatToParts(candidate).map((part) => [part.type, part.value]));
+    if (
+      Number(parts.year) === wanted.year &&
+      Number(parts.month) === wanted.month &&
+      Number(parts.day) === wanted.day &&
+      Number(parts.hour) === wanted.hour &&
+      Number(parts.minute) === wanted.minute
+    ) {
+      return candidate;
+    }
+  }
+
+  throw new Error("Kunne ikke beregne vagtslut i Europe/Copenhagen.");
+}
+
 async function pushSender(input) {
   if (process.env.NOTIFICATIONS_DISABLE_PUSH === "true") {
     return;
@@ -261,22 +335,64 @@ async function createPublishedNotification(prisma, input, now) {
 }
 
 export async function completeDueShiftEndTransfers(prisma, now = new Date()) {
+  const activeShiftEndStatuses = ["VC_APPROVED_AWAITING_ACTIVATION", "VC_APPROVED_ACTIVE"];
+  let backfilled = 0;
+  const completedByStatus = {
+    VC_APPROVED_ACTIVE: 0,
+    VC_APPROVED_AWAITING_ACTIVATION: 0
+  };
+  const errors = [];
+
+  const missingCalculatedShiftEnds = await prisma.shiftTransfer.findMany({
+    where: {
+      status: { in: activeShiftEndStatuses },
+      expectedEndMode: "UNTIL_SHIFT_END",
+      calculatedShiftEndAt: null
+    },
+    take: 100
+  });
+
+  for (const transfer of missingCalculatedShiftEnds) {
+    try {
+      const calculatedShiftEndAt = calculateCopenhagenShiftEnd(transfer.requestedStartAt);
+      const updated = await prisma.shiftTransfer.updateMany({
+        where: {
+          id: transfer.id,
+          status: { in: activeShiftEndStatuses },
+          expectedEndMode: "UNTIL_SHIFT_END",
+          calculatedShiftEndAt: null
+        },
+        data: { calculatedShiftEndAt }
+      });
+      if (updated.count === 1) {
+        transfer.calculatedShiftEndAt = calculatedShiftEndAt;
+        backfilled += 1;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push({ transferId: transfer.id, message });
+      console.error("SHIFT_END_BACKFILL_FAILED", { transferId: transfer.id, message });
+    }
+  }
+
   const transfers = await prisma.shiftTransfer.findMany({
     where: {
-      status: "VC_APPROVED_ACTIVE",
+      status: { in: activeShiftEndStatuses },
       expectedEndMode: "UNTIL_SHIFT_END",
       calculatedShiftEndAt: { lte: now }
     },
     take: 100
   });
 
-  let completed = 0;
   for (const transfer of transfers) {
+    const originalStatus = transfer.status;
     const result = await prisma.$transaction(async (tx) => {
       const updated = await tx.shiftTransfer.updateMany({
         where: {
           id: transfer.id,
-          status: "VC_APPROVED_ACTIVE",
+          status: {
+            in: activeShiftEndStatuses
+          },
           expectedEndMode: "UNTIL_SHIFT_END",
           completedAt: null
         },
@@ -309,7 +425,9 @@ export async function completeDueShiftEndTransfers(prisma, now = new Date()) {
       continue;
     }
 
-    completed += 1;
+    if (originalStatus === "VC_APPROVED_AWAITING_ACTIVATION" || originalStatus === "VC_APPROVED_ACTIVE") {
+      completedByStatus[originalStatus] += 1;
+    }
     for (const recipientUserId of [transfer.giverUserId, transfer.receiverUserId]) {
       await createPublishedNotification(
         prisma,
@@ -327,7 +445,21 @@ export async function completeDueShiftEndTransfers(prisma, now = new Date()) {
     }
   }
 
-  return { completed };
+  const completed = completedByStatus.VC_APPROVED_ACTIVE + completedByStatus.VC_APPROVED_AWAITING_ACTIVATION;
+  console.log("SHIFT_END_COMPLETION_SUMMARY", {
+    backfilled,
+    completedFromActive: completedByStatus.VC_APPROVED_ACTIVE,
+    completedFromAwaitingActivation: completedByStatus.VC_APPROVED_AWAITING_ACTIVATION,
+    errors: errors.length
+  });
+
+  return {
+    completed,
+    backfilled,
+    completedFromActive: completedByStatus.VC_APPROVED_ACTIVE,
+    completedFromAwaitingActivation: completedByStatus.VC_APPROVED_AWAITING_ACTIVATION,
+    errors
+  };
 }
 
 export async function publishDueNotifications(prisma, now = new Date()) {
@@ -359,5 +491,13 @@ export async function publishDueNotifications(prisma, now = new Date()) {
     published += 1;
   }
 
-  return { published, cancelled, completedShiftEndTransfers: shiftEnd.completed };
+  return {
+    published,
+    cancelled,
+    completedShiftEndTransfers: shiftEnd.completed,
+    backfilledShiftEndTransfers: shiftEnd.backfilled,
+    completedShiftEndTransfersFromActive: shiftEnd.completedFromActive,
+    completedShiftEndTransfersFromAwaitingActivation: shiftEnd.completedFromAwaitingActivation,
+    shiftEndErrors: shiftEnd.errors.length
+  };
 }
