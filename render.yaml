@@ -10,7 +10,7 @@ services:
     runtime: node
     branch: main
     plan: starter
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci --include=dev && npm run build
     preDeployCommand: npm run db:deploy
     startCommand: npm run start
     healthCheckPath: /api/health
@@ -37,7 +37,7 @@ services:
     runtime: node
     branch: main
     plan: starter
-    buildCommand: npm install && npx prisma generate
+    buildCommand: npm ci --omit=dev && npx prisma generate
     startCommand: npm run notifications:worker
     envVars:
       - key: DATABASE_URL

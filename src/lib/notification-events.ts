@@ -1,6 +1,7 @@
 import type { ReturnRequest, ShiftTransfer, User } from "@prisma/client";
 import { prisma } from "./prisma";
 import { cancelFutureTransferNotifications, createNotifications } from "./notifications";
+import { shouldScheduleExpectedEndNotification } from "./notification-rules";
 
 type BasicUser = Pick<User, "id" | "role">;
 
@@ -152,12 +153,6 @@ export async function scheduleTransferReminders(transfer: ShiftTransfer, vcUserI
   }
 }
 
-export function shouldScheduleExpectedEndNotification(input: {
-  expectedEndMode: "SPECIFIC_TIME" | "UNTIL_SHIFT_END";
-  expectedEndAt: Date | null;
-}) {
-  return input.expectedEndMode === "SPECIFIC_TIME" && Boolean(input.expectedEndAt);
-}
 
 export async function notifyReturnCreated(transfer: ShiftTransfer, request: ReturnRequest) {
   await createNotifications(prisma, [

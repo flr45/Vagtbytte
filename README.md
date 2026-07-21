@@ -160,15 +160,19 @@ Blueprintet opretter:
 Webservice bruger:
 
 ```bash
-npm install && npm run build
+npm ci --include=dev && npm run build
 npm run db:deploy
 npm run start
 ```
 
+Web-buildet installerer devDependencies, selv om runtime kører med
+`NODE_ENV=production`, fordi Tailwind CSS, PostCSS, Autoprefixer og TypeScript
+bruges under build.
+
 Worker bruger:
 
 ```bash
-npm install && npx prisma generate
+npm ci --omit=dev && npx prisma generate
 npm run notifications:worker
 ```
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shouldScheduleExpectedEndNotification } from "./notification-events";
+import { shouldScheduleExpectedEndNotification } from "./notification-rules";
 
 describe("forventet tilbagelevering - notifikationer", () => {
   it("bestemt tidspunkt opretter forventet-sluttid-notifikationer", () => {
