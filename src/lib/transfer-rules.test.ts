@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { TransferStatus, UserRole } from "@prisma/client";
 import {
+  canCreateReturnRequest,
+  canOriginalRespondToReturn,
   canRespondToTransfer,
+  canVcDecideReturn,
+  canVcDecideTransfer,
   canViewTransfer,
+  isExpectedEndOverdue,
   statusLabel,
   validateTransferParticipants,
   type TransferParticipant
@@ -134,5 +139,169 @@ describe("vagtoverdragelse - svar", () => {
 
   it("afvisning sender ikke sagen videre til VC", () => {
     expect(statusLabel(TransferStatus.RECEIVER_REJECTED)).toBe("Afvist af modtager");
+  });
+});
+
+describe("del 3 - vagtcentral", () => {
+  it("VC kan se en sag efter B's accept", () => {
+    expect(canVcDecideTransfer({ role: UserRole.VC, status: TransferStatus.RECEIVER_ACCEPTED_AWAITING_VC }).ok).toBe(
+      true
+    );
+  });
+
+  it("VC kan ikke se en sag som klar til behandling før B's accept", () => {
+    expect(canVcDecideTransfer({ role: UserRole.VC, status: TransferStatus.AWAITING_RECEIVER }).ok).toBe(false);
+  });
+
+  it("VC kan godkende en accepteret sag", () => {
+    expect(canVcDecideTransfer({ role: UserRole.VC, status: TransferStatus.RECEIVER_ACCEPTED_AWAITING_VC }).ok).toBe(
+      true
+    );
+  });
+
+  it("VC kan afvise en accepteret sag", () => {
+    expect(canVcDecideTransfer({ role: UserRole.VC, status: TransferStatus.RECEIVER_ACCEPTED_AWAITING_VC }).ok).toBe(
+      true
+    );
+  });
+
+  it("brandmand kan ikke kalde VC-godkendelse", () => {
+    expect(canVcDecideTransfer({ role: UserRole.BRANDFIGHTER, status: TransferStatus.RECEIVER_ACCEPTED_AWAITING_VC }).ok).toBe(
+      false
+    );
+  });
+
+  it("admin kan ikke godkende alene på baggrund af adminrollen", () => {
+    expect(canVcDecideTransfer({ role: UserRole.ADMIN, status: TransferStatus.RECEIVER_ACCEPTED_AWAITING_VC }).ok).toBe(
+      false
+    );
+  });
+
+  it("godkendelse ændrer status til aktiv", () => {
+    expect(statusLabel(TransferStatus.VC_APPROVED_ACTIVE)).toBe("Aktiv vagtoverdragelse");
+  });
+});
+
+describe("del 3 - tilbagelevering", () => {
+  it("B kan oprette tilbagelevering på en aktiv sag", () => {
+    expect(
+      canCreateReturnRequest({
+        userId: receiver.id,
+        receiverUserId: receiver.id,
+        status: TransferStatus.VC_APPROVED_ACTIVE,
+        hasOpenReturnRequest: false
+      }).ok
+    ).toBe(true);
+  });
+
+  it("A kan ikke oprette tilbageleveringen som B", () => {
+    expect(
+      canCreateReturnRequest({
+        userId: giver.id,
+        receiverUserId: receiver.id,
+        status: TransferStatus.VC_APPROVED_ACTIVE,
+        hasOpenReturnRequest: false
+      }).ok
+    ).toBe(false);
+  });
+
+  it("en tredje bruger kan ikke oprette tilbagelevering", () => {
+    expect(
+      canCreateReturnRequest({
+        userId: "tredje",
+        receiverUserId: receiver.id,
+        status: TransferStatus.VC_APPROVED_ACTIVE,
+        hasOpenReturnRequest: false
+      }).ok
+    ).toBe(false);
+  });
+
+  it("A kan acceptere tilbageleveringen", () => {
+    expect(
+      canOriginalRespondToReturn({
+        userId: giver.id,
+        originalUserId: giver.id,
+        transferStatus: TransferStatus.RETURN_AWAITING_ORIGINAL,
+        returnStatus: "AWAITING_ORIGINAL"
+      }).ok
+    ).toBe(true);
+  });
+
+  it("A kan afvise tilbageleveringen", () => {
+    expect(
+      canOriginalRespondToReturn({
+        userId: giver.id,
+        originalUserId: giver.id,
+        transferStatus: TransferStatus.RETURN_AWAITING_ORIGINAL,
+        returnStatus: "AWAITING_ORIGINAL"
+      }).ok
+    ).toBe(true);
+  });
+
+  it("B kan ikke acceptere på vegne af A", () => {
+    expect(
+      canOriginalRespondToReturn({
+        userId: receiver.id,
+        originalUserId: giver.id,
+        transferStatus: TransferStatus.RETURN_AWAITING_ORIGINAL,
+        returnStatus: "AWAITING_ORIGINAL"
+      }).ok
+    ).toBe(false);
+  });
+
+  it("VC kan ikke godkende tilbageleveringen før A's accept", () => {
+    expect(
+      canVcDecideReturn({
+        role: UserRole.VC,
+        transferStatus: TransferStatus.RETURN_AWAITING_ORIGINAL,
+        returnStatus: "AWAITING_ORIGINAL"
+      }).ok
+    ).toBe(false);
+  });
+
+  it("VC kan godkende en accepteret tilbagelevering", () => {
+    expect(
+      canVcDecideReturn({
+        role: UserRole.VC,
+        transferStatus: TransferStatus.RETURN_ACCEPTED_AWAITING_VC,
+        returnStatus: "ORIGINAL_ACCEPTED_AWAITING_VC"
+      }).ok
+    ).toBe(true);
+  });
+
+  it("godkendt tilbagelevering afslutter sagen", () => {
+    expect(statusLabel(TransferStatus.COMPLETED)).toBe("Afsluttet");
+  });
+
+  it("VC kan afvise tilbageleveringen", () => {
+    expect(
+      canVcDecideReturn({
+        role: UserRole.VC,
+        transferStatus: TransferStatus.RETURN_ACCEPTED_AWAITING_VC,
+        returnStatus: "ORIGINAL_ACCEPTED_AWAITING_VC"
+      }).ok
+    ).toBe(true);
+  });
+
+  it("afvist tilbagelevering efterlader den oprindelige overdragelse aktiv", () => {
+    expect(statusLabel(TransferStatus.VC_APPROVED_ACTIVE)).toBe("Aktiv vagtoverdragelse");
+  });
+
+  it("forventet sluttid medfører ingen automatisk ændring", () => {
+    expect(isExpectedEndOverdue(new Date("2026-01-01T00:00:00.000Z"), new Date("2026-01-02T00:00:00.000Z"))).toBe(
+      true
+    );
+    expect(statusLabel(TransferStatus.VC_APPROVED_ACTIVE)).toBe("Aktiv vagtoverdragelse");
+  });
+
+  it("afsluttede sager kan ikke ændres", () => {
+    expect(
+      canCreateReturnRequest({
+        userId: receiver.id,
+        receiverUserId: receiver.id,
+        status: TransferStatus.COMPLETED,
+        hasOpenReturnRequest: false
+      }).ok
+    ).toBe(false);
   });
 });

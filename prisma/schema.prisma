@@ -17,7 +17,20 @@ enum TransferStatus {
   AWAITING_RECEIVER
   RECEIVER_ACCEPTED_AWAITING_VC
   RECEIVER_REJECTED
+  VC_REJECTED
+  VC_APPROVED_ACTIVE
+  RETURN_AWAITING_ORIGINAL
+  RETURN_ACCEPTED_AWAITING_VC
+  COMPLETED
   CANCELLED
+}
+
+enum ReturnRequestStatus {
+  AWAITING_ORIGINAL
+  ORIGINAL_ACCEPTED_AWAITING_VC
+  ORIGINAL_REJECTED
+  VC_APPROVED_COMPLETED
+  VC_REJECTED
 }
 
 model User {
@@ -37,6 +50,8 @@ model User {
   targetedAuditLogs  AuditLog[] @relation("TargetAuditLogs")
   givenTransfers     ShiftTransfer[] @relation("GivenTransfers")
   receivedTransfers  ShiftTransfer[] @relation("ReceivedTransfers")
+  createdReturns     ReturnRequest[] @relation("ReturnCreatedBy")
+  answeredReturns     ReturnRequest[] @relation("ReturnAnsweredBy")
 
   @@index([role])
   @@index([isActive])
@@ -59,11 +74,51 @@ model ShiftTransfer {
   updatedAt                      DateTime       @updatedAt
   receiverRespondedAt            DateTime?
   receiverResponseComment        String?
+  vcDecidedAt                    DateTime?
+  vcDecision                     String?
+  vcComment                      String?
+  activatedAt                    DateTime?
+  completedAt                    DateTime?
   giver                          User           @relation("GivenTransfers", fields: [giverUserId], references: [id], onDelete: Restrict)
   receiver                       User           @relation("ReceivedTransfers", fields: [receiverUserId], references: [id], onDelete: Restrict)
+  returnRequests                 ReturnRequest[]
 
   @@index([giverUserId])
   @@index([receiverUserId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ReturnRequest {
+  id                              String              @id @default(cuid())
+  returnNumber                    String              @unique
+  transferId                      String
+  createdByUserId                 String
+  originalUserId                  String
+  currentHolderUserId             String
+  originalNameSnapshot            String
+  originalEmployeeNumberSnapshot  String
+  currentHolderNameSnapshot       String
+  currentHolderEmployeeNumberSnapshot String
+  requestedReturnAt               DateTime
+  comment                         String?
+  status                          ReturnRequestStatus @default(AWAITING_ORIGINAL)
+  createdAt                       DateTime            @default(now())
+  updatedAt                       DateTime            @updatedAt
+  originalRespondedAt             DateTime?
+  originalAcceptedAt              DateTime?
+  originalResponseComment         String?
+  vcDecidedAt                     DateTime?
+  vcDecision                      String?
+  vcComment                       String?
+  completedAt                     DateTime?
+  transfer                        ShiftTransfer       @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  createdBy                       User                @relation("ReturnCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  originalUser                    User                @relation("ReturnAnsweredBy", fields: [originalUserId], references: [id], onDelete: Restrict)
+
+  @@index([transferId])
+  @@index([createdByUserId])
+  @@index([originalUserId])
   @@index([status])
   @@index([createdAt])
 }

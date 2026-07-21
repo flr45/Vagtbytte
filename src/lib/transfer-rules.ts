@@ -1,4 +1,4 @@
-import { UserRole, type TransferStatus } from "@prisma/client";
+import { UserRole, type ReturnRequestStatus, type TransferStatus } from "@prisma/client";
 
 export type TransferParticipant = {
   id: string;
@@ -28,6 +28,11 @@ export function statusLabel(status: TransferStatus) {
     AWAITING_RECEIVER: "Afventer modtager",
     RECEIVER_ACCEPTED_AWAITING_VC: "Accepteret - afventer vagtcentralen",
     RECEIVER_REJECTED: "Afvist af modtager",
+    VC_REJECTED: "Afvist af vagtcentralen",
+    VC_APPROVED_ACTIVE: "Aktiv vagtoverdragelse",
+    RETURN_AWAITING_ORIGINAL: "Tilbagelevering afventer oprindelig brandmand",
+    RETURN_ACCEPTED_AWAITING_VC: "Tilbagelevering accepteret - afventer vagtcentralen",
+    COMPLETED: "Afsluttet",
     CANCELLED: "Annulleret"
   };
 
@@ -96,4 +101,85 @@ export function canRespondToTransfer(input: {
   }
 
   return { ok: true, message: "Anmodningen kan besvares." };
+}
+
+export function canVcDecideTransfer(input: { role: UserRole; status: TransferStatus }) {
+  if (input.role !== UserRole.VC) {
+    return { ok: false, message: "Kun vagtcentralen kan behandle sagen." };
+  }
+
+  if (input.status !== "RECEIVER_ACCEPTED_AWAITING_VC") {
+    return { ok: false, message: "Sagen kan først behandles, når modtager har accepteret." };
+  }
+
+  return { ok: true, message: "Sagen kan behandles af vagtcentralen." };
+}
+
+export function canCreateReturnRequest(input: {
+  userId: string;
+  receiverUserId: string;
+  status: TransferStatus;
+  hasOpenReturnRequest: boolean;
+}) {
+  if (input.status === "COMPLETED") {
+    return { ok: false, message: "Afsluttede sager kan ikke ændres." };
+  }
+
+  if (input.userId !== input.receiverUserId) {
+    return { ok: false, message: "Kun brandmanden, der har overtaget vagten, kan oprette tilbagelevering." };
+  }
+
+  if (input.status !== "VC_APPROVED_ACTIVE") {
+    return { ok: false, message: "Tilbagelevering kan kun oprettes på en aktiv vagtoverdragelse." };
+  }
+
+  if (input.hasOpenReturnRequest) {
+    return { ok: false, message: "Der findes allerede en åben tilbagelevering." };
+  }
+
+  return { ok: true, message: "Tilbagelevering kan oprettes." };
+}
+
+export function canOriginalRespondToReturn(input: {
+  userId: string;
+  originalUserId: string;
+  transferStatus: TransferStatus;
+  returnStatus: ReturnRequestStatus;
+}) {
+  if (input.transferStatus === "COMPLETED") {
+    return { ok: false, message: "Afsluttede sager kan ikke ændres." };
+  }
+
+  if (input.userId !== input.originalUserId) {
+    return { ok: false, message: "Kun den oprindelige brandmand kan besvare tilbageleveringen." };
+  }
+
+  if (input.transferStatus !== "RETURN_AWAITING_ORIGINAL" || input.returnStatus !== "AWAITING_ORIGINAL") {
+    return { ok: false, message: "Tilbageleveringen er allerede besvaret." };
+  }
+
+  return { ok: true, message: "Tilbageleveringen kan besvares." };
+}
+
+export function canVcDecideReturn(input: {
+  role: UserRole;
+  transferStatus: TransferStatus;
+  returnStatus: ReturnRequestStatus;
+}) {
+  if (input.role !== UserRole.VC) {
+    return { ok: false, message: "Kun vagtcentralen kan behandle tilbageleveringen." };
+  }
+
+  if (
+    input.transferStatus !== "RETURN_ACCEPTED_AWAITING_VC" ||
+    input.returnStatus !== "ORIGINAL_ACCEPTED_AWAITING_VC"
+  ) {
+    return { ok: false, message: "Tilbageleveringen kan først behandles, når den oprindelige brandmand har accepteret." };
+  }
+
+  return { ok: true, message: "Tilbageleveringen kan behandles af vagtcentralen." };
+}
+
+export function isExpectedEndOverdue(expectedEndAt: Date | null, now = new Date()) {
+  return Boolean(expectedEndAt && expectedEndAt < now);
 }

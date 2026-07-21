@@ -64,7 +64,7 @@ Hvis du bruger værdierne fra `.env.example`:
 
 Admin kan ikke udgive sig for at være brandmand og får ikke adgang til vagtcentralens godkendelsesområde alene på grund af adminrollen.
 
-## Implementeret i del 1
+## Implementeret indtil nu
 
 - Next.js med App Router og TypeScript
 - Tailwind CSS
@@ -80,13 +80,17 @@ Admin kan ikke udgive sig for at være brandmand og får ikke adgang til vagtcen
 - Adminside til vedligeholdelse af den fælles VC-konto
 - Seed-data til én admin, én VC-konto og to brandmænd
 - Automatiske tests for centrale login- og rolletjek
+- Oprettelse af vagtoverdragelser mellem to brandmænd
+- Accept eller afvisning hos modtageren
+- Vagtcentralens godkendelse eller afvisning af accepterede vagtoverdragelser
+- Aktiv vagtoverdragelse efter VC-godkendelse
+- Manuel tilbagelevering fra overtager til oprindelig brandmand
+- Accept eller afvisning af tilbagelevering hos oprindelig brandmand
+- Endelig VC-godkendelse eller afvisning af tilbagelevering
 
 ## Ikke implementeret endnu
 
 - Oprettelse af vagtoverdragelse
-- Accept eller afvisning fra modpart
-- Vagtcentralens godkendelse af konkrete anmodninger
-- Manuel tilbagelevering
 - Push-notifikationer
 - Notifikationscenter
 - Historik for vagtoverdragelser
@@ -100,4 +104,4 @@ npm run lint
 npm run build
 ```
 
-Del 2 bør først startes, når del 1 er testet og godkendt.
+Næste større trin er push-notifikationer og notifikationscenter.

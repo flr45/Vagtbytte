@@ -10,6 +10,8 @@ export type TransferSummaryItem = {
   expectedEndAt: Date | null;
   comment: string | null;
   receiverResponseComment: string | null;
+  vcDecision?: string | null;
+  vcComment?: string | null;
   counterpartName: string;
   counterpartEmployeeNumber: string;
 };
@@ -26,6 +28,11 @@ export function StatusBadge({ status }: { status: TransferStatus }) {
     AWAITING_RECEIVER: "bg-amber-50 text-amber-900",
     RECEIVER_ACCEPTED_AWAITING_VC: "bg-emerald-50 text-emerald-900",
     RECEIVER_REJECTED: "bg-red-50 text-red-900",
+    VC_REJECTED: "bg-red-50 text-red-900",
+    VC_APPROVED_ACTIVE: "bg-emerald-50 text-emerald-900",
+    RETURN_AWAITING_ORIGINAL: "bg-amber-50 text-amber-900",
+    RETURN_ACCEPTED_AWAITING_VC: "bg-emerald-50 text-emerald-900",
+    COMPLETED: "bg-zinc-100 text-zinc-700",
     CANCELLED: "bg-zinc-100 text-zinc-700"
   };
 
@@ -77,6 +84,8 @@ export function TransferList({
               {transfer.receiverResponseComment ? (
                 <p className="text-sm text-zinc-700">Begrundelse: {transfer.receiverResponseComment}</p>
               ) : null}
+              {transfer.vcDecision ? <p className="text-sm text-zinc-700">VC: {transfer.vcDecision}</p> : null}
+              {transfer.vcComment ? <p className="text-sm text-zinc-700">VC-kommentar: {transfer.vcComment}</p> : null}
             </Link>
           ))}
         </div>

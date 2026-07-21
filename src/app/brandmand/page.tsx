@@ -52,6 +52,8 @@ export default async function FirefighterPage() {
             expectedEndAt: transfer.expectedEndAt,
             comment: transfer.comment,
             receiverResponseComment: transfer.receiverResponseComment,
+            vcDecision: transfer.vcDecision,
+            vcComment: transfer.vcComment,
             counterpartName: transfer.giverNameSnapshot,
             counterpartEmployeeNumber: transfer.giverEmployeeNumberSnapshot
           }))}
@@ -67,6 +69,8 @@ export default async function FirefighterPage() {
             expectedEndAt: transfer.expectedEndAt,
             comment: transfer.comment,
             receiverResponseComment: transfer.receiverResponseComment,
+            vcDecision: transfer.vcDecision,
+            vcComment: transfer.vcComment,
             counterpartName: transfer.receiverNameSnapshot,
             counterpartEmployeeNumber: transfer.receiverEmployeeNumberSnapshot
           }))}

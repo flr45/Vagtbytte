@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canViewTransfer } from "@/lib/transfer-rules";
 import { TopBar } from "@/components/TopBar";
+import { ReturnRequestCreateForm, ReturnRequestResponseForms } from "@/components/ReturnRequestForms";
 import { TransferResponseForms } from "@/components/TransferResponseForms";
 import { formatDateTime, StatusBadge } from "@/components/TransferSummary";
 
@@ -14,7 +15,14 @@ export default async function TransferDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const [{ id }, user] = await Promise.all([params, requireRole(UserRole.BRANDFIGHTER)]);
-  const transfer = await prisma.shiftTransfer.findUnique({ where: { id } });
+  const transfer = await prisma.shiftTransfer.findUnique({
+    where: { id },
+    include: {
+      returnRequests: {
+        orderBy: { createdAt: "desc" }
+      }
+    }
+  });
 
   if (!transfer) {
     redirect("/forbudt");
@@ -39,7 +47,17 @@ export default async function TransferDetailPage({
   }
 
   const isReceiver = user.id === transfer.receiverUserId;
+  const isGiver = user.id === transfer.giverUserId;
   const canRespond = isReceiver && transfer.status === "AWAITING_RECEIVER";
+  const activeReturn = transfer.returnRequests.find((request) =>
+    ["AWAITING_ORIGINAL", "ORIGINAL_ACCEPTED_AWAITING_VC"].includes(request.status)
+  );
+  const canCreateReturn = isReceiver && transfer.status === "VC_APPROVED_ACTIVE" && !activeReturn;
+  const canAnswerReturn =
+    isGiver &&
+    transfer.status === "RETURN_AWAITING_ORIGINAL" &&
+    activeReturn?.status === "AWAITING_ORIGINAL";
+  const isOverdue = Boolean(transfer.expectedEndAt && transfer.expectedEndAt < new Date());
 
   return (
     <>
@@ -72,11 +90,36 @@ export default async function TransferDetailPage({
             {transfer.receiverResponseComment ? (
               <Detail label="Begrundelse fra modtager" value={transfer.receiverResponseComment} />
             ) : null}
+            {transfer.vcDecision ? <Detail label="VC's afgørelse" value={transfer.vcDecision} /> : null}
+            {transfer.vcComment ? <Detail label="VC-kommentar" value={transfer.vcComment} /> : null}
           </dl>
           <p className="rounded-md bg-amber-50 p-3 text-sm font-semibold text-amber-950">
             Forventet sluttid er kun en påmindelse. Vagten tilbageleveres ikke automatisk.
           </p>
+          {isOverdue ? (
+            <p className="rounded-md bg-red-50 p-3 text-sm font-semibold text-red-950">
+              Forventet sluttid er overskredet. Vagtoverdragelsen fortsætter, indtil en tilbagelevering er godkendt af vagtcentralen.
+            </p>
+          ) : null}
           {canRespond ? <TransferResponseForms transferId={transfer.id} /> : null}
+          {canCreateReturn ? (
+            <ReturnRequestCreateForm transferId={transfer.id} originalName={transfer.giverNameSnapshot} />
+          ) : null}
+          {activeReturn ? (
+            <section className="grid gap-3 rounded-md border border-brand-line p-4">
+              <h2 className="text-xl font-bold">Aktiv tilbagelevering</h2>
+              <dl className="grid gap-3">
+                <Detail label="Tilbagelevering" value={activeReturn.returnNumber} />
+                <Detail label="Ønsket tidspunkt" value={formatDateTime(activeReturn.requestedReturnAt)} />
+                {activeReturn.comment ? <Detail label="Kommentar" value={activeReturn.comment} /> : null}
+                {activeReturn.originalResponseComment ? (
+                  <Detail label="Svar fra oprindelig brandmand" value={activeReturn.originalResponseComment} />
+                ) : null}
+                {activeReturn.vcComment ? <Detail label="VC-kommentar" value={activeReturn.vcComment} /> : null}
+              </dl>
+              {canAnswerReturn ? <ReturnRequestResponseForms returnRequestId={activeReturn.id} /> : null}
+            </section>
+          ) : null}
         </section>
       </main>
     </>

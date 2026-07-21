@@ -11,14 +11,24 @@ import {
   firefighterUpdateSchema,
   loginSchema,
   passwordResetSchema,
+  returnRequestCreateSchema,
+  returnRequestResponseSchema,
   transferCreateSchema,
   transferLookupSchema,
   transferResponseSchema,
+  vcReturnDecisionSchema,
+  vcReturnRejectSchema,
+  vcTransferDecisionSchema,
+  vcTransferRejectSchema,
   vcUpdateSchema
 } from "./validation";
 import { requirePasswordChangeUser, requireRole, roleHome, signIn, signOut } from "./auth";
 import {
   canRespondToTransfer,
+  canCreateReturnRequest,
+  canOriginalRespondToReturn,
+  canVcDecideReturn,
+  canVcDecideTransfer,
   validateTransferParticipants,
   type TransferParticipant
 } from "./transfer-rules";
@@ -60,6 +70,11 @@ async function findFirefighterByEmployeeNumber(employeeNumber: string) {
 async function nextTransferNumber() {
   const count = await prisma.shiftTransfer.count();
   return `VO-${String(count + 1).padStart(5, "0")}`;
+}
+
+async function nextReturnNumber() {
+  const count = await prisma.returnRequest.count();
+  return `TL-${String(count + 1).padStart(5, "0")}`;
 }
 
 export async function loginAction(_state: ActionState, formData: FormData): Promise<ActionState> {
@@ -586,5 +601,426 @@ export async function rejectTransferAction(
     transferId: parsed.data.transferId,
     status: "RECEIVER_REJECTED",
     responseComment: parsed.data.responseComment
+  });
+}
+
+async function decideTransferByVc(input: {
+  transferId: string;
+  approve: boolean;
+  comment?: string;
+}): Promise<ActionState> {
+  const vc = await requireRole(UserRole.VC);
+  const transfer = await prisma.shiftTransfer.findUnique({ where: { id: input.transferId } });
+
+  if (!transfer) {
+    return { ok: false, message: "Sagen blev ikke fundet." };
+  }
+
+  const permission = canVcDecideTransfer({ role: vc.role, status: transfer.status });
+  if (!permission.ok) {
+    await prisma.auditLog.create({
+      data: {
+        actorUserId: vc.id,
+        actorRole: vc.role,
+        action: "VC_TRANSFER_DECISION_REJECTED",
+        description: permission.message
+      }
+    });
+    return { ok: false, message: permission.message };
+  }
+
+  const now = new Date();
+  await prisma.shiftTransfer.update({
+    where: { id: transfer.id },
+    data: {
+      status: input.approve ? "VC_APPROVED_ACTIVE" : "VC_REJECTED",
+      vcDecidedAt: now,
+      vcDecision: input.approve ? "Godkendt af Vagtcentralen" : "Afvist af Vagtcentralen",
+      vcComment: optionalText(input.comment),
+      activatedAt: input.approve ? now : null
+    }
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actorUserId: vc.id,
+      actorRole: vc.role,
+      action: input.approve ? "TRANSFER_VC_APPROVED" : "TRANSFER_VC_REJECTED",
+      targetUserId: transfer.giverUserId,
+      description: input.approve
+        ? `Godkendt af Vagtcentralen: ${transfer.transferNumber}`
+        : `Afvist af Vagtcentralen: ${transfer.transferNumber}`
+    }
+  });
+
+  revalidatePath("/vagtcentral");
+  revalidatePath(`/vagtcentral/sager/${transfer.id}`);
+  revalidatePath("/brandmand");
+  revalidatePath(`/brandmand/anmodninger/${transfer.id}`);
+  return {
+    ok: true,
+    message: input.approve ? "Vagtoverdragelsen er godkendt." : "Vagtoverdragelsen er afvist."
+  };
+}
+
+export async function approveTransferByVcAction(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const parsed = vcTransferDecisionSchema.safeParse({
+    transferId: formData.get("transferId"),
+    comment: formData.get("comment") ?? ""
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: firstError(parsed.error) };
+  }
+
+  return decideTransferByVc({
+    transferId: parsed.data.transferId,
+    approve: true,
+    comment: parsed.data.comment
+  });
+}
+
+export async function rejectTransferByVcAction(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const parsed = vcTransferRejectSchema.safeParse({
+    transferId: formData.get("transferId"),
+    comment: formData.get("comment") ?? ""
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: firstError(parsed.error) };
+  }
+
+  return decideTransferByVc({
+    transferId: parsed.data.transferId,
+    approve: false,
+    comment: parsed.data.comment
+  });
+}
+
+export async function createReturnRequestAction(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const user = await requireRole(UserRole.BRANDFIGHTER);
+  const parsed = returnRequestCreateSchema.safeParse({
+    transferId: formData.get("transferId"),
+    requestedReturnAt: formData.get("requestedReturnAt"),
+    comment: formData.get("comment") ?? ""
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: firstError(parsed.error) };
+  }
+
+  const transfer = await prisma.shiftTransfer.findUnique({
+    where: { id: parsed.data.transferId },
+    include: {
+      returnRequests: {
+        where: { status: { in: ["AWAITING_ORIGINAL", "ORIGINAL_ACCEPTED_AWAITING_VC"] } }
+      }
+    }
+  });
+
+  if (!transfer) {
+    return { ok: false, message: "Sagen blev ikke fundet." };
+  }
+
+  const permission = canCreateReturnRequest({
+    userId: user.id,
+    receiverUserId: transfer.receiverUserId,
+    status: transfer.status,
+    hasOpenReturnRequest: transfer.returnRequests.length > 0
+  });
+
+  if (!permission.ok) {
+    await prisma.auditLog.create({
+      data: {
+        actorUserId: user.id,
+        actorRole: user.role,
+        action: "RETURN_CREATE_REJECTED",
+        description: permission.message
+      }
+    });
+    return { ok: false, message: permission.message };
+  }
+
+  const returnRequest = await prisma.returnRequest.create({
+    data: {
+      returnNumber: await nextReturnNumber(),
+      transferId: transfer.id,
+      createdByUserId: user.id,
+      originalUserId: transfer.giverUserId,
+      currentHolderUserId: transfer.receiverUserId,
+      originalNameSnapshot: transfer.giverNameSnapshot,
+      originalEmployeeNumberSnapshot: transfer.giverEmployeeNumberSnapshot,
+      currentHolderNameSnapshot: transfer.receiverNameSnapshot,
+      currentHolderEmployeeNumberSnapshot: transfer.receiverEmployeeNumberSnapshot,
+      requestedReturnAt: parsed.data.requestedReturnAt,
+      comment: optionalText(parsed.data.comment),
+      status: "AWAITING_ORIGINAL"
+    }
+  });
+
+  await prisma.shiftTransfer.update({
+    where: { id: transfer.id },
+    data: { status: "RETURN_AWAITING_ORIGINAL" }
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actorUserId: user.id,
+      actorRole: user.role,
+      action: "RETURN_CREATED",
+      targetUserId: transfer.giverUserId,
+      description: `Tilbagelevering ${returnRequest.returnNumber} blev oprettet`
+    }
+  });
+
+  revalidatePath("/brandmand");
+  revalidatePath(`/brandmand/anmodninger/${transfer.id}`);
+  return { ok: true, message: "Tilbageleveringen er oprettet og afventer den oprindelige brandmand." };
+}
+
+async function respondToReturnRequest(input: {
+  returnRequestId: string;
+  accept: boolean;
+  responseComment?: string;
+}): Promise<ActionState> {
+  const user = await requireRole(UserRole.BRANDFIGHTER);
+  const returnRequest = await prisma.returnRequest.findUnique({
+    where: { id: input.returnRequestId },
+    include: { transfer: true }
+  });
+
+  if (!returnRequest) {
+    return { ok: false, message: "Tilbageleveringen blev ikke fundet." };
+  }
+
+  const permission = canOriginalRespondToReturn({
+    userId: user.id,
+    originalUserId: returnRequest.originalUserId,
+    transferStatus: returnRequest.transfer.status,
+    returnStatus: returnRequest.status
+  });
+
+  if (!permission.ok) {
+    await prisma.auditLog.create({
+      data: {
+        actorUserId: user.id,
+        actorRole: user.role,
+        action: "RETURN_RESPONSE_REJECTED",
+        description: permission.message
+      }
+    });
+    return { ok: false, message: permission.message };
+  }
+
+  const now = new Date();
+  await prisma.returnRequest.update({
+    where: { id: returnRequest.id },
+    data: {
+      status: input.accept ? "ORIGINAL_ACCEPTED_AWAITING_VC" : "ORIGINAL_REJECTED",
+      originalRespondedAt: now,
+      originalAcceptedAt: input.accept ? now : null,
+      originalResponseComment: optionalText(input.responseComment)
+    }
+  });
+
+  await prisma.shiftTransfer.update({
+    where: { id: returnRequest.transferId },
+    data: { status: input.accept ? "RETURN_ACCEPTED_AWAITING_VC" : "VC_APPROVED_ACTIVE" }
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actorUserId: user.id,
+      actorRole: user.role,
+      action: input.accept ? "RETURN_ACCEPTED_BY_ORIGINAL" : "RETURN_REJECTED_BY_ORIGINAL",
+      targetUserId: returnRequest.currentHolderUserId,
+      description: input.accept
+        ? `Tilbagelevering ${returnRequest.returnNumber} blev accepteret`
+        : `Tilbagelevering ${returnRequest.returnNumber} blev afvist`
+    }
+  });
+
+  revalidatePath("/brandmand");
+  revalidatePath(`/brandmand/anmodninger/${returnRequest.transferId}`);
+  revalidatePath("/vagtcentral");
+  return {
+    ok: true,
+    message: input.accept
+      ? "Tilbageleveringen er accepteret og afventer vagtcentralen."
+      : "Tilbageleveringen er afvist. Vagtoverdragelsen fortsætter."
+  };
+}
+
+export async function acceptReturnRequestAction(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const parsed = returnRequestResponseSchema.safeParse({
+    returnRequestId: formData.get("returnRequestId"),
+    responseComment: ""
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: firstError(parsed.error) };
+  }
+
+  return respondToReturnRequest({ returnRequestId: parsed.data.returnRequestId, accept: true });
+}
+
+export async function rejectReturnRequestAction(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const parsed = returnRequestResponseSchema.safeParse({
+    returnRequestId: formData.get("returnRequestId"),
+    responseComment: formData.get("responseComment") ?? ""
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: firstError(parsed.error) };
+  }
+
+  return respondToReturnRequest({
+    returnRequestId: parsed.data.returnRequestId,
+    accept: false,
+    responseComment: parsed.data.responseComment
+  });
+}
+
+async function decideReturnByVc(input: {
+  returnRequestId: string;
+  approve: boolean;
+  comment?: string;
+}): Promise<ActionState> {
+  const vc = await requireRole(UserRole.VC);
+  const returnRequest = await prisma.returnRequest.findUnique({
+    where: { id: input.returnRequestId },
+    include: { transfer: true }
+  });
+
+  if (!returnRequest) {
+    return { ok: false, message: "Tilbageleveringen blev ikke fundet." };
+  }
+
+  const permission = canVcDecideReturn({
+    role: vc.role,
+    transferStatus: returnRequest.transfer.status,
+    returnStatus: returnRequest.status
+  });
+
+  if (!permission.ok) {
+    await prisma.auditLog.create({
+      data: {
+        actorUserId: vc.id,
+        actorRole: vc.role,
+        action: "VC_RETURN_DECISION_REJECTED",
+        description: permission.message
+      }
+    });
+    return { ok: false, message: permission.message };
+  }
+
+  const now = new Date();
+  await prisma.returnRequest.update({
+    where: { id: returnRequest.id },
+    data: {
+      status: input.approve ? "VC_APPROVED_COMPLETED" : "VC_REJECTED",
+      vcDecidedAt: now,
+      vcDecision: input.approve ? "Godkendt af Vagtcentralen" : "Afvist af Vagtcentralen",
+      vcComment: optionalText(input.comment),
+      completedAt: input.approve ? now : null
+    }
+  });
+
+  await prisma.shiftTransfer.update({
+    where: { id: returnRequest.transferId },
+    data: {
+      status: input.approve ? "COMPLETED" : "VC_APPROVED_ACTIVE",
+      completedAt: input.approve ? now : null
+    }
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actorUserId: vc.id,
+      actorRole: vc.role,
+      action: input.approve ? "RETURN_VC_APPROVED_COMPLETED" : "RETURN_VC_REJECTED",
+      targetUserId: returnRequest.originalUserId,
+      description: input.approve
+        ? `Tilbagelevering ${returnRequest.returnNumber} blev godkendt og sagen afsluttet`
+        : `Tilbagelevering ${returnRequest.returnNumber} blev afvist af vagtcentralen`
+    }
+  });
+
+  if (input.approve) {
+    await prisma.auditLog.create({
+      data: {
+        actorUserId: vc.id,
+        actorRole: vc.role,
+        action: "TRANSFER_COMPLETED",
+        targetUserId: returnRequest.currentHolderUserId,
+        description: `Vagtoverdragelse ${returnRequest.transfer.transferNumber} blev afsluttet`
+      }
+    });
+  }
+
+  revalidatePath("/vagtcentral");
+  revalidatePath(`/vagtcentral/sager/${returnRequest.transferId}`);
+  revalidatePath("/brandmand");
+  revalidatePath(`/brandmand/anmodninger/${returnRequest.transferId}`);
+  return {
+    ok: true,
+    message: input.approve
+      ? "Tilbageleveringen er godkendt, og sagen er afsluttet."
+      : "Tilbageleveringen er afvist. Vagtoverdragelsen fortsætter."
+  };
+}
+
+export async function approveReturnByVcAction(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const parsed = vcReturnDecisionSchema.safeParse({
+    returnRequestId: formData.get("returnRequestId"),
+    comment: formData.get("comment") ?? ""
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: firstError(parsed.error) };
+  }
+
+  return decideReturnByVc({
+    returnRequestId: parsed.data.returnRequestId,
+    approve: true,
+    comment: parsed.data.comment
+  });
+}
+
+export async function rejectReturnByVcAction(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const parsed = vcReturnRejectSchema.safeParse({
+    returnRequestId: formData.get("returnRequestId"),
+    comment: formData.get("comment") ?? ""
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: firstError(parsed.error) };
+  }
+
+  return decideReturnByVc({
+    returnRequestId: parsed.data.returnRequestId,
+    approve: false,
+    comment: parsed.data.comment
   });
 }

@@ -65,3 +65,40 @@ export const transferResponseSchema = z.object({
   transferId: z.string().min(1),
   responseComment: z.string().trim().max(500, "Begrundelsen må højst være 500 tegn").optional()
 });
+
+export const vcTransferDecisionSchema = z.object({
+  transferId: z.string().min(1),
+  comment: z.string().trim().max(500, "Kommentaren må højst være 500 tegn").optional()
+});
+
+export const vcTransferRejectSchema = vcTransferDecisionSchema.refine(
+  (data) => Boolean(data.comment && data.comment.length > 0),
+  {
+    message: "Vagtcentralen skal skrive en begrundelse ved afvisning.",
+    path: ["comment"]
+  }
+);
+
+export const returnRequestCreateSchema = z.object({
+  transferId: z.string().min(1),
+  requestedReturnAt: z.coerce.date({ invalid_type_error: "Ønsket tilbageleveringstidspunkt skal udfyldes" }),
+  comment: z.string().trim().max(500, "Kommentaren må højst være 500 tegn").optional()
+});
+
+export const returnRequestResponseSchema = z.object({
+  returnRequestId: z.string().min(1),
+  responseComment: z.string().trim().max(500, "Kommentaren må højst være 500 tegn").optional()
+});
+
+export const vcReturnDecisionSchema = z.object({
+  returnRequestId: z.string().min(1),
+  comment: z.string().trim().max(500, "Kommentaren må højst være 500 tegn").optional()
+});
+
+export const vcReturnRejectSchema = vcReturnDecisionSchema.refine(
+  (data) => Boolean(data.comment && data.comment.length > 0),
+  {
+    message: "Vagtcentralen skal skrive en begrundelse ved afvisning.",
+    path: ["comment"]
+  }
+);
