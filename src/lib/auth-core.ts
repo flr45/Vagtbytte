@@ -1,5 +1,6 @@
 import { randomBytes, createHmac } from "crypto";
 import type { UserRole } from "@prisma/client";
+import { normalizeLoginIdentifier } from "./login-identifiers";
 import { verifyPassword } from "./passwords";
 
 export type AuthUser = {
@@ -42,6 +43,7 @@ export type SessionUser = AuthUser;
 export type SessionRecord = {
   id: string;
   expiresAt: Date;
+  lastSeenAt?: Date;
   user: SessionUser;
 };
 
@@ -64,7 +66,30 @@ export function newSessionToken() {
 }
 
 export function sessionExpiry() {
-  return new Date(Date.now() + 1000 * 60 * 60 * 12);
+  return new Date(Date.now() + sessionLifetimeMs());
+}
+
+export function sessionLifetimeMs() {
+  return 1000 * 60 * 60 * 24 * 30;
+}
+
+export function sessionCookieOptions(expiresAt: Date, now = new Date()) {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: Math.max(0, Math.floor((expiresAt.getTime() - now.getTime()) / 1000)),
+    expires: expiresAt
+  };
+}
+
+export function shouldRefreshSession(session: { expiresAt: Date; lastSeenAt: Date }, now = new Date()) {
+  return now.getTime() - session.lastSeenAt.getTime() >= 1000 * 60 * 60 * 24;
+}
+
+export function refreshedSessionExpiry(now = new Date()) {
+  return new Date(now.getTime() + sessionLifetimeMs());
 }
 
 export function resolveCurrentUserFromSession(session: SessionRecord | null, now = new Date()) {
@@ -93,7 +118,7 @@ export async function authenticateLogin(input: {
   ipAddress?: string;
   repo: AuthRepository;
 }): Promise<LoginResult> {
-  const identifier = input.identifier.trim().toLowerCase();
+  const identifier = normalizeLoginIdentifier(input.identifier);
   const recentFailures = await input.repo.countRecentFailures(identifier, input.ipAddress);
 
   if (recentFailures >= 5) {

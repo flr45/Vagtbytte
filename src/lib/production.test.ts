@@ -73,6 +73,18 @@ describe("produktionsbootstrap", () => {
     expect(repo.createdUsers.map((user) => user.loginIdentifier)).toEqual(["admin-prod", "vc-prod"]);
     expect(JSON.stringify(repo.createdUsers)).not.toContain("AdminProd123!");
   });
+
+  it("gemmer bootstrap-login med små bogstaver", async () => {
+    const repo = makeBootstrapRepo({ existingCount: 0 });
+    await bootstrapCore.bootstrapProductionUsers(repo, {
+      BOOTSTRAP_ADMIN_USERNAME: " AdminProd ",
+      BOOTSTRAP_ADMIN_PASSWORD: "AdminProd123!",
+      BOOTSTRAP_VC_USERNAME: "VCProd",
+      BOOTSTRAP_VC_PASSWORD: "VcProd123!"
+    });
+
+    expect(repo.createdUsers.map((user) => user.loginIdentifier)).toEqual(["adminprod", "vcprod"]);
+  });
 });
 
 function makeBootstrapRepo({ existingCount }: { existingCount: number }) {

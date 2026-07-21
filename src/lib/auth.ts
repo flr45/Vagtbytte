@@ -6,6 +6,7 @@ import {
   authenticateLogin,
   hashSessionToken,
   resolveCurrentUserFromSession,
+  sessionCookieOptions,
   shouldDeleteCookieOnLogout,
   type AuthRepository
 } from "./auth-core";
@@ -71,14 +72,7 @@ export async function signIn(identifier: string, password: string) {
 
   if (result.ok) {
     const cookieStore = await cookies();
-    cookieStore.set(SESSION_COOKIE_NAME, result.rawToken, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: Math.floor((result.expiresAt.getTime() - Date.now()) / 1000),
-      expires: result.expiresAt
-    });
+    cookieStore.set(SESSION_COOKIE_NAME, result.rawToken, sessionCookieOptions(result.expiresAt));
   }
 
   return result;

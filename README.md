@@ -223,6 +223,24 @@ Kommandoen kræver:
 Den nægter at køre, hvis der allerede findes en admin eller VC. Begge konti får
 `mustChangePassword=true`, og adgangskoder logges ikke.
 
+Når første admin og VC er oprettet, kan disse Render-variabler fjernes igen:
+
+- `BOOTSTRAP_ADMIN_USERNAME`
+- `BOOTSTRAP_ADMIN_PASSWORD`
+- `BOOTSTRAP_VC_USERNAME`
+- `BOOTSTRAP_VC_PASSWORD`
+
+Almindelige deployments kræver ikke bootstrap-variablerne.
+
+Hvis der findes gamle logins med store bogstaver, kan de normaliseres sikkert:
+
+```bash
+npm run production:normalize-logins
+```
+
+Kommandoen stopper med en tydelig fejl, hvis to logins ville blive ens efter
+konvertering til små bogstaver.
+
 ### Health check og drift
 
 Render bruger `/api/health` som health check. Endpointet returnerer kun:
@@ -239,9 +257,21 @@ Efter deploy kontrolleres:
 - worker logs: Render-dashboard > `vagtbytte-worker` > Logs
 - database: Render-dashboard > `vagtbytte-db`
 - health check: åbn `https://DIN-RENDER-URL/api/health`
+- systemstatus: log ind som admin og åbn `/admin/systemstatus`
 
 Rollback sker fra Render-dashboardet ved at vælge en tidligere deploy for
 webservice og worker. Databasemigrationer skal vurderes særskilt før rollback.
+
+Brandmænd oprettes i adminområdet. Midlertidige adgangskoder sættes samme sted
+og kræver adgangskodeskift ved næste login.
+
+Ved manglende notifikationer kontrolleres i denne rækkefølge:
+
+1. At in-app-notifikationen findes på brugerens notifikationsside.
+2. At push er aktiveret, og at enheden står under registrerede enheder.
+3. At `vagtbytte-worker` kører og har nye logs.
+4. At `/admin/systemstatus` ikke advarer om gammel worker-aktivitet.
+5. At VAPID-variablerne er sat på både webservice og worker.
 
 ### Push på telefon
 

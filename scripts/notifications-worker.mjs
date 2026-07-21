@@ -10,6 +10,12 @@ console.log(`Notifikations-worker startet. Interval: ${intervalMs} ms.`);
 async function tick() {
   try {
     const result = await publishDueNotifications(prisma);
+    await prisma.auditLog.create({
+      data: {
+        action: "NOTIFICATION_WORKER_HEARTBEAT",
+        description: "Notifikations-worker var aktiv"
+      }
+    });
     if (result.published || result.cancelled) {
       console.log(`Publiceret: ${result.published}. Annulleret: ${result.cancelled}.`);
     }

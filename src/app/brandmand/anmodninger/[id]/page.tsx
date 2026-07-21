@@ -50,7 +50,7 @@ export default async function TransferDetailPage({
   const isGiver = user.id === transfer.giverUserId;
   const canRespond = isReceiver && transfer.status === "AWAITING_RECEIVER";
   const activeReturn = transfer.returnRequests.find((request) =>
-    ["AWAITING_ORIGINAL", "ORIGINAL_ACCEPTED_AWAITING_VC"].includes(request.status)
+    ["AWAITING_ORIGINAL", "ORIGINAL_ACCEPTED_AWAITING_VC", "VC_APPROVED_AWAITING_EXECUTION"].includes(request.status)
   );
   const canCreateReturn = isReceiver && transfer.status === "VC_APPROVED_ACTIVE" && !activeReturn;
   const canAnswerReturn =

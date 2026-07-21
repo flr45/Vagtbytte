@@ -21,6 +21,15 @@ export async function TopBar({ title }: { title: string }) {
       <div className="mx-auto flex min-h-16 w-full max-w-5xl items-center justify-between gap-3 px-4">
         <p className="text-lg font-bold">{title}</p>
         <div className="flex items-center gap-2">
+          {user ? (
+            <a
+              className="focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-zinc-300 px-3 text-sm font-bold text-zinc-900"
+              href={roleHome[user.role]}
+            >
+              <span aria-hidden="true">⌂</span>
+              Forside
+            </a>
+          ) : null}
           {user?.role !== "ADMIN" ? (
             <a
               className="focus-ring relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-zinc-300 px-3 text-sm font-bold text-zinc-900"

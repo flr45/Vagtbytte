@@ -8,7 +8,7 @@ export default async function FirefighterNotificationsPage() {
   const user = await requireRole(UserRole.BRANDFIGHTER);
   const [notifications, devices] = await Promise.all([
     prisma.notification.findMany({
-      where: { recipientUserId: user.id, publishedAt: { not: null }, cancelledAt: null },
+      where: { recipientUserId: user.id, publishedAt: { not: null }, cancelledAt: null, dismissedAt: null },
       orderBy: { createdAt: "desc" },
       take: 100
     }),

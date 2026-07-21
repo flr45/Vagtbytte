@@ -107,6 +107,20 @@ describe("push-enheder", () => {
     expect(result.sent).toBe(1);
     expect(repo.deliveries.map((delivery) => delivery.status).sort()).toEqual(["FAILED", "SENT"]);
   });
+
+  it("push-payload indeholder notification-id til åbnet/læst-markering", async () => {
+    const repo = makePushRepo([
+      { id: "sub-1", endpoint: "https://push.test/ok", p256dh: "key", auth: "auth", revokedAt: null }
+    ]);
+    const ids: string[] = [];
+    setPushSenderForTests(async (input) => {
+      ids.push(input.notificationId);
+    });
+
+    await sendPushForNotification(repo, "notification-1");
+
+    expect(ids).toEqual(["notification-1"]);
+  });
 });
 
 type TestSubscription = {

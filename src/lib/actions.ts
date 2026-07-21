@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { UserRole, type TransferStatus } from "@prisma/client";
 import { prisma } from "./prisma";
 import { hashPassword, verifyPassword } from "./passwords";
+import { normalizeLoginIdentifier } from "./login-identifiers";
 import {
   changePasswordSchema,
   firefighterCreateSchema,
@@ -20,7 +21,9 @@ import {
   transferLookupSchema,
   transferResponseSchema,
   vcReturnDecisionSchema,
+  vcReturnExecutionSchema,
   vcReturnRejectSchema,
+  vcTransferActivationSchema,
   vcTransferDecisionSchema,
   vcTransferRejectSchema,
   vcUpdateSchema
@@ -32,6 +35,8 @@ import {
   canOriginalRespondToReturn,
   canVcDecideReturn,
   canVcDecideTransfer,
+  canVcConfirmReturnExecution,
+  canVcConfirmTransferActivation,
   validateTransferParticipants,
   type TransferParticipant
 } from "./transfer-rules";
@@ -43,7 +48,9 @@ import {
   notifyReturnCreated,
   notifyTransferCreated,
   notifyVcReturnDecision,
-  notifyVcTransferDecision
+  notifyVcTransferDecision,
+  notifyTransferActivated,
+  notifyReturnExecutionCompleted
 } from "./notification-events";
 
 export type ActionState = {
@@ -134,20 +141,23 @@ export async function createFirefighterAction(
     return { ok: false, message: firstError(parsed.error) };
   }
 
+  const loginIdentifier = normalizeLoginIdentifier(parsed.data.employeeNumber);
   const existing = await prisma.user.findFirst({
-    where: { employeeNumber: parsed.data.employeeNumber }
+    where: {
+      OR: [{ employeeNumber: loginIdentifier }, { loginIdentifier }]
+    }
   });
 
   if (existing) {
-    return { ok: false, message: "Medarbejdernummeret er allerede i brug." };
+    return { ok: false, message: "Medarbejdernummeret eller login er allerede i brug." };
   }
 
   const user = await prisma.user.create({
     data: {
       name: parsed.data.name,
       role: UserRole.BRANDFIGHTER,
-      employeeNumber: parsed.data.employeeNumber,
-      loginIdentifier: parsed.data.employeeNumber,
+      employeeNumber: loginIdentifier,
+      loginIdentifier,
       passwordHash: await hashPassword(parsed.data.temporaryPassword),
       isActive: parsed.data.isActive,
       mustChangePassword: true
@@ -189,26 +199,30 @@ export async function updateFirefighterAction(
     return { ok: false, message: "Brandmanden blev ikke fundet." };
   }
 
+  const loginIdentifier = normalizeLoginIdentifier(parsed.data.employeeNumber);
   const duplicate = await prisma.user.findFirst({
     where: {
-      employeeNumber: parsed.data.employeeNumber,
-      id: { not: parsed.data.userId }
+      id: { not: parsed.data.userId },
+      OR: [{ employeeNumber: loginIdentifier }, { loginIdentifier }]
     }
   });
 
   if (duplicate) {
-    return { ok: false, message: "Medarbejdernummeret er allerede i brug." };
+    return { ok: false, message: "Medarbejdernummeret eller login er allerede i brug." };
   }
 
   await prisma.user.update({
     where: { id: parsed.data.userId },
     data: {
       name: parsed.data.name,
-      employeeNumber: parsed.data.employeeNumber,
-      loginIdentifier: parsed.data.employeeNumber,
+      employeeNumber: loginIdentifier,
+      loginIdentifier,
       isActive: parsed.data.isActive
     }
   });
+  if (!parsed.data.isActive) {
+    await prisma.session.deleteMany({ where: { userId: parsed.data.userId } });
+  }
 
   await prisma.auditLog.create({
     data: {
@@ -277,9 +291,10 @@ export async function updateVcAction(_state: ActionState, formData: FormData): P
     return { ok: false, message: firstError(parsed.error) };
   }
 
+  const loginIdentifier = normalizeLoginIdentifier(parsed.data.loginIdentifier);
   const existingIdentifier = await prisma.user.findFirst({
     where: {
-      loginIdentifier: parsed.data.loginIdentifier,
+      loginIdentifier,
       role: { not: UserRole.VC }
     }
   });
@@ -308,7 +323,7 @@ export async function updateVcAction(_state: ActionState, formData: FormData): P
         where: { id: vc.id },
         data: {
           name: "Vagtcentralen",
-          loginIdentifier: parsed.data.loginIdentifier,
+          loginIdentifier,
           employeeNumber: null,
           isActive: parsed.data.isActive,
           ...passwordData
@@ -319,7 +334,7 @@ export async function updateVcAction(_state: ActionState, formData: FormData): P
           name: "Vagtcentralen",
           role: UserRole.VC,
           employeeNumber: null,
-          loginIdentifier: parsed.data.loginIdentifier,
+          loginIdentifier,
           passwordHash: await hashPassword(vcCreatePassword!),
           isActive: parsed.data.isActive,
           mustChangePassword: true
@@ -366,6 +381,7 @@ export async function changePasswordAction(
       mustChangePassword: false
     }
   });
+  await prisma.session.deleteMany({ where: { userId: user.id } });
 
   await prisma.auditLog.create({
     data: {
@@ -582,7 +598,7 @@ async function respondToTransfer(input: {
   revalidatePath(`/brandmand/anmodninger/${transfer.id}`);
   return {
     ok: true,
-      message:
+    message:
       input.status === "RECEIVER_ACCEPTED_AWAITING_VC"
         ? "Anmodningen er accepteret og afventer vagtcentralen."
         : "Anmodningen er afvist."
@@ -657,11 +673,11 @@ async function decideTransferByVc(input: {
   const decision = await prisma.shiftTransfer.updateMany({
     where: { id: transfer.id, status: "RECEIVER_ACCEPTED_AWAITING_VC" },
     data: {
-      status: input.approve ? "VC_APPROVED_ACTIVE" : "VC_REJECTED",
+      status: input.approve ? "VC_APPROVED_AWAITING_ACTIVATION" : "VC_REJECTED",
       vcDecidedAt: now,
       vcDecision: input.approve ? "Godkendt af Vagtcentralen" : "Afvist af Vagtcentralen",
       vcComment: optionalText(input.comment),
-      activatedAt: input.approve ? now : null
+      activatedAt: null
     }
   });
   if (decision.count !== 1) {
@@ -965,11 +981,11 @@ async function decideReturnByVc(input: {
   const decision = await prisma.returnRequest.updateMany({
     where: { id: returnRequest.id, status: "ORIGINAL_ACCEPTED_AWAITING_VC" },
     data: {
-      status: input.approve ? "VC_APPROVED_COMPLETED" : "VC_REJECTED",
+      status: input.approve ? "VC_APPROVED_AWAITING_EXECUTION" : "VC_REJECTED",
       vcDecidedAt: now,
       vcDecision: input.approve ? "Godkendt af Vagtcentralen" : "Afvist af Vagtcentralen",
       vcComment: optionalText(input.comment),
-      completedAt: input.approve ? now : null
+      completedAt: null
     }
   });
   if (decision.count !== 1) {
@@ -981,8 +997,8 @@ async function decideReturnByVc(input: {
   const updatedTransfer = await prisma.shiftTransfer.update({
     where: { id: returnRequest.transferId },
     data: {
-      status: input.approve ? "COMPLETED" : "VC_APPROVED_ACTIVE",
-      completedAt: input.approve ? now : null
+      status: input.approve ? "RETURN_APPROVED_AWAITING_EXECUTION" : "VC_APPROVED_ACTIVE",
+      completedAt: null
     }
   });
   await notifyVcReturnDecision(updatedTransfer, updatedReturnRequest, vc, input.approve);
@@ -991,25 +1007,13 @@ async function decideReturnByVc(input: {
     data: {
       actorUserId: vc.id,
       actorRole: vc.role,
-      action: input.approve ? "RETURN_VC_APPROVED_COMPLETED" : "RETURN_VC_REJECTED",
+      action: input.approve ? "RETURN_VC_APPROVED_AWAITING_EXECUTION" : "RETURN_VC_REJECTED",
       targetUserId: returnRequest.originalUserId,
       description: input.approve
-        ? `Tilbagelevering ${returnRequest.returnNumber} blev godkendt og sagen afsluttet`
+        ? `Tilbagelevering ${returnRequest.returnNumber} blev godkendt og afventer gennemførelse`
         : `Tilbagelevering ${returnRequest.returnNumber} blev afvist af vagtcentralen`
     }
   });
-
-  if (input.approve) {
-    await prisma.auditLog.create({
-      data: {
-        actorUserId: vc.id,
-        actorRole: vc.role,
-        action: "TRANSFER_COMPLETED",
-        targetUserId: returnRequest.currentHolderUserId,
-        description: `Vagtoverdragelse ${returnRequest.transfer.transferNumber} blev afsluttet`
-      }
-    });
-  }
 
   revalidatePath("/vagtcentral");
   revalidatePath(`/vagtcentral/sager/${returnRequest.transferId}`);
@@ -1018,9 +1022,126 @@ async function decideReturnByVc(input: {
   return {
     ok: true,
     message: input.approve
-      ? "Tilbageleveringen er godkendt, og sagen er afsluttet."
+      ? "Tilbageleveringen er godkendt og afventer gennemførelse."
       : "Tilbageleveringen er afvist. Vagtoverdragelsen fortsætter."
   };
+}
+
+export async function confirmTransferActivationAction(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const vc = await requireRole(UserRole.VC);
+  const parsed = vcTransferActivationSchema.safeParse({ transferId: formData.get("transferId") });
+  if (!parsed.success) {
+    return { ok: false, message: firstError(parsed.error) };
+  }
+
+  const transfer = await prisma.shiftTransfer.findUnique({ where: { id: parsed.data.transferId } });
+  if (!transfer) {
+    return { ok: false, message: "Sagen blev ikke fundet." };
+  }
+
+  const permission = canVcConfirmTransferActivation({ role: vc.role, status: transfer.status });
+  if (!permission.ok) {
+    return { ok: false, message: permission.message };
+  }
+
+  const now = new Date();
+  const confirmed = await prisma.shiftTransfer.updateMany({
+    where: { id: transfer.id, status: "VC_APPROVED_AWAITING_ACTIVATION" },
+    data: {
+      status: "VC_APPROVED_ACTIVE",
+      activatedAt: now,
+      activationConfirmedAt: now,
+      activationConfirmedByUserId: vc.id
+    }
+  });
+  if (confirmed.count !== 1) {
+    return { ok: false, message: "Vagtskiftet er allerede bekræftet." };
+  }
+
+  const updatedTransfer = await prisma.shiftTransfer.findUniqueOrThrow({ where: { id: transfer.id } });
+  await notifyTransferActivated(updatedTransfer);
+  await prisma.auditLog.create({
+    data: {
+      actorUserId: vc.id,
+      actorRole: vc.role,
+      action: "TRANSFER_ACTIVATION_CONFIRMED",
+      targetUserId: transfer.receiverUserId,
+      description: `Vagtskifte ${transfer.transferNumber} blev bekræftet udført`
+    }
+  });
+
+  revalidatePath("/vagtcentral");
+  revalidatePath(`/vagtcentral/sager/${transfer.id}`);
+  revalidatePath("/brandmand");
+  revalidatePath(`/brandmand/anmodninger/${transfer.id}`);
+  return { ok: true, message: "Vagtskiftet er bekræftet udført." };
+}
+
+export async function confirmReturnExecutionAction(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const vc = await requireRole(UserRole.VC);
+  const parsed = vcReturnExecutionSchema.safeParse({ returnRequestId: formData.get("returnRequestId") });
+  if (!parsed.success) {
+    return { ok: false, message: firstError(parsed.error) };
+  }
+
+  const returnRequest = await prisma.returnRequest.findUnique({
+    where: { id: parsed.data.returnRequestId },
+    include: { transfer: true }
+  });
+  if (!returnRequest) {
+    return { ok: false, message: "Tilbageleveringen blev ikke fundet." };
+  }
+
+  const permission = canVcConfirmReturnExecution({
+    role: vc.role,
+    transferStatus: returnRequest.transfer.status,
+    returnStatus: returnRequest.status
+  });
+  if (!permission.ok) {
+    return { ok: false, message: permission.message };
+  }
+
+  const now = new Date();
+  const confirmed = await prisma.returnRequest.updateMany({
+    where: { id: returnRequest.id, status: "VC_APPROVED_AWAITING_EXECUTION" },
+    data: {
+      status: "VC_APPROVED_COMPLETED",
+      completedAt: now,
+      returnExecutionConfirmedAt: now,
+      returnExecutionConfirmedByUserId: vc.id
+    }
+  });
+  if (confirmed.count !== 1) {
+    return { ok: false, message: "Tilbageleveringen er allerede bekræftet." };
+  }
+
+  const updatedTransfer = await prisma.shiftTransfer.update({
+    where: { id: returnRequest.transferId },
+    data: { status: "COMPLETED", completedAt: now }
+  });
+  const updatedReturnRequest = await prisma.returnRequest.findUniqueOrThrow({ where: { id: returnRequest.id } });
+  await notifyReturnExecutionCompleted(updatedTransfer, updatedReturnRequest);
+  await prisma.auditLog.create({
+    data: {
+      actorUserId: vc.id,
+      actorRole: vc.role,
+      action: "RETURN_EXECUTION_CONFIRMED",
+      targetUserId: returnRequest.originalUserId,
+      description: `Tilbagelevering ${returnRequest.returnNumber} blev bekræftet udført`
+    }
+  });
+
+  revalidatePath("/vagtcentral");
+  revalidatePath(`/vagtcentral/sager/${returnRequest.transferId}`);
+  revalidatePath("/brandmand");
+  revalidatePath(`/brandmand/anmodninger/${returnRequest.transferId}`);
+  return { ok: true, message: "Tilbageleveringen er bekræftet udført." };
 }
 
 export async function markNotificationReadAction(formData: FormData) {
@@ -1049,11 +1170,46 @@ export async function markNotificationReadAction(formData: FormData) {
   revalidatePath(roleHome[user.role]);
 }
 
+export async function openNotificationAction(formData: FormData) {
+  const user = await requireUser();
+  const parsed = notificationIdSchema.safeParse({
+    notificationId: formData.get("notificationId")
+  });
+  if (!parsed.success) {
+    redirect(roleHome[user.role]);
+  }
+
+  const notification = await prisma.notification.findUnique({ where: { id: parsed.data.notificationId } });
+  if (!notification || notification.recipientUserId !== user.id) {
+    redirect("/forbudt");
+  }
+
+  await prisma.notification.update({
+    where: { id: notification.id },
+    data: { readAt: notification.readAt ?? new Date(), openedAt: notification.openedAt ?? new Date() }
+  });
+
+  redirect(notification.link || roleHome[user.role]);
+}
+
 export async function markAllNotificationsReadAction() {
   const user = await requireUser();
   await prisma.notification.updateMany({
     where: { recipientUserId: user.id, readAt: null },
     data: { readAt: new Date() }
+  });
+  revalidatePath(roleHome[user.role]);
+}
+
+export async function dismissReadNotificationsAction() {
+  const user = await requireUser();
+  await prisma.notification.updateMany({
+    where: {
+      recipientUserId: user.id,
+      readAt: { not: null },
+      dismissedAt: null
+    },
+    data: { dismissedAt: new Date() }
   });
   revalidatePath(roleHome[user.role]);
 }

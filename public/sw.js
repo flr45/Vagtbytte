@@ -19,6 +19,7 @@ self.addEventListener("push", (event) => {
     body: data.body || "Der er en ny besked i Vagtbytte.",
     icon: "/icon.svg",
     data: {
+      notificationId: data.notificationId || null,
       link: data.link || "/"
     }
   };
@@ -28,21 +29,33 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  const notificationId =
+    event.notification.data && event.notification.data.notificationId ? event.notification.data.notificationId : null;
   const link = event.notification.data && event.notification.data.link ? event.notification.data.link : "/";
   const targetUrl = new URL(link, self.location.origin).href;
 
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      for (const client of clients) {
-        const clientUrl = new URL(client.url);
-        if (clientUrl.origin === self.location.origin && "focus" in client) {
-          if ("navigate" in client) {
-            client.navigate(targetUrl);
+    Promise.all([
+      notificationId
+        ? fetch("/api/notifications/open", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ notificationId })
+          }).catch(() => undefined)
+        : Promise.resolve(),
+      self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+        for (const client of clients) {
+          const clientUrl = new URL(client.url);
+          if (clientUrl.origin === self.location.origin && "focus" in client) {
+            if ("navigate" in client) {
+              client.navigate(targetUrl);
+            }
+            return client.focus();
           }
-          return client.focus();
         }
-      }
-      return self.clients.openWindow(targetUrl);
-    })
+        return self.clients.openWindow(targetUrl);
+      })
+    ])
   );
 });

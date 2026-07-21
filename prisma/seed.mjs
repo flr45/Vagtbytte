@@ -7,11 +7,15 @@ function envPassword(name, fallback) {
   return process.env[name] ?? fallback;
 }
 
+function normalizeLoginIdentifier(value) {
+  return String(value).trim().toLowerCase();
+}
+
 async function upsertUser(input) {
   const passwordHash = await bcrypt.hash(input.password, 12);
 
   return prisma.user.upsert({
-    where: { loginIdentifier: input.loginIdentifier },
+    where: { loginIdentifier: normalizeLoginIdentifier(input.loginIdentifier) },
     update: {
       name: input.name,
       role: input.role,
@@ -24,7 +28,7 @@ async function upsertUser(input) {
       name: input.name,
       role: input.role,
       employeeNumber: input.employeeNumber ?? null,
-      loginIdentifier: input.loginIdentifier,
+      loginIdentifier: normalizeLoginIdentifier(input.loginIdentifier),
       passwordHash,
       isActive: true,
       mustChangePassword: false

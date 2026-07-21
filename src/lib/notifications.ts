@@ -51,6 +51,7 @@ export function sanitizePushError(error: unknown) {
 }
 
 export type PushPayload = {
+  notificationId: string;
   endpoint: string;
   p256dh: string;
   auth: string;
@@ -98,6 +99,7 @@ export async function sendPushForNotification(repo: NotificationRepo, notificati
   for (const subscription of subscriptions) {
     try {
       await pushSender({
+        notificationId: notification.id,
         endpoint: subscription.endpoint,
         p256dh: subscription.p256dh,
         auth: subscription.auth,
@@ -229,6 +231,21 @@ async function shouldCancelScheduledNotification(repo: NotificationRepo, notific
     );
   }
 
+  if (notification.type === "TRANSFER_ACTIVATION_REMINDER") {
+    return notification.shiftTransfer.status !== "VC_APPROVED_AWAITING_ACTIVATION";
+  }
+
+  if (notification.type === "RETURN_EXECUTION_REMINDER") {
+    const request = notification.returnRequestId
+      ? await repo.returnRequest.findUnique({ where: { id: notification.returnRequestId }, include: { transfer: true } })
+      : null;
+    return (
+      !request ||
+      request.status !== "VC_APPROVED_AWAITING_EXECUTION" ||
+      request.transfer.status !== "RETURN_APPROVED_AWAITING_EXECUTION"
+    );
+  }
+
   if (notification.type === "TRANSFER_STARTED") {
     return ["COMPLETED", "VC_REJECTED", "RECEIVER_REJECTED", "CANCELLED"].includes(
       notification.shiftTransfer.status
@@ -276,6 +293,7 @@ async function pushSender(input: PushPayload) {
       }
     },
     JSON.stringify({
+      notificationId: input.notificationId,
       title: input.title,
       body: input.body,
       link: input.link

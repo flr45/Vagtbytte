@@ -8,7 +8,7 @@ export default async function VcNotificationsPage() {
   const user = await requireRole(UserRole.VC);
   const [notifications, devices] = await Promise.all([
     prisma.notification.findMany({
-      where: { recipientUserId: user.id, publishedAt: { not: null }, cancelledAt: null },
+      where: { recipientUserId: user.id, publishedAt: { not: null }, cancelledAt: null, dismissedAt: null },
       orderBy: { createdAt: "desc" },
       take: 100
     }),

@@ -13,7 +13,12 @@ import {
   sortVcTasksByDeadline,
   type VcPriority
 } from "@/lib/vc-dashboard";
-import { VcReturnDecisionForms, VcTransferDecisionForms } from "./VcDecisionForms";
+import {
+  VcReturnDecisionForms,
+  VcReturnExecutionForm,
+  VcTransferActivationForm,
+  VcTransferDecisionForms
+} from "./VcDecisionForms";
 import { formatDateTime, StatusBadge } from "./TransferSummary";
 
 export type VcDashboardTransfer = {
@@ -30,6 +35,7 @@ export type VcDashboardTransfer = {
   comment: string | null;
   receiverRespondedAt: string | null;
   receiverResponseComment: string | null;
+  vcDecidedAt: string | null;
   activatedAt: string | null;
   updatedAt: string;
   returnRequests: VcDashboardReturnRequest[];
@@ -42,8 +48,10 @@ export type VcDashboardReturnRequest = {
   comment: string | null;
   originalRespondedAt: string | null;
   originalResponseComment: string | null;
+  vcDecidedAt: string | null;
   status: string;
   createdAt: string;
+  updatedAt: string;
 };
 
 export function VcDashboard({
@@ -67,7 +75,13 @@ export function VcDashboard({
       ...awaitingTransfers.map((transfer) => transferToTask(transfer)),
       ...returnTransfers.map((transfer) => transferToReturnTask(transfer)),
       ...activeTransfers
-        .filter((transfer) => transfer.expectedEndMode === "SPECIFIC_TIME" && transfer.expectedEndAt)
+        .filter((transfer) => transfer.status === "VC_APPROVED_AWAITING_ACTIVATION")
+        .map((transfer) => transferToActivationTask(transfer)),
+      ...activeTransfers
+        .filter((transfer) => transfer.status === "RETURN_APPROVED_AWAITING_EXECUTION")
+        .map((transfer) => transferToReturnExecutionTask(transfer)),
+      ...activeTransfers
+        .filter((transfer) => transfer.status === "VC_APPROVED_ACTIVE" && transfer.expectedEndMode === "SPECIFIC_TIME" && transfer.expectedEndAt)
         .map((transfer) => transferToExpectedEndTask(transfer))
     ],
     [activeTransfers, awaitingTransfers, returnTransfers]
@@ -179,6 +193,35 @@ function transferToExpectedEndTask(transfer: VcDashboardTransfer) {
   };
 }
 
+function transferToActivationTask(transfer: VcDashboardTransfer) {
+  return {
+    id: `activation:${transfer.id}`,
+    kind: "ACTIVATION" as const,
+    transfer,
+    transferId: transfer.id,
+    transferNumber: transfer.transferNumber,
+    status: transfer.status,
+    deadlineAt: parseDate(transfer.requestedStartAt),
+    awaitingSince: parseDate(transfer.vcDecidedAt ?? transfer.updatedAt)
+  };
+}
+
+function transferToReturnExecutionTask(transfer: VcDashboardTransfer) {
+  const returnRequest = currentReturnRequest(transfer);
+  return {
+    id: `return-execution:${returnRequest?.id ?? transfer.id}`,
+    kind: "RETURN_EXECUTION" as const,
+    transfer,
+    returnRequest,
+    transferId: transfer.id,
+    returnRequestId: returnRequest?.id,
+    transferNumber: transfer.transferNumber,
+    status: transfer.status,
+    deadlineAt: returnRequest ? parseDate(returnRequest.requestedReturnAt) : null,
+    awaitingSince: returnRequest ? parseDate(returnRequest.vcDecidedAt ?? returnRequest.updatedAt) : parseDate(transfer.updatedAt)
+  };
+}
+
 function StatusBar({
   status,
   nextDeadline,
@@ -225,7 +268,7 @@ function ActionCard({
 }: {
   transfer: VcDashboardTransfer;
   returnRequest?: VcDashboardReturnRequest;
-  type: "TRANSFER" | "RETURN" | "EXPECTED_END";
+  type: "TRANSFER" | "RETURN" | "EXPECTED_END" | "ACTIVATION" | "RETURN_EXECUTION";
   now: Date;
 }) {
   const deadline =
@@ -233,6 +276,8 @@ function ActionCard({
       ? parseDate(transfer.requestedStartAt)
       : type === "EXPECTED_END"
         ? parseDate(transfer.expectedEndAt)
+        : type === "ACTIVATION"
+          ? parseDate(transfer.requestedStartAt)
         : parseDate(returnRequest?.requestedReturnAt);
   const priority = getVcPriority(deadline, now);
   const border = {
@@ -247,7 +292,15 @@ function ActionCard({
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="text-sm font-bold uppercase text-zinc-600">
-            {type === "TRANSFER" ? "Ny vagtoverdragelse" : type === "RETURN" ? "Tilbagelevering" : "Forventet tilbagelevering"}
+            {type === "TRANSFER"
+              ? "Ny vagtoverdragelse"
+              : type === "RETURN"
+                ? "Tilbagelevering"
+                : type === "ACTIVATION"
+                  ? "Vagtskifte skal bekræftes"
+                  : type === "RETURN_EXECUTION"
+                    ? "Tilbagelevering skal bekræftes"
+                    : "Forventet tilbagelevering"}
           </p>
           <h2 className="mt-1 text-2xl font-bold">{transfer.transferNumber}</h2>
         </div>
@@ -258,7 +311,7 @@ function ActionCard({
           </span>
         </div>
       </div>
-      {type === "TRANSFER" ? (
+      {type === "TRANSFER" || type === "ACTIVATION" ? (
         <TransferDetails deadline={deadline} now={now} transfer={transfer} />
       ) : type === "EXPECTED_END" ? (
         <ExpectedEndDetails deadline={deadline} now={now} transfer={transfer} />
@@ -273,6 +326,16 @@ function ActionCard({
           confirmationText={`Vil du godkende denne vagtoverdragelse?\n${transfer.giverNameSnapshot} til ${transfer.receiverNameSnapshot}\nStart: ${formatDateTime(parseDate(transfer.requestedStartAt) ?? new Date())}`}
           direct
           transferId={transfer.id}
+        />
+      ) : type === "ACTIVATION" ? (
+        <VcTransferActivationForm
+          confirmationText={`Vil du bekræfte, at vagtskiftet er udført?\n${transfer.giverNameSnapshot} til ${transfer.receiverNameSnapshot}\nTidspunkt: ${formatDateTime(parseDate(transfer.requestedStartAt) ?? new Date())}`}
+          transferId={transfer.id}
+        />
+      ) : type === "RETURN_EXECUTION" && returnRequest ? (
+        <VcReturnExecutionForm
+          confirmationText={`Vil du bekræfte, at tilbageleveringen er udført?\n${transfer.receiverNameSnapshot} tilbageleverer til ${transfer.giverNameSnapshot}\nTidspunkt: ${formatDateTime(parseDate(returnRequest.requestedReturnAt) ?? new Date())}`}
+          returnRequestId={returnRequest.id}
         />
       ) : type === "RETURN" && returnRequest ? (
         <VcReturnDecisionForms
@@ -415,7 +478,7 @@ function Detail({ label, value, strong = false }: { label: string; value: string
 
 function currentReturnRequest(transfer: VcDashboardTransfer) {
   return transfer.returnRequests.find((request) =>
-    ["AWAITING_ORIGINAL", "ORIGINAL_ACCEPTED_AWAITING_VC"].includes(request.status)
+    ["AWAITING_ORIGINAL", "ORIGINAL_ACCEPTED_AWAITING_VC", "VC_APPROVED_AWAITING_EXECUTION"].includes(request.status)
   );
 }
 

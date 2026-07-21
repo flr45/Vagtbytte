@@ -4,6 +4,8 @@ import { useActionState } from "react";
 import {
   approveReturnByVcAction,
   approveTransferByVcAction,
+  confirmReturnExecutionAction,
+  confirmTransferActivationAction,
   rejectReturnByVcAction,
   rejectTransferByVcAction
 } from "@/lib/actions";
@@ -109,6 +111,58 @@ export function VcReturnDecisionForms({
         </button>
       </form>
     </div>
+  );
+}
+
+export function VcTransferActivationForm({
+  transferId,
+  confirmationText
+}: {
+  transferId: string;
+  confirmationText: string;
+}) {
+  const [state, action] = useActionState(confirmTransferActivationAction, {});
+
+  return (
+    <form
+      action={action}
+      className="grid gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-4"
+      onSubmit={(event) => {
+        if (!window.confirm(confirmationText)) {
+          event.preventDefault();
+        }
+      }}
+    >
+      <input name="transferId" type="hidden" value={transferId} />
+      <ActionMessage message={state.message} ok={state.ok} />
+      <SubmitButton pendingText="Bekræfter...">Bekræft vagtskifte udført</SubmitButton>
+    </form>
+  );
+}
+
+export function VcReturnExecutionForm({
+  returnRequestId,
+  confirmationText
+}: {
+  returnRequestId: string;
+  confirmationText: string;
+}) {
+  const [state, action] = useActionState(confirmReturnExecutionAction, {});
+
+  return (
+    <form
+      action={action}
+      className="grid gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-4"
+      onSubmit={(event) => {
+        if (!window.confirm(confirmationText)) {
+          event.preventDefault();
+        }
+      }}
+    >
+      <input name="returnRequestId" type="hidden" value={returnRequestId} />
+      <ActionMessage message={state.message} ok={state.ok} />
+      <SubmitButton pendingText="Bekræfter...">Bekræft tilbagelevering udført</SubmitButton>
+    </form>
   );
 }
 

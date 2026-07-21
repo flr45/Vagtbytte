@@ -4,6 +4,8 @@ import {
   canCreateReturnRequest,
   canOriginalRespondToReturn,
   canRespondToTransfer,
+  canVcConfirmReturnExecution,
+  canVcConfirmTransferActivation,
   canVcDecideReturn,
   canVcDecideTransfer,
   canViewTransfer,
@@ -194,13 +196,30 @@ describe("del 3 - vagtcentral", () => {
     );
   });
 
-  it("godkendelse ændrer status til aktiv", () => {
-    expect(statusLabel(TransferStatus.VC_APPROVED_ACTIVE)).toBe("Aktiv vagtoverdragelse");
+  it("godkendelse afventer nu separat bekræftelse af gennemførelse", () => {
+    expect(statusLabel(TransferStatus.VC_APPROVED_AWAITING_ACTIVATION)).toBe(
+      "Godkendt - afventer gennemførelse"
+    );
+    expect(canVcConfirmTransferActivation({ role: UserRole.VC, status: TransferStatus.VC_APPROVED_AWAITING_ACTIVATION }).ok).toBe(
+      true
+    );
   });
 
   it("dobbelt behandling af samme sag afvises", () => {
     expect(canVcDecideTransfer({ role: UserRole.VC, status: TransferStatus.VC_APPROVED_ACTIVE }).ok).toBe(false);
     expect(canVcDecideTransfer({ role: UserRole.VC, status: TransferStatus.VC_REJECTED }).ok).toBe(false);
+  });
+
+  it("kun VC kan bekræfte et godkendt vagtskifte som udført", () => {
+    expect(
+      canVcConfirmTransferActivation({
+        role: UserRole.BRANDFIGHTER,
+        status: TransferStatus.VC_APPROVED_AWAITING_ACTIVATION
+      }).ok
+    ).toBe(false);
+    expect(canVcConfirmTransferActivation({ role: UserRole.VC, status: TransferStatus.VC_APPROVED_ACTIVE }).ok).toBe(
+      false
+    );
   });
 });
 
@@ -311,8 +330,17 @@ describe("del 3 - tilbagelevering", () => {
     ).toBe(true);
   });
 
-  it("godkendt tilbagelevering afslutter sagen", () => {
-    expect(statusLabel(TransferStatus.COMPLETED)).toBe("Afsluttet");
+  it("godkendt tilbagelevering afventer separat bekræftelse af gennemførelse", () => {
+    expect(statusLabel(TransferStatus.RETURN_APPROVED_AWAITING_EXECUTION)).toBe(
+      "Tilbagelevering godkendt - afventer gennemførelse"
+    );
+    expect(
+      canVcConfirmReturnExecution({
+        role: UserRole.VC,
+        transferStatus: TransferStatus.RETURN_APPROVED_AWAITING_EXECUTION,
+        returnStatus: "VC_APPROVED_AWAITING_EXECUTION"
+      }).ok
+    ).toBe(true);
   });
 
   it("VC kan afvise tilbageleveringen", () => {
@@ -343,6 +371,23 @@ describe("del 3 - tilbagelevering", () => {
         receiverUserId: receiver.id,
         status: TransferStatus.COMPLETED,
         hasOpenReturnRequest: false
+      }).ok
+    ).toBe(false);
+  });
+
+  it("kun VC kan bekræfte tilbageleveringen som udført", () => {
+    expect(
+      canVcConfirmReturnExecution({
+        role: UserRole.BRANDFIGHTER,
+        transferStatus: TransferStatus.RETURN_APPROVED_AWAITING_EXECUTION,
+        returnStatus: "VC_APPROVED_AWAITING_EXECUTION"
+      }).ok
+    ).toBe(false);
+    expect(
+      canVcConfirmReturnExecution({
+        role: UserRole.VC,
+        transferStatus: TransferStatus.VC_APPROVED_ACTIVE,
+        returnStatus: "VC_APPROVED_AWAITING_EXECUTION"
       }).ok
     ).toBe(false);
   });

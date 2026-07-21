@@ -1,6 +1,6 @@
 import type { NotificationType, TransferStatus } from "@prisma/client";
 
-export type VcTaskKind = "TRANSFER" | "RETURN" | "EXPECTED_END";
+export type VcTaskKind = "TRANSFER" | "RETURN" | "EXPECTED_END" | "ACTIVATION" | "RETURN_EXECUTION";
 export type VcPriority = "green" | "yellow" | "red" | "critical";
 
 export type VcDashboardTask = {
@@ -61,6 +61,8 @@ export function getVcDashboardStatus(tasks: VcDashboardTask[], now = new Date())
   const actionableTasks = tasks.filter(
     (task) =>
       task.kind === "EXPECTED_END" ||
+      task.kind === "ACTIVATION" ||
+      task.kind === "RETURN_EXECUTION" ||
       ["RECEIVER_ACCEPTED_AWAITING_VC", "RETURN_ACCEPTED_AWAITING_VC"].includes(task.status)
   );
 
@@ -153,12 +155,16 @@ export function notificationTypeLabel(type: NotificationType) {
     TRANSFER_VC_APPROVED: "Godkendt af vagtcentralen",
     TRANSFER_VC_REJECTED: "Afvist af vagtcentralen",
     TRANSFER_STARTED: "Starttidspunkt nærmer sig",
+    TRANSFER_ACTIVATION_REMINDER: "Vagtskifte skal bekræftes",
+    TRANSFER_ACTIVATED: "Vagtskifte gennemført",
     TRANSFER_EXPECTED_END: "Forventet sluttid nået",
     RETURN_CREATED: "Ny tilbagelevering",
     RETURN_ORIGINAL_ACCEPTED: "Tilbagelevering accepteret",
     RETURN_ORIGINAL_REJECTED: "Tilbagelevering afvist",
     RETURN_VC_APPROVED: "Tilbagelevering godkendt",
     RETURN_VC_REJECTED: "Tilbagelevering afvist af vagtcentralen",
+    RETURN_EXECUTION_REMINDER: "Tilbagelevering skal bekræftes",
+    RETURN_COMPLETED: "Tilbagelevering gennemført",
     TEST: "Testnotifikation"
   };
 

@@ -30,14 +30,43 @@ export function statusLabel(status: TransferStatus) {
     RECEIVER_ACCEPTED_AWAITING_VC: "Accepteret - afventer vagtcentralen",
     RECEIVER_REJECTED: "Afvist af modtager",
     VC_REJECTED: "Afvist af vagtcentralen",
+    VC_APPROVED_AWAITING_ACTIVATION: "Godkendt - afventer gennemførelse",
     VC_APPROVED_ACTIVE: "Aktiv vagtoverdragelse",
     RETURN_AWAITING_ORIGINAL: "Tilbagelevering afventer oprindelig brandmand",
     RETURN_ACCEPTED_AWAITING_VC: "Tilbagelevering accepteret - afventer vagtcentralen",
+    RETURN_APPROVED_AWAITING_EXECUTION: "Tilbagelevering godkendt - afventer gennemførelse",
     COMPLETED: "Afsluttet",
     CANCELLED: "Annulleret"
   };
 
   return labels[status];
+}
+
+export function canVcConfirmTransferActivation(input: { role: UserRole; status: TransferStatus }) {
+  if (input.role !== UserRole.VC) {
+    return { ok: false, message: "Kun vagtcentralen kan bekræfte vagtskiftet." };
+  }
+  if (input.status !== "VC_APPROVED_AWAITING_ACTIVATION") {
+    return { ok: false, message: "Vagtskiftet kan kun bekræftes, når sagen afventer gennemførelse." };
+  }
+  return { ok: true, message: "Vagtskiftet kan bekræftes." };
+}
+
+export function canVcConfirmReturnExecution(input: {
+  role: UserRole;
+  transferStatus: TransferStatus;
+  returnStatus: ReturnRequestStatus;
+}) {
+  if (input.role !== UserRole.VC) {
+    return { ok: false, message: "Kun vagtcentralen kan bekræfte tilbageleveringen." };
+  }
+  if (
+    input.transferStatus !== "RETURN_APPROVED_AWAITING_EXECUTION" ||
+    input.returnStatus !== "VC_APPROVED_AWAITING_EXECUTION"
+  ) {
+    return { ok: false, message: "Tilbageleveringen kan kun bekræftes, når den afventer gennemførelse." };
+  }
+  return { ok: true, message: "Tilbageleveringen kan bekræftes." };
 }
 
 export function validateTransferParticipants(input: {

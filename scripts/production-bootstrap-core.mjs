@@ -8,13 +8,17 @@ export const requiredBootstrapEnv = [
   "BOOTSTRAP_VC_PASSWORD"
 ];
 
+export function normalizeLoginIdentifier(value) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
 export function validateBootstrapEnv(env) {
   const missing = requiredBootstrapEnv.filter((key) => !String(env[key] ?? "").trim());
   if (missing.length > 0) {
     return { ok: false, message: `Manglende bootstrap-variabler: ${missing.join(", ")}` };
   }
 
-  if (env.BOOTSTRAP_ADMIN_USERNAME === env.BOOTSTRAP_VC_USERNAME) {
+  if (normalizeLoginIdentifier(env.BOOTSTRAP_ADMIN_USERNAME) === normalizeLoginIdentifier(env.BOOTSTRAP_VC_USERNAME)) {
     return { ok: false, message: "Admin og VC skal have forskellige login." };
   }
 
@@ -56,7 +60,7 @@ export async function bootstrapProductionUsers(prisma, env) {
       data: {
         name: "Administrator",
         role: UserRole.ADMIN,
-        loginIdentifier: env.BOOTSTRAP_ADMIN_USERNAME,
+        loginIdentifier: normalizeLoginIdentifier(env.BOOTSTRAP_ADMIN_USERNAME),
         passwordHash: adminPasswordHash,
         isActive: true,
         mustChangePassword: true
@@ -66,7 +70,7 @@ export async function bootstrapProductionUsers(prisma, env) {
       data: {
         name: "Vagtcentralen",
         role: UserRole.VC,
-        loginIdentifier: env.BOOTSTRAP_VC_USERNAME,
+        loginIdentifier: normalizeLoginIdentifier(env.BOOTSTRAP_VC_USERNAME),
         passwordHash: vcPasswordHash,
         isActive: true,
         mustChangePassword: true

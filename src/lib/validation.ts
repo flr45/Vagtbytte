@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeLoginIdentifier } from "./login-identifiers";
 import { passwordSchema } from "./passwords";
 
 const expectedEndModeSchema = z.enum(["SPECIFIC_TIME", "UNTIL_SHIFT_END"], {
@@ -12,7 +13,7 @@ export const loginSchema = z.object({
 
 export const firefighterCreateSchema = z.object({
   name: z.string().trim().min(1, "Navn skal udfyldes"),
-  employeeNumber: z.string().trim().min(1, "Medarbejdernummer skal udfyldes"),
+  employeeNumber: z.string().trim().min(1, "Medarbejdernummer skal udfyldes").transform(normalizeLoginIdentifier),
   temporaryPassword: passwordSchema,
   isActive: z.boolean()
 });
@@ -20,7 +21,7 @@ export const firefighterCreateSchema = z.object({
 export const firefighterUpdateSchema = z.object({
   userId: z.string().min(1),
   name: z.string().trim().min(1, "Navn skal udfyldes"),
-  employeeNumber: z.string().trim().min(1, "Medarbejdernummer skal udfyldes"),
+  employeeNumber: z.string().trim().min(1, "Medarbejdernummer skal udfyldes").transform(normalizeLoginIdentifier),
   isActive: z.boolean()
 });
 
@@ -30,7 +31,7 @@ export const passwordResetSchema = z.object({
 });
 
 export const vcUpdateSchema = z.object({
-  loginIdentifier: z.string().trim().min(1, "Brugernavn skal udfyldes"),
+  loginIdentifier: z.string().trim().min(1, "Brugernavn skal udfyldes").transform(normalizeLoginIdentifier),
   temporaryPassword: passwordSchema.optional().or(z.literal("")),
   isActive: z.boolean()
 });
@@ -115,6 +116,14 @@ export const vcReturnRejectSchema = vcReturnDecisionSchema.refine(
     path: ["comment"]
   }
 );
+
+export const vcTransferActivationSchema = z.object({
+  transferId: z.string().min(1)
+});
+
+export const vcReturnExecutionSchema = z.object({
+  returnRequestId: z.string().min(1)
+});
 
 export const notificationIdSchema = z.object({
   notificationId: z.string().min(1)

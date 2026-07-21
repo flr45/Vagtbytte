@@ -1,7 +1,11 @@
 import type { ReturnRequest, ShiftTransfer, User } from "@prisma/client";
 import { prisma } from "./prisma";
 import { cancelFutureTransferNotifications, createNotifications } from "./notifications";
-import { shouldScheduleExpectedEndNotification } from "./notification-rules";
+import {
+  returnExecutionReminderInputs,
+  shouldScheduleExpectedEndNotification,
+  transferActivationReminderInputs
+} from "./notification-rules";
 
 type BasicUser = Pick<User, "id" | "role">;
 
@@ -89,7 +93,7 @@ export async function notifyReceiverRejected(transfer: ShiftTransfer) {
 export async function notifyVcTransferDecision(transfer: ShiftTransfer, vc: BasicUser, approved: boolean) {
   const title = approved ? "Vagtcentralen har godkendt" : "Vagtcentralen har afvist";
   const body = approved
-    ? `Vagtcentralen har godkendt vagtoverdragelsen. ${transfer.receiverNameSnapshot} overtager fra ${transfer.giverNameSnapshot}.`
+    ? `Vagtcentralen har godkendt vagtoverdragelsen. Den afventer vagtcentralens bekræftelse, når vagtskiftet er udført.`
     : `Vagtcentralen har afvist vagtoverdragelsen.${transfer.vcComment ? ` Begrundelse: ${transfer.vcComment}` : ""}`;
 
   await createNotifications(prisma, [
@@ -107,7 +111,7 @@ export async function notifyVcTransferDecision(transfer: ShiftTransfer, vc: Basi
       shiftTransferId: transfer.id,
       type: approved ? "TRANSFER_VC_APPROVED" : "TRANSFER_VC_REJECTED",
       title: approved ? "Godkendt af Vagtcentralen" : "Afvist af Vagtcentralen",
-      body: approved ? "Vagtoverdragelsen er godkendt." : "Vagtoverdragelsen er afvist.",
+      body: approved ? "Vagtoverdragelsen er godkendt og afventer gennemførelse." : "Vagtoverdragelsen er afvist.",
       link: `/vagtcentral/sager/${transfer.id}`,
       uniqueKey: `transfer:${transfer.id}:vc-internal:${approved ? "approved" : "rejected"}:${vc.id}`
     }
@@ -119,40 +123,39 @@ export async function notifyVcTransferDecision(transfer: ShiftTransfer, vc: Basi
 }
 
 export async function scheduleTransferReminders(transfer: ShiftTransfer, vcUserId: string, now = new Date()) {
-  const recipients = [transfer.giverUserId, transfer.receiverUserId, vcUserId];
-  const startFor = transfer.requestedStartAt > now ? transfer.requestedStartAt : null;
+  await createNotifications(prisma, transferActivationReminderInputs(transfer, vcUserId, now));
+}
+
+export async function notifyTransferActivated(transfer: ShiftTransfer) {
   await createNotifications(
     prisma,
-    recipients.map((recipientUserId) => ({
+    [transfer.giverUserId, transfer.receiverUserId].map((recipientUserId) => ({
       recipientUserId,
       shiftTransferId: transfer.id,
-      type: "TRANSFER_STARTED",
-      title: "Vagtoverdragelsen er startet",
-      body: `Vagtoverdragelsen er nu startet. ${transfer.receiverNameSnapshot} har overtaget vagten fra ${transfer.giverNameSnapshot}.`,
-      link: recipientUserId === vcUserId ? `/vagtcentral/sager/${transfer.id}` : `/brandmand/anmodninger/${transfer.id}`,
-      scheduledFor: startFor,
-      publishNow: !startFor,
-      uniqueKey: `transfer:${transfer.id}:start:${recipientUserId}`
+      type: "TRANSFER_ACTIVATED" as const,
+      title: "Vagtskifte gennemført",
+      body: `Vagtcentralen har bekræftet, at vagtskiftet er udført.`,
+      link: `/brandmand/anmodninger/${transfer.id}`,
+      uniqueKey: `transfer:${transfer.id}:activated:${recipientUserId}`
     }))
   );
 
   if (shouldScheduleExpectedEndNotification(transfer)) {
     await createNotifications(
       prisma,
-      recipients.map((recipientUserId) => ({
+      [transfer.giverUserId, transfer.receiverUserId].map((recipientUserId) => ({
         recipientUserId,
         shiftTransferId: transfer.id,
         type: "TRANSFER_EXPECTED_END",
         title: "Forventet sluttid er nået",
         body: "Den forventede sluttid er nået. Vagtoverdragelsen fortsætter, indtil en tilbagelevering er accepteret og godkendt af vagtcentralen.",
-        link: recipientUserId === vcUserId ? `/vagtcentral/sager/${transfer.id}` : `/brandmand/anmodninger/${transfer.id}`,
+        link: `/brandmand/anmodninger/${transfer.id}`,
         scheduledFor: transfer.expectedEndAt,
         uniqueKey: `transfer:${transfer.id}:expected-end:${recipientUserId}`
       }))
     );
   }
 }
-
 
 export async function notifyReturnCreated(transfer: ShiftTransfer, request: ReturnRequest) {
   await createNotifications(prisma, [
@@ -220,7 +223,7 @@ export async function notifyOriginalReturnResponse(transfer: ShiftTransfer, requ
 
 export async function notifyVcReturnDecision(transfer: ShiftTransfer, request: ReturnRequest, vc: BasicUser, approved: boolean) {
   const body = approved
-    ? "Vagtcentralen har godkendt tilbageleveringen. Vagtoverdragelsen er afsluttet."
+    ? "Vagtcentralen har godkendt tilbageleveringen. Den afventer vagtcentralens bekræftelse, når den er udført."
     : `Vagtcentralen har afvist tilbageleveringen. Den oprindelige vagtoverdragelse fortsætter.${request.vcComment ? ` Begrundelse: ${request.vcComment}` : ""}`;
   await createNotifications(prisma, [
     ...[transfer.giverUserId, transfer.receiverUserId].map((userId) => ({
@@ -239,13 +242,30 @@ export async function notifyVcReturnDecision(transfer: ShiftTransfer, request: R
       returnRequestId: request.id,
       type: approved ? "RETURN_VC_APPROVED" : "RETURN_VC_REJECTED",
       title: approved ? "Tilbagelevering godkendt" : "Tilbagelevering afvist",
-      body: approved ? "Sagen er afsluttet." : "Vagtoverdragelsen fortsætter.",
+      body: approved ? "Tilbageleveringen er godkendt og afventer gennemførelse." : "Vagtoverdragelsen fortsætter.",
       link: `/vagtcentral/sager/${transfer.id}`,
       uniqueKey: `return:${request.id}:vc-internal:${approved ? "approved" : "rejected"}:${vc.id}`
     }
   ]);
 
   if (approved) {
-    await cancelFutureTransferNotifications(prisma, transfer.id);
+    await createNotifications(prisma, returnExecutionReminderInputs(transfer, request, vc.id));
   }
+}
+
+export async function notifyReturnExecutionCompleted(transfer: ShiftTransfer, request: ReturnRequest) {
+  await createNotifications(
+    prisma,
+    [transfer.giverUserId, transfer.receiverUserId].map((recipientUserId) => ({
+      recipientUserId,
+      shiftTransferId: transfer.id,
+      returnRequestId: request.id,
+      type: "RETURN_COMPLETED" as const,
+      title: "Tilbagelevering gennemført",
+      body: "Vagtcentralen har bekræftet, at tilbageleveringen er udført.",
+      link: `/brandmand/anmodninger/${transfer.id}`,
+      uniqueKey: `return:${request.id}:completed:${recipientUserId}`
+    }))
+  );
+  await cancelFutureTransferNotifications(prisma, transfer.id);
 }

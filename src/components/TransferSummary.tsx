@@ -20,7 +20,8 @@ export type TransferSummaryItem = {
 export function formatDateTime(date: Date) {
   return new Intl.DateTimeFormat("da-DK", {
     dateStyle: "short",
-    timeStyle: "short"
+    timeStyle: "short",
+    timeZone: "Europe/Copenhagen"
   }).format(date);
 }
 
@@ -30,9 +31,11 @@ export function StatusBadge({ status }: { status: TransferStatus }) {
     RECEIVER_ACCEPTED_AWAITING_VC: "bg-emerald-50 text-emerald-900",
     RECEIVER_REJECTED: "bg-red-50 text-red-900",
     VC_REJECTED: "bg-red-50 text-red-900",
+    VC_APPROVED_AWAITING_ACTIVATION: "bg-amber-50 text-amber-900",
     VC_APPROVED_ACTIVE: "bg-emerald-50 text-emerald-900",
     RETURN_AWAITING_ORIGINAL: "bg-amber-50 text-amber-900",
     RETURN_ACCEPTED_AWAITING_VC: "bg-emerald-50 text-emerald-900",
+    RETURN_APPROVED_AWAITING_EXECUTION: "bg-amber-50 text-amber-900",
     COMPLETED: "bg-zinc-100 text-zinc-700",
     CANCELLED: "bg-zinc-100 text-zinc-700"
   };

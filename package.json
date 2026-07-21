@@ -12,6 +12,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
     "production:bootstrap": "node scripts/production-bootstrap.mjs",
+    "production:normalize-logins": "node scripts/production-normalize-logins.mjs",
     "notifications:generate-keys": "node scripts/generate-vapid-keys.mjs",
     "notifications:process": "node scripts/process-notifications.mjs",
     "notifications:worker": "node scripts/notifications-worker.mjs",

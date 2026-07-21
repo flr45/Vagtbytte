@@ -13,7 +13,16 @@ export default async function VagtcentralPage() {
       include: { returnRequests: { orderBy: { createdAt: "desc" } } }
     }),
     prisma.shiftTransfer.findMany({
-      where: { status: { in: ["VC_APPROVED_ACTIVE", "RETURN_AWAITING_ORIGINAL"] } },
+      where: {
+        status: {
+          in: [
+            "VC_APPROVED_AWAITING_ACTIVATION",
+            "VC_APPROVED_ACTIVE",
+            "RETURN_AWAITING_ORIGINAL",
+            "RETURN_APPROVED_AWAITING_EXECUTION"
+          ]
+        }
+      },
       orderBy: { activatedAt: "desc" },
       include: { returnRequests: { orderBy: { createdAt: "desc" } } }
     }),
@@ -53,8 +62,10 @@ function serializeTransfer(
       comment: string | null;
       originalRespondedAt: Date | null;
       originalResponseComment: string | null;
+      vcDecidedAt: Date | null;
       status: string;
       createdAt: Date;
+      updatedAt: Date;
     }>;
   }
 ): VcDashboardTransfer {
@@ -72,6 +83,7 @@ function serializeTransfer(
     comment: transfer.comment,
     receiverRespondedAt: transfer.receiverRespondedAt?.toISOString() ?? null,
     receiverResponseComment: transfer.receiverResponseComment,
+    vcDecidedAt: transfer.vcDecidedAt?.toISOString() ?? null,
     activatedAt: transfer.activatedAt?.toISOString() ?? null,
     updatedAt: transfer.updatedAt.toISOString(),
     returnRequests: transfer.returnRequests.map((request) => ({
@@ -81,8 +93,10 @@ function serializeTransfer(
       comment: request.comment,
       originalRespondedAt: request.originalRespondedAt?.toISOString() ?? null,
       originalResponseComment: request.originalResponseComment,
+      vcDecidedAt: request.vcDecidedAt?.toISOString() ?? null,
       status: request.status,
-      createdAt: request.createdAt.toISOString()
+      createdAt: request.createdAt.toISOString(),
+      updatedAt: request.updatedAt.toISOString()
     }))
   };
 }

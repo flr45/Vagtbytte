@@ -5,7 +5,12 @@ import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { expectedEndLabel } from "@/lib/transfer-rules";
 import { TopBar } from "@/components/TopBar";
-import { VcReturnDecisionForms, VcTransferDecisionForms } from "@/components/VcDecisionForms";
+import {
+  VcReturnDecisionForms,
+  VcReturnExecutionForm,
+  VcTransferActivationForm,
+  VcTransferDecisionForms
+} from "@/components/VcDecisionForms";
 import { formatDateTime, StatusBadge } from "@/components/TransferSummary";
 
 export default async function VcTransferDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -22,7 +27,7 @@ export default async function VcTransferDetailPage({ params }: { params: Promise
   }
 
   const activeReturn = transfer.returnRequests.find((request) =>
-    ["AWAITING_ORIGINAL", "ORIGINAL_ACCEPTED_AWAITING_VC"].includes(request.status)
+    ["AWAITING_ORIGINAL", "ORIGINAL_ACCEPTED_AWAITING_VC", "VC_APPROVED_AWAITING_EXECUTION"].includes(request.status)
   );
 
   return (
@@ -67,6 +72,12 @@ export default async function VcTransferDetailPage({ params }: { params: Promise
           {transfer.status === "RECEIVER_ACCEPTED_AWAITING_VC" ? (
             <VcTransferDecisionForms transferId={transfer.id} />
           ) : null}
+          {transfer.status === "VC_APPROVED_AWAITING_ACTIVATION" ? (
+            <VcTransferActivationForm
+              confirmationText={`Vil du bekræfte, at vagtskiftet er udført?\n${transfer.giverNameSnapshot} til ${transfer.receiverNameSnapshot}\nTidspunkt: ${formatDateTime(transfer.requestedStartAt)}`}
+              transferId={transfer.id}
+            />
+          ) : null}
           {activeReturn ? (
             <section className="grid gap-3 rounded-md border border-brand-line p-4">
               <h2 className="text-xl font-bold">Tilbagelevering</h2>
@@ -84,6 +95,13 @@ export default async function VcTransferDetailPage({ params }: { params: Promise
               {transfer.status === "RETURN_ACCEPTED_AWAITING_VC" &&
               activeReturn.status === "ORIGINAL_ACCEPTED_AWAITING_VC" ? (
                 <VcReturnDecisionForms returnRequestId={activeReturn.id} />
+              ) : null}
+              {transfer.status === "RETURN_APPROVED_AWAITING_EXECUTION" &&
+              activeReturn.status === "VC_APPROVED_AWAITING_EXECUTION" ? (
+                <VcReturnExecutionForm
+                  confirmationText={`Vil du bekræfte, at tilbageleveringen er udført?\n${transfer.receiverNameSnapshot} tilbageleverer til ${transfer.giverNameSnapshot}\nTidspunkt: ${formatDateTime(activeReturn.requestedReturnAt)}`}
+                  returnRequestId={activeReturn.id}
+                />
               ) : null}
             </section>
           ) : null}

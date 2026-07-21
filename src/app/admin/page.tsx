@@ -1,8 +1,10 @@
 import { UserRole } from "@prisma/client";
+import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { TopBar } from "@/components/TopBar";
 import { CreateFirefighterForm, FirefighterEditForms, VcForm } from "@/components/AdminForms";
+import { formatDateTime } from "@/components/TransferSummary";
 
 function roleLabel(role: UserRole) {
   if (role === UserRole.BRANDFIGHTER) return "Brandmand";
@@ -48,6 +50,12 @@ export default async function AdminPage() {
           <p className="mt-2 text-base text-zinc-700">
             Administrer brandmænd og vagtcentralens fælles login.
           </p>
+          <Link
+            className="focus-ring mt-4 inline-flex min-h-12 items-center justify-center rounded-md border border-zinc-300 px-5 font-semibold text-zinc-900"
+            href="/admin/systemstatus"
+          >
+            Se systemstatus
+          </Link>
         </section>
 
         <section className="rounded-lg border border-brand-line bg-white p-4">
@@ -71,10 +79,7 @@ export default async function AdminPage() {
                     <td className="py-3 pr-4">{roleLabel(user.role)}</td>
                     <td className="py-3 pr-4">{user.isActive ? "Aktiv" : "Deaktiveret"}</td>
                     <td className="py-3 pr-4">
-                      {new Intl.DateTimeFormat("da-DK", {
-                        dateStyle: "short",
-                        timeStyle: "short"
-                      }).format(user.updatedAt)}
+                      {formatDateTime(user.updatedAt)}
                     </td>
                   </tr>
                 ))}
@@ -102,10 +107,7 @@ export default async function AdminPage() {
                       <p className="text-sm font-bold">{log.action}</p>
                       <p className="mt-1 text-sm text-zinc-700">{log.description}</p>
                       <p className="mt-1 text-xs text-zinc-500">
-                        {new Intl.DateTimeFormat("da-DK", {
-                          dateStyle: "short",
-                          timeStyle: "short"
-                        }).format(log.createdAt)}
+                        {formatDateTime(log.createdAt)}
                       </p>
                     </article>
                   ))

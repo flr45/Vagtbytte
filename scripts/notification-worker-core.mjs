@@ -53,6 +53,24 @@ async function shouldCancelScheduledNotification(prisma, notificationId) {
     );
   }
 
+  if (notification.type === "TRANSFER_ACTIVATION_REMINDER") {
+    return notification.shiftTransfer.status !== "VC_APPROVED_AWAITING_ACTIVATION";
+  }
+
+  if (notification.type === "RETURN_EXECUTION_REMINDER") {
+    const request = notification.returnRequestId
+      ? await prisma.returnRequest.findUnique({
+          where: { id: notification.returnRequestId },
+          include: { transfer: true }
+        })
+      : null;
+    return (
+      !request ||
+      request.status !== "VC_APPROVED_AWAITING_EXECUTION" ||
+      request.transfer.status !== "RETURN_APPROVED_AWAITING_EXECUTION"
+    );
+  }
+
   if (notification.type === "TRANSFER_STARTED") {
     return ["COMPLETED", "VC_REJECTED", "RECEIVER_REJECTED", "CANCELLED"].includes(
       notification.shiftTransfer.status
