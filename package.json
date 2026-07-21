@@ -10,6 +10,9 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
+    "notifications:generate-keys": "node scripts/generate-vapid-keys.mjs",
+    "notifications:process": "node scripts/process-notifications.mjs",
+    "notifications:worker": "node scripts/notifications-worker.mjs",
     "test": "vitest run"
   },
   "dependencies": {
@@ -19,6 +22,7 @@
     "prisma": "^6.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "web-push": "^3.6.7",
     "zod": "^3.23.0"
   },
   "devDependencies": {
@@ -29,6 +33,7 @@
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/web-push": "^3.6.4",
     "autoprefixer": "^10.4.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "^15.0.0",

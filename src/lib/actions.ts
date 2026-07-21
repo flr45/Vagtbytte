@@ -11,6 +11,9 @@ import {
   firefighterUpdateSchema,
   loginSchema,
   passwordResetSchema,
+  notificationIdSchema,
+  pushSubscriptionIdSchema,
+  pushSubscriptionSchema,
   returnRequestCreateSchema,
   returnRequestResponseSchema,
   transferCreateSchema,
@@ -22,7 +25,7 @@ import {
   vcTransferRejectSchema,
   vcUpdateSchema
 } from "./validation";
-import { requirePasswordChangeUser, requireRole, roleHome, signIn, signOut } from "./auth";
+import { requirePasswordChangeUser, requireRole, requireUser, roleHome, signIn, signOut } from "./auth";
 import {
   canRespondToTransfer,
   canCreateReturnRequest,
@@ -32,6 +35,16 @@ import {
   validateTransferParticipants,
   type TransferParticipant
 } from "./transfer-rules";
+import { createNotification, sendPushForNotification } from "./notifications";
+import {
+  notifyOriginalReturnResponse,
+  notifyReceiverAccepted,
+  notifyReceiverRejected,
+  notifyReturnCreated,
+  notifyTransferCreated,
+  notifyVcReturnDecision,
+  notifyVcTransferDecision
+} from "./notification-events";
 
 export type ActionState = {
   ok?: boolean;
@@ -480,6 +493,7 @@ export async function createTransferAction(
       status: "AWAITING_RECEIVER"
     }
   });
+  await notifyTransferCreated(transfer);
 
   await prisma.auditLog.create({
     data: {
@@ -529,7 +543,7 @@ async function respondToTransfer(input: {
     return { ok: false, message: permission.message };
   }
 
-  await prisma.shiftTransfer.update({
+  const updatedTransfer = await prisma.shiftTransfer.update({
     where: { id: transfer.id },
     data: {
       status: input.status,
@@ -537,6 +551,11 @@ async function respondToTransfer(input: {
       receiverResponseComment: optionalText(input.responseComment)
     }
   });
+  if (input.status === "RECEIVER_ACCEPTED_AWAITING_VC") {
+    await notifyReceiverAccepted(updatedTransfer);
+  } else {
+    await notifyReceiverRejected(updatedTransfer);
+  }
 
   await prisma.auditLog.create({
     data: {
@@ -630,7 +649,7 @@ async function decideTransferByVc(input: {
   }
 
   const now = new Date();
-  await prisma.shiftTransfer.update({
+  const updatedTransfer = await prisma.shiftTransfer.update({
     where: { id: transfer.id },
     data: {
       status: input.approve ? "VC_APPROVED_ACTIVE" : "VC_REJECTED",
@@ -640,6 +659,7 @@ async function decideTransferByVc(input: {
       activatedAt: input.approve ? now : null
     }
   });
+  await notifyVcTransferDecision(updatedTransfer, vc, input.approve);
 
   await prisma.auditLog.create({
     data: {
@@ -771,6 +791,7 @@ export async function createReturnRequestAction(
     where: { id: transfer.id },
     data: { status: "RETURN_AWAITING_ORIGINAL" }
   });
+  await notifyReturnCreated(transfer, returnRequest);
 
   await prisma.auditLog.create({
     data: {
@@ -822,7 +843,7 @@ async function respondToReturnRequest(input: {
   }
 
   const now = new Date();
-  await prisma.returnRequest.update({
+  const updatedReturnRequest = await prisma.returnRequest.update({
     where: { id: returnRequest.id },
     data: {
       status: input.accept ? "ORIGINAL_ACCEPTED_AWAITING_VC" : "ORIGINAL_REJECTED",
@@ -832,10 +853,11 @@ async function respondToReturnRequest(input: {
     }
   });
 
-  await prisma.shiftTransfer.update({
+  const updatedTransfer = await prisma.shiftTransfer.update({
     where: { id: returnRequest.transferId },
     data: { status: input.accept ? "RETURN_ACCEPTED_AWAITING_VC" : "VC_APPROVED_ACTIVE" }
   });
+  await notifyOriginalReturnResponse(updatedTransfer, updatedReturnRequest, input.accept);
 
   await prisma.auditLog.create({
     data: {
@@ -930,7 +952,7 @@ async function decideReturnByVc(input: {
   }
 
   const now = new Date();
-  await prisma.returnRequest.update({
+  const updatedReturnRequest = await prisma.returnRequest.update({
     where: { id: returnRequest.id },
     data: {
       status: input.approve ? "VC_APPROVED_COMPLETED" : "VC_REJECTED",
@@ -941,13 +963,14 @@ async function decideReturnByVc(input: {
     }
   });
 
-  await prisma.shiftTransfer.update({
+  const updatedTransfer = await prisma.shiftTransfer.update({
     where: { id: returnRequest.transferId },
     data: {
       status: input.approve ? "COMPLETED" : "VC_APPROVED_ACTIVE",
       completedAt: input.approve ? now : null
     }
   });
+  await notifyVcReturnDecision(updatedTransfer, updatedReturnRequest, vc, input.approve);
 
   await prisma.auditLog.create({
     data: {
@@ -983,6 +1006,144 @@ async function decideReturnByVc(input: {
       ? "Tilbageleveringen er godkendt, og sagen er afsluttet."
       : "Tilbageleveringen er afvist. Vagtoverdragelsen fortsætter."
   };
+}
+
+export async function markNotificationReadAction(formData: FormData) {
+  const user = await requireUser();
+  const parsed = notificationIdSchema.safeParse({
+    notificationId: formData.get("notificationId")
+  });
+
+  if (!parsed.success) {
+    redirect(roleHome[user.role]);
+  }
+
+  const notification = await prisma.notification.findUnique({
+    where: { id: parsed.data.notificationId }
+  });
+
+  if (!notification || notification.recipientUserId !== user.id) {
+    redirect("/forbudt");
+  }
+
+  await prisma.notification.update({
+    where: { id: notification.id },
+    data: { readAt: notification.readAt ?? new Date(), openedAt: notification.openedAt ?? new Date() }
+  });
+
+  revalidatePath(roleHome[user.role]);
+}
+
+export async function markAllNotificationsReadAction() {
+  const user = await requireUser();
+  await prisma.notification.updateMany({
+    where: { recipientUserId: user.id, readAt: null },
+    data: { readAt: new Date() }
+  });
+  revalidatePath(roleHome[user.role]);
+}
+
+export async function savePushSubscriptionAction(input: unknown): Promise<ActionState> {
+  const user = await requireUser();
+  const parsed = pushSubscriptionSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return { ok: false, message: firstError(parsed.error) };
+  }
+
+  await prisma.pushSubscription.upsert({
+    where: { endpoint: parsed.data.endpoint },
+    update: {
+      userId: user.id,
+      p256dh: parsed.data.p256dh,
+      auth: parsed.data.auth,
+      userAgent: parsed.data.userAgent,
+      deviceName: parsed.data.deviceName,
+      revokedAt: null,
+      lastUsedAt: new Date()
+    },
+    create: {
+      userId: user.id,
+      endpoint: parsed.data.endpoint,
+      p256dh: parsed.data.p256dh,
+      auth: parsed.data.auth,
+      userAgent: parsed.data.userAgent,
+      deviceName: parsed.data.deviceName,
+      lastUsedAt: new Date()
+    }
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actorUserId: user.id,
+      actorRole: user.role,
+      action: "PUSH_SUBSCRIPTION_SAVED",
+      description: "Push-enhed blev registreret"
+    }
+  });
+
+  return { ok: true, message: "Push-notifikationer er aktive." };
+}
+
+export async function removePushSubscriptionAction(formData: FormData) {
+  const user = await requireUser();
+  const parsed = pushSubscriptionIdSchema.safeParse({
+    subscriptionId: formData.get("subscriptionId")
+  });
+
+  if (!parsed.success) {
+    redirect(roleHome[user.role]);
+  }
+
+  const subscription = await prisma.pushSubscription.findUnique({ where: { id: parsed.data.subscriptionId } });
+  if (!subscription || subscription.userId !== user.id) {
+    redirect("/forbudt");
+  }
+
+  await prisma.pushSubscription.update({
+    where: { id: subscription.id },
+    data: { revokedAt: new Date() }
+  });
+
+  revalidatePath(roleHome[user.role]);
+}
+
+export async function sendTestNotificationAction(): Promise<ActionState> {
+  const user = await requireUser();
+  const recent = await prisma.notification.count({
+    where: {
+      recipientUserId: user.id,
+      type: "TEST",
+      createdAt: { gte: new Date(Date.now() - 1000 * 60) }
+    }
+  });
+
+  if (recent > 0) {
+    return { ok: false, message: "Vent lidt, før du sender en ny testnotifikation." };
+  }
+
+  const notification = await createNotification(prisma, {
+    recipientUserId: user.id,
+    type: "TEST",
+    title: "Testnotifikation",
+    body: "Dette er en testbesked fra Vagtbytte.",
+    link: roleHome[user.role],
+    uniqueKey: `test:${user.id}:${Date.now()}`,
+    publishNow: true
+  });
+  await sendPushForNotification(prisma, notification.id);
+
+  await prisma.auditLog.create({
+    data: {
+      actorUserId: user.id,
+      actorRole: user.role,
+      action: "TEST_NOTIFICATION_SENT",
+      description: "Testnotifikation blev oprettet"
+    }
+  });
+
+  revalidatePath(roleHome[user.role]);
+  return { ok: true, message: "Testnotifikationen er oprettet." };
 }
 
 export async function approveReturnByVcAction(

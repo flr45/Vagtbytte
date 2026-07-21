@@ -27,6 +27,10 @@ Ret eventuelt værdierne i `.env`. Til lokal udvikling bruges SQLite med `DATABA
 - `SEED_ADMIN_PASSWORD`
 - `SEED_VC_PASSWORD`
 - `SEED_FIREFIGHTER_PASSWORD`
+- `NEXT_PUBLIC_VAPID_PUBLIC_KEY`
+- `VAPID_PRIVATE_KEY`
+- `VAPID_SUBJECT`
+- `NOTIFICATIONS_DISABLE_PUSH`
 
 Den rigtige `.env` skal blive lokalt og må ikke committes.
 
@@ -87,14 +91,47 @@ Admin kan ikke udgive sig for at være brandmand og får ikke adgang til vagtcen
 - Manuel tilbagelevering fra overtager til oprindelig brandmand
 - Accept eller afvisning af tilbagelevering hos oprindelig brandmand
 - Endelig VC-godkendelse eller afvisning af tilbagelevering
+- Permanent notifikationscenter for brandmænd og vagtcentralen
+- Registrering og fjernelse af push-enheder
+- Testnotifikationer
+- Planlagte start- og forventet-sluttid-notifikationer via lokal worker
 
 ## Ikke implementeret endnu
 
-- Oprettelse af vagtoverdragelse
-- Push-notifikationer
-- Notifikationscenter
 - Historik for vagtoverdragelser
 - Driftshærdning ud over fundamentet i del 1
+
+## Notifikationer
+
+In-app-notifikationer gemmes permanent i databasen og er systemets sikre beskedkanal. Browser-push er kun en ekstra kanal og er ikke en garanti for, at brugeren har læst beskeden.
+
+Brandmænd finder beskeder på `/brandmand/notifikationer`. Vagtcentralen finder beskeder på `/vagtcentral/notifikationer`.
+
+Lokale VAPID-nøgler kan genereres med:
+
+```bash
+npm run notifications:generate-keys
+```
+
+Service worker aktiveres først, når brugeren trykker “Aktivér notifikationer” på notifikationssiden. En testnotifikation kan sendes fra samme side.
+
+Planlagte beskeder behandles enkeltstående med:
+
+```bash
+npm run notifications:process
+```
+
+Til løbende lokal test bruges to terminaler:
+
+```bash
+npm run dev
+```
+
+```bash
+npm run notifications:worker
+```
+
+Hvis push fejler eller ikke er aktiveret, fortsætter sagerne uændret inde i systemet. Produktionshosting og permanent worker opsættes senere.
 
 ## Kvalitetstjek
 
@@ -104,4 +141,4 @@ npm run lint
 npm run build
 ```
 
-Næste større trin er push-notifikationer og notifikationscenter.
+Næste større trin er samlet historik, sikkerhedsgennemgang og driftshærdning.

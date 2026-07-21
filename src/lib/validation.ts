@@ -102,3 +102,19 @@ export const vcReturnRejectSchema = vcReturnDecisionSchema.refine(
     path: ["comment"]
   }
 );
+
+export const notificationIdSchema = z.object({
+  notificationId: z.string().min(1)
+});
+
+export const pushSubscriptionSchema = z.object({
+  endpoint: z.string().url("Push-endpoint er ugyldigt"),
+  p256dh: z.string().min(8, "Push-nøgle mangler"),
+  auth: z.string().min(8, "Push-auth mangler"),
+  userAgent: z.string().trim().max(300).optional(),
+  deviceName: z.string().trim().max(80).optional()
+});
+
+export const pushSubscriptionIdSchema = z.object({
+  subscriptionId: z.string().min(1)
+});

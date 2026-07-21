@@ -1,0 +1,28 @@
+import "dotenv/config";
+import { PrismaClient } from "@prisma/client";
+import { publishDueNotifications } from "./notification-worker-core.mjs";
+
+const prisma = new PrismaClient();
+const intervalMs = Number(process.env.NOTIFICATIONS_WORKER_INTERVAL_MS ?? 15000);
+
+console.log(`Notifikations-worker startet. Interval: ${intervalMs} ms.`);
+
+async function tick() {
+  try {
+    const result = await publishDueNotifications(prisma);
+    if (result.published || result.cancelled) {
+      console.log(`Publiceret: ${result.published}. Annulleret: ${result.cancelled}.`);
+    }
+  } catch (error) {
+    console.error("Worker-fejl:", error instanceof Error ? error.message : String(error));
+  }
+}
+
+await tick();
+const timer = setInterval(tick, intervalMs);
+
+process.on("SIGINT", async () => {
+  clearInterval(timer);
+  await prisma.$disconnect();
+  process.exit(0);
+});

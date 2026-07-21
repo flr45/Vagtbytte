@@ -33,6 +33,30 @@ enum ReturnRequestStatus {
   VC_REJECTED
 }
 
+enum NotificationType {
+  TRANSFER_CREATED
+  TRANSFER_RECEIVER_ACCEPTED
+  TRANSFER_RECEIVER_REJECTED
+  TRANSFER_VC_APPROVED
+  TRANSFER_VC_REJECTED
+  TRANSFER_STARTED
+  TRANSFER_EXPECTED_END
+  RETURN_CREATED
+  RETURN_ORIGINAL_ACCEPTED
+  RETURN_ORIGINAL_REJECTED
+  RETURN_VC_APPROVED
+  RETURN_VC_REJECTED
+  TEST
+}
+
+enum PushDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  PERMANENT_FAILURE
+  NO_ACTIVE_DEVICE
+}
+
 model User {
   id                 String     @id @default(cuid())
   name               String
@@ -52,6 +76,8 @@ model User {
   receivedTransfers  ShiftTransfer[] @relation("ReceivedTransfers")
   createdReturns     ReturnRequest[] @relation("ReturnCreatedBy")
   answeredReturns     ReturnRequest[] @relation("ReturnAnsweredBy")
+  notifications       Notification[]
+  pushSubscriptions   PushSubscription[]
 
   @@index([role])
   @@index([isActive])
@@ -82,6 +108,7 @@ model ShiftTransfer {
   giver                          User           @relation("GivenTransfers", fields: [giverUserId], references: [id], onDelete: Restrict)
   receiver                       User           @relation("ReceivedTransfers", fields: [receiverUserId], references: [id], onDelete: Restrict)
   returnRequests                 ReturnRequest[]
+  notifications                  Notification[]
 
   @@index([giverUserId])
   @@index([receiverUserId])
@@ -115,12 +142,80 @@ model ReturnRequest {
   transfer                        ShiftTransfer       @relation(fields: [transferId], references: [id], onDelete: Cascade)
   createdBy                       User                @relation("ReturnCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
   originalUser                    User                @relation("ReturnAnsweredBy", fields: [originalUserId], references: [id], onDelete: Restrict)
+  notifications                   Notification[]
 
   @@index([transferId])
   @@index([createdByUserId])
   @@index([originalUserId])
   @@index([status])
   @@index([createdAt])
+}
+
+model Notification {
+  id              String           @id @default(cuid())
+  recipientUserId String
+  shiftTransferId String?
+  returnRequestId String?
+  type            NotificationType
+  title           String
+  body            String
+  link            String
+  scheduledFor    DateTime?
+  publishedAt     DateTime?
+  readAt          DateTime?
+  openedAt        DateTime?
+  cancelledAt     DateTime?
+  uniqueKey       String           @unique
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  recipient       User             @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
+  shiftTransfer   ShiftTransfer?   @relation(fields: [shiftTransferId], references: [id], onDelete: Cascade)
+  returnRequest   ReturnRequest?   @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  deliveries      PushDelivery[]
+
+  @@index([recipientUserId, readAt])
+  @@index([recipientUserId, createdAt])
+  @@index([scheduledFor])
+  @@index([publishedAt])
+  @@index([cancelledAt])
+}
+
+model PushSubscription {
+  id          String         @id @default(cuid())
+  userId      String
+  endpoint    String         @unique
+  p256dh      String
+  auth        String
+  userAgent   String?
+  deviceName  String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries  PushDelivery[]
+
+  @@index([userId])
+  @@index([revokedAt])
+}
+
+model PushDelivery {
+  id                 String             @id @default(cuid())
+  notificationId     String
+  pushSubscriptionId String?
+  status             PushDeliveryStatus @default(PENDING)
+  attemptCount       Int                @default(0)
+  sentAt             DateTime?
+  failedAt           DateTime?
+  lastError          String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  notification       Notification       @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  pushSubscription   PushSubscription?  @relation(fields: [pushSubscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([notificationId])
+  @@index([pushSubscriptionId])
+  @@index([status])
 }
 
 model Session {
