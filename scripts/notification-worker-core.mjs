@@ -139,6 +139,14 @@ async function shouldCancelScheduledNotification(prisma, notificationId) {
   }
 
   if (notification.type === "RETURN_EXECUTION_REMINDER") {
+    if (!notification.returnRequestId) {
+      return (
+        notification.shiftTransfer.status !== "VC_APPROVED_ACTIVE" ||
+        notification.shiftTransfer.expectedEndMode !== "SPECIFIC_TIME" ||
+        !notification.shiftTransfer.expectedEndAt
+      );
+    }
+
     const request = notification.returnRequestId
       ? await prisma.returnRequest.findUnique({
           where: { id: notification.returnRequestId },

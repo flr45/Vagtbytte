@@ -12,6 +12,7 @@ type ActivationReminderTransfer = {
 
 type ReturnExecutionReminderTransfer = {
   id: string;
+  expectedEndAt?: Date | null;
 };
 
 type ReturnExecutionReminderRequest = {
@@ -68,5 +69,27 @@ export function returnExecutionReminderInputs(
     scheduledFor: reminder.scheduledFor,
     publishNow: reminder.publishNow,
     uniqueKey: `return:${request.id}:execution-reminder:${reminder.suffix}:${vcUserId}`
+  }));
+}
+
+export function expectedReturnExecutionReminderInputs(
+  transfer: ReturnExecutionReminderTransfer,
+  vcUserId: string,
+  now = new Date()
+) {
+  if (!transfer.expectedEndAt) {
+    return [];
+  }
+
+  return operationalReminderTimes(transfer.expectedEndAt, now).map((reminder) => ({
+    recipientUserId: vcUserId,
+    shiftTransferId: transfer.id,
+    type: "RETURN_EXECUTION_REMINDER" as const,
+    title: reminder.suffix === "due" ? "Tilbagelevering kræver handling nu" : "Tilbagelevering skal snart udføres",
+    body: "Bekræft tilbageleveringen, når vagten er tilbageleveret.",
+    link: `/vagtcentral/sager/${transfer.id}`,
+    scheduledFor: reminder.scheduledFor,
+    publishNow: reminder.publishNow,
+    uniqueKey: `transfer:${transfer.id}:expected-return-reminder:${reminder.suffix}:${vcUserId}`
   }));
 }

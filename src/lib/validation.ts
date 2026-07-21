@@ -140,6 +140,10 @@ export const vcReturnExecutionSchema = z.object({
   returnRequestId: z.string().min(1)
 });
 
+export const vcExpectedReturnExecutionSchema = z.object({
+  transferId: z.string().min(1)
+});
+
 export const transferCancelSchema = z.object({
   transferId: z.string().min(1),
   cancellationReason: z.string().trim().max(500, "Begrundelsen må højst være 500 tegn").optional()

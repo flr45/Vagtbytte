@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { TransferStatus, UserRole } from "@prisma/client";
 import {
   canCreateReturnRequest,
+  canVcConfirmExpectedReturnExecution,
   canCancelTransfer,
   canOriginalRespondToReturn,
   canRespondToTransfer,
@@ -341,6 +342,7 @@ describe("del 3 - tilbagelevering", () => {
         userId: receiver.id,
         receiverUserId: receiver.id,
         status: TransferStatus.VC_APPROVED_ACTIVE,
+        expectedEndMode: "UNTIL_SHIFT_END",
         hasOpenReturnRequest: false
       }).ok
     ).toBe(true);
@@ -352,6 +354,7 @@ describe("del 3 - tilbagelevering", () => {
         userId: giver.id,
         receiverUserId: receiver.id,
         status: TransferStatus.VC_APPROVED_ACTIVE,
+        expectedEndMode: "UNTIL_SHIFT_END",
         hasOpenReturnRequest: false
       }).ok
     ).toBe(false);
@@ -363,6 +366,7 @@ describe("del 3 - tilbagelevering", () => {
         userId: "tredje",
         receiverUserId: receiver.id,
         status: TransferStatus.VC_APPROVED_ACTIVE,
+        expectedEndMode: "UNTIL_SHIFT_END",
         hasOpenReturnRequest: false
       }).ok
     ).toBe(false);
@@ -481,6 +485,7 @@ describe("del 3 - tilbagelevering", () => {
         userId: receiver.id,
         receiverUserId: receiver.id,
         status: TransferStatus.COMPLETED,
+        expectedEndMode: "UNTIL_SHIFT_END",
         hasOpenReturnRequest: false
       }).ok
     ).toBe(false);
@@ -499,6 +504,82 @@ describe("del 3 - tilbagelevering", () => {
         role: UserRole.VC,
         transferStatus: TransferStatus.VC_APPROVED_ACTIVE,
         returnStatus: "VC_APPROVED_AWAITING_EXECUTION"
+      }).ok
+    ).toBe(false);
+  });
+
+  it("bestemt tilbageleveringstidspunkt kræver ikke nyt acceptflow", () => {
+    expect(
+      canCreateReturnRequest({
+        userId: receiver.id,
+        receiverUserId: receiver.id,
+        status: TransferStatus.VC_APPROVED_ACTIVE,
+        expectedEndMode: "SPECIFIC_TIME",
+        hasOpenReturnRequest: false
+      }).ok
+    ).toBe(false);
+  });
+
+  it("VC kan bekræfte aftalt tilbagelevering på en aktiv sag", () => {
+    expect(
+      canVcConfirmExpectedReturnExecution({
+        role: UserRole.VC,
+        status: TransferStatus.VC_APPROVED_ACTIVE,
+        expectedEndMode: "SPECIFIC_TIME",
+        expectedEndAt: new Date("2026-07-21T12:00:00.000Z"),
+        hasOpenReturnRequest: false,
+        now: new Date("2026-07-21T11:56:00.000Z")
+      }).ok
+    ).toBe(true);
+  });
+
+  it("brandmand og admin kan ikke bekræfte aftalt tilbagelevering", () => {
+    for (const role of [UserRole.BRANDFIGHTER, UserRole.ADMIN]) {
+      expect(
+        canVcConfirmExpectedReturnExecution({
+          role,
+          status: TransferStatus.VC_APPROVED_ACTIVE,
+          expectedEndMode: "SPECIFIC_TIME",
+          expectedEndAt: new Date("2026-07-21T12:00:00.000Z"),
+          hasOpenReturnRequest: false,
+          now: new Date("2026-07-21T11:56:00.000Z")
+        }).ok
+      ).toBe(false);
+    }
+  });
+
+  it("aftalt tilbagelevering kan ikke bekræftes for afsluttede eller vagt-slut-sager", () => {
+    expect(
+      canVcConfirmExpectedReturnExecution({
+        role: UserRole.VC,
+        status: TransferStatus.COMPLETED,
+        expectedEndMode: "SPECIFIC_TIME",
+        expectedEndAt: new Date("2026-07-21T12:00:00.000Z"),
+        hasOpenReturnRequest: false,
+        now: new Date("2026-07-21T11:56:00.000Z")
+      }).ok
+    ).toBe(false);
+    expect(
+      canVcConfirmExpectedReturnExecution({
+        role: UserRole.VC,
+        status: TransferStatus.VC_APPROVED_ACTIVE,
+        expectedEndMode: "UNTIL_SHIFT_END",
+        expectedEndAt: null,
+        hasOpenReturnRequest: false,
+        now: new Date("2026-07-21T11:56:00.000Z")
+      }).ok
+    ).toBe(false);
+  });
+
+  it("aftalt tilbagelevering kan ikke bekræftes for tidligt", () => {
+    expect(
+      canVcConfirmExpectedReturnExecution({
+        role: UserRole.VC,
+        status: TransferStatus.VC_APPROVED_ACTIVE,
+        expectedEndMode: "SPECIFIC_TIME",
+        expectedEndAt: new Date("2026-07-21T12:00:00.000Z"),
+        hasOpenReturnRequest: false,
+        now: new Date("2026-07-21T11:54:00.000Z")
       }).ok
     ).toBe(false);
   });

@@ -194,6 +194,7 @@ export function canCreateReturnRequest(input: {
   userId: string;
   receiverUserId: string;
   status: TransferStatus;
+  expectedEndMode: ExpectedEndMode;
   hasOpenReturnRequest: boolean;
 }) {
   if (input.status === "COMPLETED") {
@@ -208,11 +209,44 @@ export function canCreateReturnRequest(input: {
     return { ok: false, message: "Tilbagelevering kan kun oprettes på en aktiv vagtoverdragelse." };
   }
 
+  if (input.expectedEndMode === "SPECIFIC_TIME") {
+    return {
+      ok: false,
+      message: "Tilbagelevering ved et aftalt tidspunkt bekræftes af vagtcentralen og kræver ikke en ny accept."
+    };
+  }
+
   if (input.hasOpenReturnRequest) {
     return { ok: false, message: "Der findes allerede en åben tilbagelevering." };
   }
 
   return { ok: true, message: "Tilbagelevering kan oprettes." };
+}
+
+export function canVcConfirmExpectedReturnExecution(input: {
+  role: UserRole;
+  status: TransferStatus;
+  expectedEndMode: ExpectedEndMode;
+  expectedEndAt: Date | null;
+  hasOpenReturnRequest: boolean;
+  now?: Date;
+}) {
+  if (input.role !== UserRole.VC) {
+    return { ok: false, message: "Kun vagtcentralen kan bekræfte tilbageleveringen." };
+  }
+  if (input.status !== "VC_APPROVED_ACTIVE") {
+    return { ok: false, message: "Tilbageleveringen kan kun bekræftes på en aktiv vagtoverdragelse." };
+  }
+  if (input.expectedEndMode !== "SPECIFIC_TIME" || !input.expectedEndAt) {
+    return { ok: false, message: "Kun vagtoverdragelser med et aftalt tilbageleveringstidspunkt kan bekræftes her." };
+  }
+  if (input.expectedEndAt.getTime() - (input.now ?? new Date()).getTime() > 5 * 60 * 1000) {
+    return { ok: false, message: "Tilbageleveringen kan først bekræftes fem minutter før det aftalte tidspunkt." };
+  }
+  if (input.hasOpenReturnRequest) {
+    return { ok: false, message: "Sagen har en åben tilbagelevering og skal behandles gennem det eksisterende flow." };
+  }
+  return { ok: true, message: "Tilbageleveringen kan bekræftes." };
 }
 
 export function canOriginalRespondToReturn(input: {

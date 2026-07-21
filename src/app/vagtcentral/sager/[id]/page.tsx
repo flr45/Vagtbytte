@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { expectedEndLabel } from "@/lib/transfer-rules";
 import { TopBar } from "@/components/TopBar";
 import {
+  VcExpectedReturnExecutionForm,
   VcReturnDecisionForms,
   VcReturnExecutionForm,
   VcTransferActivationForm,
@@ -29,6 +30,12 @@ export default async function VcTransferDetailPage({ params }: { params: Promise
   const activeReturn = transfer.returnRequests.find((request) =>
     ["AWAITING_ORIGINAL", "ORIGINAL_ACCEPTED_AWAITING_VC", "VC_APPROVED_AWAITING_EXECUTION"].includes(request.status)
   );
+  const now = new Date();
+  const canConfirmExpectedReturn =
+    transfer.status === "VC_APPROVED_ACTIVE" &&
+    transfer.expectedEndMode === "SPECIFIC_TIME" &&
+    Boolean(transfer.expectedEndAt && transfer.expectedEndAt.getTime() - now.getTime() <= 5 * 60 * 1000) &&
+    !activeReturn;
 
   return (
     <>
@@ -69,6 +76,12 @@ export default async function VcTransferDetailPage({ params }: { params: Promise
           <p className="rounded-md bg-amber-50 p-3 text-sm font-semibold text-amber-950">
             Forventet tilbagelevering medfører ikke automatisk tilbagelevering.
           </p>
+          {canConfirmExpectedReturn ? (
+            <VcExpectedReturnExecutionForm
+              confirmationText={`Vil du bekræfte, at vagten er tilbageleveret?\n${transfer.receiverNameSnapshot} tilbageleverer til ${transfer.giverNameSnapshot}\nTidspunkt: ${formatDateTime(transfer.expectedEndAt ?? new Date())}`}
+              transferId={transfer.id}
+            />
+          ) : null}
           {transfer.status === "RECEIVER_ACCEPTED_AWAITING_VC" ? (
             <VcTransferDecisionForms transferId={transfer.id} />
           ) : null}

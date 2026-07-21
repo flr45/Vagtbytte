@@ -314,6 +314,14 @@ async function shouldCancelScheduledNotification(repo: NotificationRepo, notific
   }
 
   if (notification.type === "RETURN_EXECUTION_REMINDER") {
+    if (!notification.returnRequestId) {
+      return (
+        notification.shiftTransfer.status !== "VC_APPROVED_ACTIVE" ||
+        notification.shiftTransfer.expectedEndMode !== "SPECIFIC_TIME" ||
+        !notification.shiftTransfer.expectedEndAt
+      );
+    }
+
     const request = notification.returnRequestId
       ? await repo.returnRequest.findUnique({ where: { id: notification.returnRequestId }, include: { transfer: true } })
       : null;

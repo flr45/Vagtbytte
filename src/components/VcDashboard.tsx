@@ -14,6 +14,7 @@ import {
   type VcPriority
 } from "@/lib/vc-dashboard";
 import {
+  VcExpectedReturnExecutionForm,
   VcReturnDecisionForms,
   VcReturnExecutionForm,
   VcTransferActivationForm,
@@ -81,10 +82,10 @@ export function VcDashboard({
         .filter((transfer) => transfer.status === "RETURN_APPROVED_AWAITING_EXECUTION")
         .map((transfer) => transferToReturnExecutionTask(transfer)),
       ...activeTransfers
-        .filter((transfer) => transfer.status === "VC_APPROVED_ACTIVE" && transfer.expectedEndMode === "SPECIFIC_TIME" && transfer.expectedEndAt)
+        .filter((transfer) => isExpectedEndActionable(transfer, now))
         .map((transfer) => transferToExpectedEndTask(transfer))
     ],
-    [activeTransfers, awaitingTransfers, returnTransfers]
+    [activeTransfers, awaitingTransfers, returnTransfers, now]
   );
   const sortedTasks = useMemo(() => sortVcTasksByDeadline(tasks, now), [tasks, now]);
   const dashboardStatus = getVcDashboardStatus(sortedTasks, now);
@@ -191,6 +192,19 @@ function transferToExpectedEndTask(transfer: VcDashboardTransfer) {
     deadlineAt: parseDate(transfer.expectedEndAt),
     awaitingSince: parseDate(transfer.activatedAt)
   };
+}
+
+function isExpectedEndActionable(transfer: VcDashboardTransfer, now: Date) {
+  if (transfer.status !== "VC_APPROVED_ACTIVE" || transfer.expectedEndMode !== "SPECIFIC_TIME" || !transfer.expectedEndAt) {
+    return false;
+  }
+
+  const expectedEndAt = parseDate(transfer.expectedEndAt);
+  if (!expectedEndAt) {
+    return false;
+  }
+
+  return expectedEndAt.getTime() - now.getTime() <= 5 * 60 * 1000;
 }
 
 function transferToActivationTask(transfer: VcDashboardTransfer) {
@@ -318,9 +332,6 @@ function ActionCard({
       ) : (
         <ReturnDetails deadline={deadline} now={now} returnRequest={returnRequest} transfer={transfer} />
       )}
-      <Link className="focus-ring w-fit rounded-md px-2 py-2 text-sm font-semibold text-zinc-700" href={`/vagtcentral/sager/${transfer.id}`}>
-        Åbn detaljer og historik
-      </Link>
       {type === "TRANSFER" ? (
         <VcTransferDecisionForms
           confirmationText={`Vil du godkende denne vagtoverdragelse?\n${transfer.giverNameSnapshot} til ${transfer.receiverNameSnapshot}\nStart: ${formatDateTime(parseDate(transfer.requestedStartAt) ?? new Date())}`}
@@ -337,6 +348,11 @@ function ActionCard({
           confirmationText={`Vil du bekræfte, at tilbageleveringen er udført?\n${transfer.receiverNameSnapshot} tilbageleverer til ${transfer.giverNameSnapshot}\nTidspunkt: ${formatDateTime(parseDate(returnRequest.requestedReturnAt) ?? new Date())}`}
           returnRequestId={returnRequest.id}
         />
+      ) : type === "EXPECTED_END" ? (
+        <VcExpectedReturnExecutionForm
+          confirmationText={`Vil du bekræfte, at vagten er tilbageleveret?\n${transfer.receiverNameSnapshot} tilbageleverer til ${transfer.giverNameSnapshot}\nTidspunkt: ${formatDateTime(parseDate(transfer.expectedEndAt) ?? new Date())}`}
+          transferId={transfer.id}
+        />
       ) : type === "RETURN" && returnRequest ? (
         <VcReturnDecisionForms
           confirmationText={`Vil du godkende denne tilbagelevering?\n${transfer.receiverNameSnapshot} tilbageleverer til ${transfer.giverNameSnapshot}\nTidspunkt: ${formatDateTime(parseDate(returnRequest.requestedReturnAt) ?? new Date())}`}
@@ -344,6 +360,9 @@ function ActionCard({
           returnRequestId={returnRequest.id}
         />
       ) : null}
+      <Link className="focus-ring w-fit rounded-md px-2 py-2 text-sm font-semibold text-zinc-700" href={`/vagtcentral/sager/${transfer.id}`}>
+        Åbn detaljer og historik
+      </Link>
     </article>
   );
 }
@@ -376,8 +395,8 @@ function ExpectedEndDetails({ transfer, deadline, now }: { transfer: VcDashboard
       <Detail label="Forventet tilbagelevering" value={deadline ? formatDateTime(deadline) : "Mangler tidspunkt"} />
       <Detail label="Nedtælling" value={formatCountdown(deadline, now)} strong />
       <Detail label="Aktuel status" value={statusLabel(transfer.status)} />
-      <p className="rounded-md bg-amber-50 p-3 font-semibold text-amber-950 md:col-span-2">
-        Vagtoverdragelsen fortsætter, indtil en tilbagelevering er accepteret og godkendt af vagtcentralen.
+      <p className="rounded-md bg-red-50 p-3 font-semibold text-red-950 md:col-span-2">
+        A og B har accepteret tilbageleveringen i den oprindelige sag. Bekræft udførelsen, når vagten er tilbageleveret.
       </p>
     </div>
   );

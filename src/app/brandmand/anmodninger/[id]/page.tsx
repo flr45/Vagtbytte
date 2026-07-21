@@ -53,7 +53,11 @@ export default async function TransferDetailPage({
   const activeReturn = transfer.returnRequests.find((request) =>
     ["AWAITING_ORIGINAL", "ORIGINAL_ACCEPTED_AWAITING_VC", "VC_APPROVED_AWAITING_EXECUTION"].includes(request.status)
   );
-  const canCreateReturn = isReceiver && transfer.status === "VC_APPROVED_ACTIVE" && !activeReturn;
+  const canCreateReturn =
+    isReceiver &&
+    transfer.status === "VC_APPROVED_ACTIVE" &&
+    transfer.expectedEndMode === "UNTIL_SHIFT_END" &&
+    !activeReturn;
   const canAnswerReturn =
     isGiver &&
     transfer.status === "RETURN_AWAITING_ORIGINAL" &&
@@ -107,7 +111,7 @@ export default async function TransferDetailPage({
             {transfer.cancellationReason ? <Detail label="Annulleringsbegrundelse" value={transfer.cancellationReason} /> : null}
           </dl>
           <p className="rounded-md bg-amber-50 p-3 text-sm font-semibold text-amber-950">
-            Forventet tilbagelevering er kun en påmindelse. Vagten tilbageleveres ikke automatisk.
+            Forventet tilbagelevering er kun en opgave for vagtcentralen. Vagten tilbageleveres ikke automatisk.
           </p>
           {isOverdue ? (
             <p className="rounded-md bg-red-50 p-3 text-sm font-semibold text-red-950">

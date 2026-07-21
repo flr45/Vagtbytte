@@ -2,6 +2,7 @@ import type { ReturnRequest, ShiftTransfer, User } from "@prisma/client";
 import { prisma } from "./prisma";
 import { cancelFutureTransferNotifications, createNotifications } from "./notifications";
 import {
+  expectedReturnExecutionReminderInputs,
   returnExecutionReminderInputs,
   shouldScheduleExpectedEndNotification,
   transferActivationReminderInputs
@@ -141,18 +142,10 @@ export async function notifyTransferActivated(transfer: ShiftTransfer) {
   );
 
   if (shouldScheduleExpectedEndNotification(transfer)) {
+    const vcUsers = await prisma.user.findMany({ where: { role: "VC", isActive: true } });
     await createNotifications(
       prisma,
-      [transfer.giverUserId, transfer.receiverUserId].map((recipientUserId) => ({
-        recipientUserId,
-        shiftTransferId: transfer.id,
-        type: "TRANSFER_EXPECTED_END",
-        title: "Forventet sluttid er nået",
-        body: "Den forventede sluttid er nået. Vagtoverdragelsen fortsætter, indtil en tilbagelevering er accepteret og godkendt af vagtcentralen.",
-        link: `/brandmand/anmodninger/${transfer.id}`,
-        scheduledFor: transfer.expectedEndAt,
-        uniqueKey: `transfer:${transfer.id}:expected-end:${recipientUserId}`
-      }))
+      vcUsers.flatMap((vc) => expectedReturnExecutionReminderInputs(transfer, vc.id))
     );
   }
 }
@@ -294,6 +287,22 @@ export async function notifyReturnExecutionCompleted(transfer: ShiftTransfer, re
       body: "Vagtcentralen har bekræftet, at tilbageleveringen er udført.",
       link: `/brandmand/anmodninger/${transfer.id}`,
       uniqueKey: `return:${request.id}:completed:${recipientUserId}`
+    }))
+  );
+  await cancelFutureTransferNotifications(prisma, transfer.id);
+}
+
+export async function notifyExpectedReturnExecutionCompleted(transfer: ShiftTransfer) {
+  await createNotifications(
+    prisma,
+    [transfer.giverUserId, transfer.receiverUserId].map((recipientUserId) => ({
+      recipientUserId,
+      shiftTransferId: transfer.id,
+      type: "RETURN_COMPLETED" as const,
+      title: "Vagten er tilbageleveret",
+      body: "Vagtcentralen har bekræftet, at vagten er tilbageleveret.",
+      link: `/brandmand/anmodninger/${transfer.id}`,
+      uniqueKey: `transfer:${transfer.id}:expected-return-completed:${recipientUserId}`
     }))
   );
   await cancelFutureTransferNotifications(prisma, transfer.id);

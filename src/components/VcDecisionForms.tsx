@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import {
   approveReturnByVcAction,
   approveTransferByVcAction,
+  confirmExpectedReturnExecutionAction,
   confirmReturnExecutionAction,
   confirmTransferActivationAction,
   rejectReturnByVcAction,
@@ -160,6 +161,32 @@ export function VcReturnExecutionForm({
       }}
     >
       <input name="returnRequestId" type="hidden" value={returnRequestId} />
+      <ActionMessage message={state.message} ok={state.ok} />
+      <SubmitButton pendingText="Bekræfter...">Bekræft tilbagelevering udført</SubmitButton>
+    </form>
+  );
+}
+
+export function VcExpectedReturnExecutionForm({
+  transferId,
+  confirmationText
+}: {
+  transferId: string;
+  confirmationText: string;
+}) {
+  const [state, action] = useActionState(confirmExpectedReturnExecutionAction, {});
+
+  return (
+    <form
+      action={action}
+      className="grid gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-4"
+      onSubmit={(event) => {
+        if (!window.confirm(confirmationText)) {
+          event.preventDefault();
+        }
+      }}
+    >
+      <input name="transferId" type="hidden" value={transferId} />
       <ActionMessage message={state.message} ok={state.ok} />
       <SubmitButton pendingText="Bekræfter...">Bekræft tilbagelevering udført</SubmitButton>
     </form>

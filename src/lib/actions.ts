@@ -22,6 +22,7 @@ import {
   transferLookupSchema,
   transferResponseSchema,
   vcReturnDecisionSchema,
+  vcExpectedReturnExecutionSchema,
   vcReturnExecutionSchema,
   vcReturnRejectSchema,
   vcTransferActivationSchema,
@@ -37,6 +38,7 @@ import {
   canCancelTransfer,
   canVcDecideReturn,
   canVcDecideTransfer,
+  canVcConfirmExpectedReturnExecution,
   canVcConfirmReturnExecution,
   canVcConfirmTransferActivation,
   validateTransferParticipants,
@@ -53,6 +55,7 @@ import {
   notifyVcTransferDecision,
   notifyTransferActivated,
   notifyTransferCancelled,
+  notifyExpectedReturnExecutionCompleted,
   notifyReturnExecutionCompleted
 } from "./notification-events";
 
@@ -733,7 +736,7 @@ export async function cancelTransferAction(_state: ActionState, formData: FormDa
     return { ok: true, transfer };
   });
 
-  if (!result.ok || !("transfer" in result)) {
+  if (!result.ok || !("transfer" in result) || !result.transfer) {
     return result;
   }
   const transferToNotify = result.transfer;
@@ -873,7 +876,7 @@ export async function createReturnRequestAction(
     where: { id: parsed.data.transferId },
     include: {
       returnRequests: {
-        where: { status: { in: ["AWAITING_ORIGINAL", "ORIGINAL_ACCEPTED_AWAITING_VC"] } }
+        where: { status: { in: ["AWAITING_ORIGINAL", "ORIGINAL_ACCEPTED_AWAITING_VC", "VC_APPROVED_AWAITING_EXECUTION"] } }
       }
     }
   });
@@ -886,6 +889,7 @@ export async function createReturnRequestAction(
     userId: user.id,
     receiverUserId: transfer.receiverUserId,
     status: transfer.status,
+    expectedEndMode: transfer.expectedEndMode,
     hasOpenReturnRequest: transfer.returnRequests.length > 0
   });
 
@@ -1246,6 +1250,103 @@ export async function confirmReturnExecutionAction(
   revalidatePath(`/vagtcentral/sager/${returnRequest.transferId}`);
   revalidatePath("/brandmand");
   revalidatePath(`/brandmand/anmodninger/${returnRequest.transferId}`);
+  return { ok: true, message: "Tilbageleveringen er bekræftet udført." };
+}
+
+export async function confirmExpectedReturnExecutionAction(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const vc = await requireRole(UserRole.VC);
+  const parsed = vcExpectedReturnExecutionSchema.safeParse({ transferId: formData.get("transferId") });
+  if (!parsed.success) {
+    return { ok: false, message: firstError(parsed.error) };
+  }
+
+  const openReturnStatuses = [
+    "AWAITING_ORIGINAL",
+    "ORIGINAL_ACCEPTED_AWAITING_VC",
+    "VC_APPROVED_AWAITING_EXECUTION"
+  ] as const;
+  const result = await prisma.$transaction(async (tx) => {
+    const transfer = await tx.shiftTransfer.findUnique({
+      where: { id: parsed.data.transferId },
+      include: {
+        returnRequests: {
+          where: { status: { in: [...openReturnStatuses] } }
+        }
+      }
+    });
+
+    if (!transfer) {
+      return { ok: false, message: "Sagen blev ikke fundet." };
+    }
+
+    const permission = canVcConfirmExpectedReturnExecution({
+      role: vc.role,
+      status: transfer.status,
+      expectedEndMode: transfer.expectedEndMode,
+      expectedEndAt: transfer.expectedEndAt,
+      hasOpenReturnRequest: transfer.returnRequests.length > 0,
+      now: new Date()
+    });
+    if (!permission.ok) {
+      await tx.auditLog.create({
+        data: {
+          actorUserId: vc.id,
+          actorRole: vc.role,
+          action: "EXPECTED_RETURN_EXECUTION_REJECTED",
+          targetUserId: transfer.receiverUserId,
+          description: permission.message
+        }
+      });
+      return { ok: false, message: permission.message };
+    }
+
+    const now = new Date();
+    const confirmed = await tx.shiftTransfer.updateMany({
+      where: {
+        id: transfer.id,
+        status: "VC_APPROVED_ACTIVE",
+        expectedEndMode: "SPECIFIC_TIME",
+        completedAt: null
+      },
+      data: {
+        status: "COMPLETED",
+        completedAt: now,
+        returnExecutionConfirmedAt: now,
+        returnExecutionConfirmedByUserId: vc.id
+      }
+    });
+
+    if (confirmed.count !== 1) {
+      return { ok: false, message: "Tilbageleveringen er allerede bekræftet." };
+    }
+
+    await cancelFutureTransferNotifications(tx, transfer.id);
+    await tx.auditLog.create({
+      data: {
+        actorUserId: vc.id,
+        actorRole: vc.role,
+        action: "EXPECTED_RETURN_EXECUTION_CONFIRMED",
+        targetUserId: transfer.giverUserId,
+        description: `Aftalt tilbagelevering for ${transfer.transferNumber} blev bekræftet udført`
+      }
+    });
+
+    return { ok: true, transfer: { ...transfer, status: "COMPLETED" as const, completedAt: now } };
+  });
+
+  if (!result.ok || !("transfer" in result) || !result.transfer) {
+    return result;
+  }
+
+  const completedTransfer = result.transfer;
+  await notifyExpectedReturnExecutionCompleted(completedTransfer);
+  revalidatePath("/vagtcentral");
+  revalidatePath(`/vagtcentral/sager/${parsed.data.transferId}`);
+  revalidatePath("/brandmand");
+  revalidatePath(`/brandmand/anmodninger/${parsed.data.transferId}`);
   return { ok: true, message: "Tilbageleveringen er bekræftet udført." };
 }
 

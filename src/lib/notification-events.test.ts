@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  expectedReturnExecutionReminderInputs,
   returnExecutionReminderInputs,
   shouldScheduleExpectedEndNotification,
   transferActivationReminderInputs
@@ -73,5 +74,39 @@ describe("operationelle VC-reminders", () => {
       publishNow: false,
       link: "/vagtcentral/sager/transfer-1"
     });
+  });
+
+  it("opretter VC-reminders fem minutter før aftalt tilbagelevering", () => {
+    const reminders = expectedReturnExecutionReminderInputs(
+      { id: "transfer-1", expectedEndAt: new Date("2026-07-21T12:00:00.000Z") },
+      "vc-1",
+      new Date("2026-07-21T11:00:00.000Z")
+    );
+
+    expect(reminders).toHaveLength(2);
+    expect(reminders[0]).toMatchObject({
+      type: "RETURN_EXECUTION_REMINDER",
+      scheduledFor: new Date("2026-07-21T11:55:00.000Z"),
+      publishNow: false,
+      link: "/vagtcentral/sager/transfer-1"
+    });
+    expect(reminders[0]).not.toHaveProperty("returnRequestId");
+  });
+
+  it("opretter straks-reminder efter aftalt tilbagelevering er overskredet", () => {
+    const reminders = expectedReturnExecutionReminderInputs(
+      { id: "transfer-1", expectedEndAt: new Date("2026-07-21T12:00:00.000Z") },
+      "vc-1",
+      new Date("2026-07-21T12:01:00.000Z")
+    );
+
+    expect(reminders).toHaveLength(1);
+    expect(reminders[0]).toMatchObject({ scheduledFor: null, publishNow: true });
+  });
+
+  it("opretter ingen tidsopgave for til-vagtens-slutning", () => {
+    expect(
+      expectedReturnExecutionReminderInputs({ id: "transfer-1", expectedEndAt: null }, "vc-1")
+    ).toHaveLength(0);
   });
 });
