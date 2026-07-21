@@ -1,9 +1,44 @@
 import { describe, expect, it, vi } from "vitest";
-import { activateBrowserPush, SERVICE_WORKER_ACTIVATION_MESSAGE, syncExistingBrowserPush } from "./push-client";
+import {
+  activateBrowserPush,
+  SERVICE_WORKER_ACTIVATION_MESSAGE,
+  shouldShowPushActivationButton,
+  syncExistingBrowserPush
+} from "./push-client";
 
 const publicKey = "AQID";
 
 describe("browser push-registrering", () => {
+  it("viser aktiveringsknappen når mindst ét pushkrav mangler", () => {
+    expect(
+      shouldShowPushActivationButton({
+        permission: "default",
+        serviceWorkerActive: false,
+        hasSubscription: false,
+        serverRegistrationActive: false
+      })
+    ).toBe(true);
+    expect(
+      shouldShowPushActivationButton({
+        permission: "granted",
+        serviceWorkerActive: true,
+        hasSubscription: true,
+        serverRegistrationActive: false
+      })
+    ).toBe(true);
+  });
+
+  it("skjuler kun aktiveringsknappen når alle pushkrav er opfyldt", () => {
+    expect(
+      shouldShowPushActivationButton({
+        permission: "granted",
+        serviceWorkerActive: true,
+        hasSubscription: true,
+        serverRegistrationActive: true
+      })
+    ).toBe(false);
+  });
+
   it("venter på navigator.serviceWorker.ready før subscribe", async () => {
     const order: string[] = [];
     let resolveReady: (registration: ReturnType<typeof makeRegistration>) => void = () => undefined;
@@ -115,6 +150,44 @@ describe("browser push-registrering", () => {
     expect(order).toEqual(["getSubscription", "save"]);
   });
 
+  it("ugyldig serverregistrering unsubscribe'r gammel subscription og gemmer ikke den gamle", async () => {
+    const order: string[] = [];
+    const registration = makeRegistration(order, true);
+    const environment = makeEnvironment({ ready: Promise.resolve(registration) });
+
+    const result = await syncExistingBrowserPush({
+      checkSubscription: async () => ({ ok: true, active: false }),
+      saveSubscription: makeSaveSubscription(order),
+      environment
+    });
+
+    expect(result).toMatchObject({
+      subscription: false,
+      serverRegistration: false,
+      invalidSubscription: true
+    });
+    expect(registration.unsubscribe).toHaveBeenCalledOnce();
+    expect(order).toEqual(["getSubscription", "unsubscribe"]);
+  });
+
+  it("forceNewSubscription unsubscribe'r gammel subscription før ny subscribe", async () => {
+    const order: string[] = [];
+    const registration = makeRegistration(order, true);
+    const environment = makeEnvironment({ ready: Promise.resolve(registration) });
+
+    const result = await activateBrowserPush({
+      publicKey,
+      forceNewSubscription: true,
+      saveSubscription: makeSaveSubscription(order),
+      environment
+    });
+
+    expect(result.ok).toBe(true);
+    expect(registration.unsubscribe).toHaveBeenCalledOnce();
+    expect(registration.subscribe).toHaveBeenCalledOnce();
+    expect(order).toEqual(["getSubscription", "unsubscribe", "subscribe", "save"]);
+  });
+
   it("baggrundssynk spørger ikke om permission", async () => {
     const order: string[] = [];
     const registration = makeRegistration(order, true);
@@ -165,10 +238,34 @@ describe("browser push-registrering", () => {
     expect(result.ok).toBe(true);
     expect(registration.subscribe).toHaveBeenCalledOnce();
   });
+
+  it("iPhone med navigator.standalone kan abonnere selv hvis display-mode ikke matcher", async () => {
+    const order: string[] = [];
+    const registration = makeRegistration(order);
+
+    const result = await activateBrowserPush({
+      publicKey,
+      saveSubscription: makeSaveSubscription(order),
+      environment: makeEnvironment({
+        ready: Promise.resolve(registration),
+        userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
+        standalone: false,
+        navigatorStandalone: true
+      })
+    });
+
+    expect(result.ok).toBe(true);
+    expect(registration.subscribe).toHaveBeenCalledOnce();
+  });
 });
 
 function makeRegistration(order: string[], existing = false) {
+  const unsubscribe = vi.fn(async () => {
+    order.push("unsubscribe");
+    return true;
+  });
   const subscriptionJson = {
+    unsubscribe,
     toJSON() {
       return {
         endpoint: "https://push.test/sub",
@@ -190,6 +287,7 @@ function makeRegistration(order: string[], existing = false) {
 
   return {
     active: { state: "activated" },
+    unsubscribe,
     getSubscription,
     subscribe,
     pushManager: { getSubscription, subscribe }
@@ -201,17 +299,20 @@ function makeEnvironment({
   onRegister,
   requestPermission,
   userAgent = "Vitest",
-  standalone = false
+  standalone = false,
+  navigatorStandalone = false
 }: {
   ready: Promise<ReturnType<typeof makeRegistration>>;
   onRegister?: () => void;
   requestPermission?: () => Promise<NotificationPermission>;
   userAgent?: string;
   standalone?: boolean;
+  navigatorStandalone?: boolean;
 }) {
   return {
     navigator: {
       userAgent,
+      standalone: navigatorStandalone,
       serviceWorker: {
         async register(scriptUrl: string, options: { scope: string }) {
           expect(scriptUrl).toBe("/sw.js");

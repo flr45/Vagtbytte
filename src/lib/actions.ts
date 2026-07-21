@@ -1361,6 +1361,26 @@ export async function savePushSubscriptionAction(input: unknown): Promise<Action
   return { ok: true, message: "Push-notifikationer er aktive." };
 }
 
+export async function checkPushSubscriptionAction(endpoint: string): Promise<ActionState & { active?: boolean }> {
+  const user = await requireUser();
+  const parsed = pushSubscriptionSchema.pick({ endpoint: true }).safeParse({ endpoint });
+  if (!parsed.success) {
+    return { ok: false, active: false, message: "Push-endpoint er ugyldigt." };
+  }
+
+  const subscription = await prisma.pushSubscription.findUnique({
+    where: { endpoint: parsed.data.endpoint },
+    select: { userId: true, revokedAt: true }
+  });
+
+  const active = Boolean(subscription && subscription.userId === user.id && !subscription.revokedAt);
+  return {
+    ok: true,
+    active,
+    message: active ? "Serverregistrering er aktiv." : "Serverregistrering mangler eller er ugyldig."
+  };
+}
+
 export async function removePushSubscriptionAction(formData: FormData) {
   const user = await requireUser();
   const parsed = pushSubscriptionIdSchema.safeParse({
