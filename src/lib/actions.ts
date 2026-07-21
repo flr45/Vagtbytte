@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { UserRole, type TransferStatus } from "@prisma/client";
+import { AvailabilityStatus, UserRole, type TransferStatus } from "@prisma/client";
 import { prisma } from "./prisma";
 import { calculateCopenhagenShiftEnd } from "./copenhagen-datetime";
 import { hashPassword, verifyPassword } from "./passwords";
@@ -26,11 +26,20 @@ import {
   vcExpectedReturnExecutionSchema,
   vcReturnExecutionSchema,
   vcReturnRejectSchema,
+  availabilityCreateSchema,
+  availabilityIdSchema,
   vcTransferActivationSchema,
   vcTransferDecisionSchema,
   vcTransferRejectSchema,
   vcUpdateSchema
 } from "./validation";
+import {
+  calculateAvailabilityUntil,
+  canAcknowledgeAvailability,
+  canAssignAvailability,
+  canCancelAvailability,
+  canCreateAvailability
+} from "./availability";
 import { requirePasswordChangeUser, requireRole, requireUser, roleHome, signIn, signOut } from "./auth";
 import {
   canRespondToTransfer,
@@ -102,6 +111,245 @@ async function nextTransferNumber() {
 async function nextReturnNumber() {
   const count = await prisma.returnRequest.count();
   return `TL-${String(count + 1).padStart(5, "0")}`;
+}
+
+export async function createAvailabilityAction(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const user = await requireRole(UserRole.BRANDFIGHTER);
+  const parsed = availabilityCreateSchema.safeParse({
+    availableFrom: formData.get("availableFrom")
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: firstError(parsed.error) };
+  }
+
+  const existingActiveAvailability = await prisma.availability.findFirst({
+    where: { userId: user.id, status: AvailabilityStatus.AVAILABLE },
+    select: { id: true }
+  });
+  const allowed = canCreateAvailability({ role: user.role, existingActiveAvailability });
+  if (!allowed.ok) {
+    return { ok: false, message: allowed.message };
+  }
+
+  const availability = await prisma
+    .$transaction(async (tx) => {
+      const active = await tx.availability.findFirst({
+        where: { userId: user.id, status: AvailabilityStatus.AVAILABLE },
+        select: { id: true }
+      });
+      if (active) {
+        return null;
+      }
+
+      const created = await tx.availability.create({
+        data: {
+          userId: user.id,
+          availableFrom: parsed.data.availableFrom,
+          availableUntil: calculateAvailabilityUntil(parsed.data.availableFrom),
+          status: AvailabilityStatus.AVAILABLE
+        }
+      });
+      await tx.auditLog.create({
+        data: {
+          actorUserId: user.id,
+          actorRole: user.role,
+          action: "AVAILABILITY_CREATED",
+          targetUserId: user.id,
+          availabilityId: created.id,
+          description: `${user.name} stillede sig til rådighed`
+        }
+      });
+      return created;
+    })
+    .catch(() => null);
+
+  if (!availability) {
+    return { ok: false, message: "Du er allerede til rådighed." };
+  }
+
+  revalidatePath("/brandmand");
+  revalidatePath("/vagtcentral");
+  return { ok: true, message: "Du er til rådighed." };
+}
+
+export async function cancelAvailabilityAction(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const user = await requireRole(UserRole.BRANDFIGHTER);
+  const parsed = availabilityIdSchema.safeParse({
+    availabilityId: formData.get("availabilityId")
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: firstError(parsed.error) };
+  }
+
+  const availability = await prisma.availability.findUnique({ where: { id: parsed.data.availabilityId } });
+  const allowed = canCancelAvailability({
+    role: user.role,
+    currentUserId: user.id,
+    availability
+  });
+  if (!allowed.ok) {
+    return { ok: false, message: allowed.message };
+  }
+
+  const now = new Date();
+  const updated = await prisma.$transaction(async (tx) => {
+    const claimed = await tx.availability.updateMany({
+      where: { id: parsed.data.availabilityId, userId: user.id, status: AvailabilityStatus.AVAILABLE },
+      data: { status: AvailabilityStatus.CANCELLED, cancelledAt: now }
+    });
+    if (claimed.count !== 1) {
+      return false;
+    }
+    await tx.auditLog.create({
+      data: {
+        actorUserId: user.id,
+        actorRole: user.role,
+        action: "AVAILABILITY_CANCELLED",
+        targetUserId: user.id,
+        availabilityId: parsed.data.availabilityId,
+        description: `${user.name} annullerede sin tilgængelighed`
+      }
+    });
+    return true;
+  });
+
+  revalidatePath("/brandmand");
+  revalidatePath("/vagtcentral");
+  return updated
+    ? { ok: true, message: "Tilgængeligheden er annulleret." }
+    : { ok: false, message: "Tilgængeligheden er allerede behandlet." };
+}
+
+export async function assignAvailabilityByVcAction(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const vc = await requireRole(UserRole.VC);
+  const parsed = availabilityIdSchema.safeParse({
+    availabilityId: formData.get("availabilityId")
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: firstError(parsed.error) };
+  }
+
+  const availability = await prisma.availability.findUnique({ where: { id: parsed.data.availabilityId } });
+  const allowed = canAssignAvailability({ role: vc.role, availability });
+  if (!allowed.ok) {
+    return { ok: false, message: allowed.message };
+  }
+
+  const now = new Date();
+  const assigned = await prisma.$transaction(async (tx) => {
+    const claimed = await tx.availability.updateMany({
+      where: { id: parsed.data.availabilityId, status: AvailabilityStatus.AVAILABLE },
+      data: { status: AvailabilityStatus.ASSIGNED, assignedBy: vc.id, assignedAt: now }
+    });
+    if (claimed.count !== 1) {
+      return null;
+    }
+
+    const current = await tx.availability.findUnique({
+      where: { id: parsed.data.availabilityId },
+      include: { user: true }
+    });
+    if (!current) {
+      return null;
+    }
+
+    await tx.auditLog.create({
+      data: {
+        actorUserId: vc.id,
+        actorRole: vc.role,
+        action: "AVAILABILITY_ASSIGNED",
+        targetUserId: current.userId,
+        availabilityId: current.id,
+        description: `Vagtcentralen tildelte en vagt til ${current.user.name}`
+      }
+    });
+
+    return current;
+  });
+
+  if (!assigned) {
+    revalidatePath("/vagtcentral");
+    return { ok: false, message: "Tilgængeligheden er allerede behandlet." };
+  }
+
+  await createNotification(prisma, {
+    recipientUserId: assigned.userId,
+    availabilityId: assigned.id,
+    type: "AVAILABILITY_ASSIGNED",
+    title: "Du er tildelt en vagt",
+    body: "Vagtcentralen har tildelt dig en vagt.",
+    link: `/brandmand/til-raadighed/${assigned.id}`,
+    uniqueKey: `availability:${assigned.id}:assigned`
+  });
+
+  revalidatePath("/vagtcentral");
+  revalidatePath("/brandmand");
+  return { ok: true, message: "Vagten er tildelt." };
+}
+
+export async function acknowledgeAvailabilityAction(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const user = await requireRole(UserRole.BRANDFIGHTER);
+  const parsed = availabilityIdSchema.safeParse({
+    availabilityId: formData.get("availabilityId")
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: firstError(parsed.error) };
+  }
+
+  const availability = await prisma.availability.findUnique({ where: { id: parsed.data.availabilityId } });
+  const allowed = canAcknowledgeAvailability({
+    role: user.role,
+    currentUserId: user.id,
+    availability
+  });
+  if (!allowed.ok) {
+    return { ok: false, message: allowed.message };
+  }
+
+  const now = new Date();
+  const acknowledged = await prisma.$transaction(async (tx) => {
+    const claimed = await tx.availability.updateMany({
+      where: { id: parsed.data.availabilityId, userId: user.id, status: AvailabilityStatus.ASSIGNED },
+      data: { status: AvailabilityStatus.ACKNOWLEDGED, acknowledgedAt: now }
+    });
+    if (claimed.count !== 1) {
+      return false;
+    }
+    await tx.auditLog.create({
+      data: {
+        actorUserId: user.id,
+        actorRole: user.role,
+        action: "AVAILABILITY_ACKNOWLEDGED",
+        targetUserId: user.id,
+        availabilityId: parsed.data.availabilityId,
+        description: `${user.name} bekræftede vagttildelingen`
+      }
+    });
+    return true;
+  });
+
+  revalidatePath(`/brandmand/til-raadighed/${parsed.data.availabilityId}`);
+  revalidatePath("/brandmand");
+  revalidatePath("/vagtcentral");
+  return acknowledged
+    ? { ok: true, message: "Tildeling bekræftet." }
+    : { ok: false, message: "Tildelingen er allerede behandlet." };
 }
 
 export async function loginAction(_state: ActionState, formData: FormData): Promise<ActionState> {

@@ -59,6 +59,7 @@ enum NotificationType {
   RETURN_VC_REJECTED
   RETURN_EXECUTION_REMINDER
   RETURN_COMPLETED
+  AVAILABILITY_ASSIGNED
   TEST
 }
 
@@ -70,30 +71,63 @@ enum PushDeliveryStatus {
   NO_ACTIVE_DEVICE
 }
 
+enum AvailabilityStatus {
+  AVAILABLE
+  ASSIGNED
+  ACKNOWLEDGED
+  CANCELLED
+  EXPIRED
+}
+
 model User {
-  id                 String             @id @default(cuid())
-  name               String
-  role               UserRole
-  employeeNumber     String?            @unique
-  loginIdentifier    String             @unique
-  passwordHash       String
-  isActive           Boolean            @default(true)
-  mustChangePassword Boolean            @default(false)
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
-  lastLoginAt        DateTime?
-  sessions           Session[]
-  auditLogs          AuditLog[]         @relation("ActorAuditLogs")
-  targetedAuditLogs  AuditLog[]         @relation("TargetAuditLogs")
-  givenTransfers     ShiftTransfer[]    @relation("GivenTransfers")
-  receivedTransfers  ShiftTransfer[]    @relation("ReceivedTransfers")
-  createdReturns     ReturnRequest[]    @relation("ReturnCreatedBy")
-  answeredReturns    ReturnRequest[]    @relation("ReturnAnsweredBy")
-  notifications      Notification[]
-  pushSubscriptions  PushSubscription[]
+  id                     String             @id @default(cuid())
+  name                   String
+  role                   UserRole
+  employeeNumber         String?            @unique
+  loginIdentifier        String             @unique
+  passwordHash           String
+  isActive               Boolean            @default(true)
+  mustChangePassword     Boolean            @default(false)
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  lastLoginAt            DateTime?
+  sessions               Session[]
+  auditLogs              AuditLog[]         @relation("ActorAuditLogs")
+  targetedAuditLogs      AuditLog[]         @relation("TargetAuditLogs")
+  givenTransfers         ShiftTransfer[]    @relation("GivenTransfers")
+  receivedTransfers      ShiftTransfer[]    @relation("ReceivedTransfers")
+  createdReturns         ReturnRequest[]    @relation("ReturnCreatedBy")
+  answeredReturns        ReturnRequest[]    @relation("ReturnAnsweredBy")
+  notifications          Notification[]
+  pushSubscriptions      PushSubscription[]
+  availabilities         Availability[]     @relation("AvailabilityUser")
+  assignedAvailabilities Availability[]     @relation("AvailabilityAssignedBy")
 
   @@index([role])
   @@index([isActive])
+}
+
+model Availability {
+  id             String             @id @default(cuid())
+  userId         String
+  availableFrom  DateTime
+  availableUntil DateTime
+  status         AvailabilityStatus @default(AVAILABLE)
+  assignedBy     String?
+  assignedAt     DateTime?
+  acknowledgedAt DateTime?
+  cancelledAt    DateTime?
+  expiredAt      DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  user           User               @relation("AvailabilityUser", fields: [userId], references: [id], onDelete: Cascade)
+  assignedByUser User?              @relation("AvailabilityAssignedBy", fields: [assignedBy], references: [id], onDelete: SetNull)
+  notifications  Notification[]
+
+  @@index([status])
+  @@index([availableUntil])
+  @@index([userId])
+  @@index([assignedBy])
 }
 
 model ShiftTransfer {
@@ -185,6 +219,7 @@ model Notification {
   recipientUserId String
   shiftTransferId String?
   returnRequestId String?
+  availabilityId  String?
   type            NotificationType
   title           String
   body            String
@@ -201,6 +236,7 @@ model Notification {
   recipient       User             @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
   shiftTransfer   ShiftTransfer?   @relation(fields: [shiftTransferId], references: [id], onDelete: Cascade)
   returnRequest   ReturnRequest?   @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  availability    Availability?    @relation(fields: [availabilityId], references: [id], onDelete: Cascade)
   deliveries      PushDelivery[]
 
   @@index([recipientUserId, readAt])
@@ -209,6 +245,7 @@ model Notification {
   @@index([publishedAt])
   @@index([cancelledAt])
   @@index([dismissedAt])
+  @@index([availabilityId])
 }
 
 model PushSubscription {
@@ -270,6 +307,7 @@ model AuditLog {
   targetUserId    String?
   shiftTransferId String?
   returnRequestId String?
+  availabilityId  String?
   description     String
   createdAt       DateTime  @default(now())
   actor           User?     @relation("ActorAuditLogs", fields: [actorUserId], references: [id], onDelete: SetNull)
@@ -279,6 +317,7 @@ model AuditLog {
   @@index([targetUserId])
   @@index([shiftTransferId])
   @@index([returnRequestId])
+  @@index([availabilityId])
   @@index([createdAt])
 }
 

@@ -462,8 +462,56 @@ export async function completeDueShiftEndTransfers(prisma, now = new Date()) {
   };
 }
 
+export async function expireDueAvailabilities(prisma, now = new Date()) {
+  const due = await prisma.availability.findMany({
+    where: {
+      status: "AVAILABLE",
+      availableUntil: { lte: now }
+    },
+    take: 100,
+    include: { user: true }
+  });
+
+  let expired = 0;
+  const errors = [];
+
+  for (const availability of due) {
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        const updated = await tx.availability.updateMany({
+          where: { id: availability.id, status: "AVAILABLE" },
+          data: { status: "EXPIRED", expiredAt: now }
+        });
+        if (updated.count !== 1) {
+          return false;
+        }
+        await tx.auditLog.create({
+          data: {
+            action: "AVAILABILITY_EXPIRED",
+            targetUserId: availability.userId,
+            availabilityId: availability.id,
+            description: `${availability.user.name} er ikke længere til rådighed`
+          }
+        });
+        return true;
+      });
+      if (result) {
+        expired += 1;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push({ availabilityId: availability.id, message });
+      console.error("AVAILABILITY_EXPIRE_FAILED", { availabilityId: availability.id, message });
+    }
+  }
+
+  console.log("AVAILABILITY_EXPIRY_SUMMARY", { expired, errors: errors.length });
+  return { expired, errors };
+}
+
 export async function publishDueNotifications(prisma, now = new Date()) {
   const shiftEnd = await completeDueShiftEndTransfers(prisma, now);
+  const availabilities = await expireDueAvailabilities(prisma, now);
   const dueNotifications = await prisma.notification.findMany({
     where: { publishedAt: null, cancelledAt: null, scheduledFor: { lte: now } },
     orderBy: { scheduledFor: "asc" },
@@ -498,6 +546,8 @@ export async function publishDueNotifications(prisma, now = new Date()) {
     backfilledShiftEndTransfers: shiftEnd.backfilled,
     completedShiftEndTransfersFromActive: shiftEnd.completedFromActive,
     completedShiftEndTransfersFromAwaitingActivation: shiftEnd.completedFromAwaitingActivation,
-    shiftEndErrors: shiftEnd.errors.length
+    shiftEndErrors: shiftEnd.errors.length,
+    expiredAvailabilities: availabilities.expired,
+    availabilityExpiryErrors: availabilities.errors.length
   };
 }

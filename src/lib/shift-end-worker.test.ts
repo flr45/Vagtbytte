@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { completeDueShiftEndTransfers } from "../../scripts/notification-worker-core.mjs";
+import { completeDueShiftEndTransfers, expireDueAvailabilities } from "../../scripts/notification-worker-core.mjs";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -89,6 +89,39 @@ describe("automatisk afslutning ved vagtslut", () => {
   });
 });
 
+describe("automatisk udløb af tilgængelighed", () => {
+  it("udløber AVAILABLE ved næste vagtskifte og opretter AuditLog", async () => {
+    const repo = makeAvailabilityRepo([
+      availability({ id: "availability-1", status: "AVAILABLE" }),
+      availability({ id: "availability-2", status: "ASSIGNED" })
+    ]);
+
+    const result = await expireDueAvailabilities(repo, new Date("2026-07-21T21:00:00.000Z"));
+
+    expect(result.expired).toBe(1);
+    expect(repo.availabilities[0].status).toBe("EXPIRED");
+    expect(repo.availabilities[0].expiredAt).toEqual(new Date("2026-07-21T21:00:00.000Z"));
+    expect(repo.availabilities[1].status).toBe("ASSIGNED");
+    expect(repo.auditLogs).toEqual([
+      expect.objectContaining({
+        action: "AVAILABILITY_EXPIRED",
+        targetUserId: "firefighter",
+        availabilityId: "availability-1"
+      })
+    ]);
+  });
+
+  it("udløb er idempotent", async () => {
+    const repo = makeAvailabilityRepo([availability({ id: "availability-1", status: "AVAILABLE" })]);
+
+    await expireDueAvailabilities(repo, new Date("2026-07-21T21:00:00.000Z"));
+    const second = await expireDueAvailabilities(repo, new Date("2026-07-21T21:01:00.000Z"));
+
+    expect(second.expired).toBe(0);
+    expect(repo.auditLogs).toHaveLength(1);
+  });
+});
+
 type TestTransfer = {
   id: string;
   transferNumber: string;
@@ -100,6 +133,15 @@ type TestTransfer = {
   calculatedShiftEndAt: Date | null;
   status: string;
   completedAt: Date | null;
+};
+
+type TestAvailability = {
+  id: string;
+  userId: string;
+  user: { name: string };
+  availableUntil: Date;
+  status: string;
+  expiredAt: Date | null;
 };
 
 function transfer(overrides: Partial<TestTransfer> = {}): TestTransfer {
@@ -114,6 +156,18 @@ function transfer(overrides: Partial<TestTransfer> = {}): TestTransfer {
     calculatedShiftEndAt: new Date("2026-07-21T21:00:00.000Z"),
     status: "VC_APPROVED_ACTIVE",
     completedAt: null,
+    ...overrides
+  };
+}
+
+function availability(overrides: Partial<TestAvailability> = {}): TestAvailability {
+  return {
+    id: "availability",
+    userId: "firefighter",
+    user: { name: "Frederik Racher" },
+    availableUntil: new Date("2026-07-21T21:00:00.000Z"),
+    status: "AVAILABLE",
+    expiredAt: null,
     ...overrides
   };
 }
@@ -173,6 +227,56 @@ function makeShiftEndRepo(transfers: TestTransfer[]) {
     transfers: TestTransfer[];
     notifications: Array<{ uniqueKey: string; shiftTransferId: string; recipientUserId: string }>;
     auditLogs: Array<{ action: string; shiftTransferId: string }>;
+  };
+}
+
+function makeAvailabilityRepo(availabilities: TestAvailability[]) {
+  const auditLogs: Array<{ action: string; targetUserId: string; availabilityId: string }> = [];
+  const repo = {
+    availabilities,
+    auditLogs,
+    async $transaction<T>(callback: (tx: typeof repo) => Promise<T>) {
+      return callback(repo);
+    },
+    availability: {
+      async findMany({ where }: { where: { status: string; availableUntil: { lte: Date } } }) {
+        return availabilities.filter(
+          (item) => item.status === where.status && item.availableUntil.getTime() <= where.availableUntil.lte.getTime()
+        );
+      },
+      async updateMany({
+        where,
+        data
+      }: {
+        where: { id: string; status: string };
+        data: Partial<TestAvailability>;
+      }) {
+        const item = availabilities.find(
+          (availabilityItem) => availabilityItem.id === where.id && availabilityItem.status === where.status
+        );
+        if (!item) {
+          return { count: 0 };
+        }
+        Object.assign(item, data);
+        return { count: 1 };
+      }
+    },
+    auditLog: {
+      async create({
+        data
+      }: {
+        data: { action: string; targetUserId: string; availabilityId: string };
+      }) {
+        auditLogs.push(data);
+        return data;
+      }
+    }
+  };
+
+  vi.spyOn(console, "log").mockImplementation(() => undefined);
+  return repo as unknown as Parameters<typeof expireDueAvailabilities>[0] & {
+    availabilities: TestAvailability[];
+    auditLogs: Array<{ action: string; targetUserId: string; availabilityId: string }>;
   };
 }
 

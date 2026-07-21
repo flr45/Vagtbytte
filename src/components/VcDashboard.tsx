@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import type { TransferStatus } from "@prisma/client";
+import type { AvailabilityStatus, TransferStatus } from "@prisma/client";
+import { availabilityStatusLabel } from "@/lib/availability";
 import { statusLabel } from "@/lib/transfer-rules";
 import {
   formatCountdown,
@@ -21,6 +22,7 @@ import {
   VcTransferActivationForm,
   VcTransferDecisionForms
 } from "./VcDecisionForms";
+import { VcAssignAvailabilityForm } from "./AvailabilityForms";
 import { formatDateTime, StatusBadge } from "./TransferSummary";
 import { AlertTriangleIcon, CheckIcon, ClockIcon, InboxIcon } from "./Icons";
 
@@ -58,14 +60,30 @@ export type VcDashboardReturnRequest = {
   updatedAt: string;
 };
 
+export type VcDashboardAvailability = {
+  id: string;
+  userName: string;
+  availableFrom: string;
+  availableUntil: string;
+  status: AvailabilityStatus;
+  assignedAt: string | null;
+  acknowledgedAt: string | null;
+  cancelledAt: string | null;
+  expiredAt: string | null;
+};
+
 export function VcDashboard({
   serverNow,
+  availableFirefighters,
+  previousAvailabilities,
   awaitingTransfers,
   returnTransfers,
   activeTransfers,
   recentlyHandled
 }: {
   serverNow: string;
+  availableFirefighters: VcDashboardAvailability[];
+  previousAvailabilities: VcDashboardAvailability[];
   awaitingTransfers: VcDashboardTransfer[];
   returnTransfers: VcDashboardTransfer[];
   activeTransfers: VcDashboardTransfer[];
@@ -113,6 +131,7 @@ export function VcDashboard({
   return (
     <main className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-6">
       <StatusBar status={dashboardStatus} nextDeadline={sortedTasks[0]?.deadlineAt ?? null} now={now} />
+      <AvailabilitySection availabilities={availableFirefighters} previousAvailabilities={previousAvailabilities} />
       <section className="grid gap-4">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -150,6 +169,69 @@ export function VcDashboard({
         transfers={recentlyHandled}
       />
     </main>
+  );
+}
+
+function AvailabilitySection({
+  availabilities,
+  previousAvailabilities
+}: {
+  availabilities: VcDashboardAvailability[];
+  previousAvailabilities: VcDashboardAvailability[];
+}) {
+  return (
+    <section className="grid gap-4">
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold">Til rådighed</h1>
+          <p className="text-sm font-semibold text-zinc-600">Til rådighed ({availabilities.length})</p>
+        </div>
+      </div>
+      {availabilities.length === 0 ? (
+        <EmptyState text="Der er ingen brandmænd til rådighed." />
+      ) : (
+        <div className="grid gap-3">
+          {availabilities.map((availability) => (
+            <article
+              className="grid gap-4 rounded-2xl border border-emerald-100 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)] sm:grid-cols-[1fr_auto] sm:items-center"
+              key={availability.id}
+            >
+              <div>
+                <h2 className="text-xl font-black">{availability.userName}</h2>
+                <p className="mt-1 text-lg font-bold text-zinc-700">
+                  {formatShortTime(parseDate(availability.availableFrom))} → {formatShortTime(parseDate(availability.availableUntil))}
+                </p>
+              </div>
+              <VcAssignAvailabilityForm availabilityId={availability.id} />
+            </article>
+          ))}
+        </div>
+      )}
+      <details className="grid gap-3">
+        <summary className="cursor-pointer text-base font-bold text-zinc-700">Tidligere tilgængeligheder</summary>
+        <div className="mt-3 grid gap-2">
+          {previousAvailabilities.length === 0 ? (
+            <p className="rounded-2xl border border-zinc-100 bg-white p-4 text-sm font-semibold text-zinc-600">
+              Ingen tidligere tilgængeligheder.
+            </p>
+          ) : (
+            previousAvailabilities.map((availability) => (
+              <div className="rounded-2xl border border-zinc-100 bg-white p-4" key={availability.id}>
+                <p className="font-bold">{availability.userName}</p>
+                <p className="mt-1 text-sm font-semibold text-zinc-600">
+                  {availabilityStatusLabel(availability.status)}
+                  {availability.acknowledgedAt
+                    ? ` · bekræftet ${formatDateTime(parseDate(availability.acknowledgedAt) ?? new Date(availability.acknowledgedAt))}`
+                    : availability.assignedAt
+                      ? ` · tildelt ${formatDateTime(parseDate(availability.assignedAt) ?? new Date(availability.assignedAt))}`
+                      : ""}
+                </p>
+              </div>
+            ))
+          )}
+        </div>
+      </details>
+    </section>
   );
 }
 
@@ -530,6 +612,17 @@ function expectedEndDisplay(transfer: VcDashboardTransfer) {
   }
   const expectedEnd = parseDate(transfer.expectedEndAt);
   return expectedEnd ? formatDateTime(expectedEnd) : "Mangler tidspunkt";
+}
+
+function formatShortTime(date: Date | null) {
+  if (!date) {
+    return "Ukendt";
+  }
+  return new Intl.DateTimeFormat("da-DK", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Copenhagen"
+  }).format(date);
 }
 
 function parseDate(value?: string | null) {

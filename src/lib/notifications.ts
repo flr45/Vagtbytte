@@ -11,6 +11,7 @@ export type NotificationInput = {
   recipientUserId: string;
   shiftTransferId?: string;
   returnRequestId?: string;
+  availabilityId?: string;
   type: NotificationType;
   title: string;
   body: string;
@@ -36,6 +37,7 @@ export async function createNotification(
       recipientUserId: input.recipientUserId,
       shiftTransferId: input.shiftTransferId,
       returnRequestId: input.returnRequestId,
+      availabilityId: input.availabilityId,
       type: input.type,
       title: input.title,
       body: input.body,
@@ -366,7 +368,8 @@ export function pushUrgencyForNotificationType(type: NotificationType): "normal"
     "RETURN_CREATED",
     "RETURN_ORIGINAL_ACCEPTED",
     "TRANSFER_ACTIVATION_REMINDER",
-    "RETURN_EXECUTION_REMINDER"
+    "RETURN_EXECUTION_REMINDER",
+    "AVAILABILITY_ASSIGNED"
   ];
   return highUrgencyTypes.includes(type) ? "high" : "normal";
 }

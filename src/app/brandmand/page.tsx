@@ -1,13 +1,15 @@
-import { UserRole } from "@prisma/client";
+import { AvailabilityStatus, UserRole } from "@prisma/client";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
+import { availabilityStatusLabel } from "@/lib/availability";
 import { prisma } from "@/lib/prisma";
+import { AvailabilityActiveForm, AvailabilityCreateForm } from "@/components/AvailabilityForms";
 import { TopBar } from "@/components/TopBar";
-import { TransferList } from "@/components/TransferSummary";
+import { formatDateTime, TransferList } from "@/components/TransferSummary";
 
 export default async function FirefighterPage() {
   const user = await requireRole(UserRole.BRANDFIGHTER);
-  const [requestsToMe, myCreatedRequests] = await Promise.all([
+  const [requestsToMe, myCreatedRequests, activeAvailability, availabilityHistory] = await Promise.all([
     prisma.shiftTransfer.findMany({
       where: { receiverUserId: user.id },
       orderBy: { createdAt: "desc" }
@@ -15,6 +17,18 @@ export default async function FirefighterPage() {
     prisma.shiftTransfer.findMany({
       where: { giverUserId: user.id },
       orderBy: { createdAt: "desc" }
+    }),
+    prisma.availability.findFirst({
+      where: { userId: user.id, status: AvailabilityStatus.AVAILABLE },
+      orderBy: { createdAt: "desc" }
+    }),
+    prisma.availability.findMany({
+      where: {
+        userId: user.id,
+        status: { in: [AvailabilityStatus.ASSIGNED, AvailabilityStatus.ACKNOWLEDGED, AvailabilityStatus.CANCELLED, AvailabilityStatus.EXPIRED] }
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 10
     })
   ]);
   const activeStatuses = new Set([
@@ -53,6 +67,15 @@ export default async function FirefighterPage() {
             Opret vagtoverdragelse
           </Link>
         </section>
+        {activeAvailability ? (
+          <AvailabilityActiveForm
+            availabilityId={activeAvailability.id}
+            from={formatShortTime(activeAvailability.availableFrom)}
+            until={formatShortTime(activeAvailability.availableUntil)}
+          />
+        ) : (
+          <AvailabilityCreateForm defaultFrom={toDateTimeLocalValue(new Date())} />
+        )}
         <TransferList
           emptyText="Der er ingen anmodninger rettet til dig."
           title="Anmodninger til mig"
@@ -97,7 +120,7 @@ export default async function FirefighterPage() {
         />
         <details className="grid gap-3">
           <summary className="cursor-pointer text-xl font-bold">Tidligere sager</summary>
-          <div className="mt-3">
+          <div className="mt-3 grid gap-4">
             <TransferList
               emptyText="Der er ingen tidligere sager."
               title="Tidligere vagtoverdragelser"
@@ -123,9 +146,58 @@ export default async function FirefighterPage() {
                     : transfer.giverEmployeeNumberSnapshot
               }))}
             />
+            <section className="app-card grid gap-3">
+              <h2 className="text-xl font-bold">Til rådighed</h2>
+              {availabilityHistory.length === 0 ? (
+                <p className="text-sm font-semibold text-zinc-600">Ingen tidligere tilgængeligheder.</p>
+              ) : (
+                <div className="grid gap-2">
+                  {availabilityHistory.map((availability) => (
+                    <div
+                      className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4"
+                      key={availability.id}
+                    >
+                      <p className="font-bold">{availabilityStatusLabel(availability.status)}</p>
+                      <p className="mt-1 text-sm font-semibold text-zinc-600">
+                        {formatShortTime(availability.availableFrom)} → {formatShortTime(availability.availableUntil)}
+                      </p>
+                      {availability.status === AvailabilityStatus.ACKNOWLEDGED && availability.acknowledgedAt ? (
+                        <p className="mt-1 text-sm font-semibold text-emerald-700">
+                          Bekræftet {formatDateTime(availability.acknowledgedAt)}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
           </div>
         </details>
       </main>
     </>
   );
+}
+
+function toDateTimeLocalValue(date: Date) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Copenhagen",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
+    }).formatToParts(date).map((part) => [part.type, part.value])
+  );
+
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
+function formatShortTime(date: Date) {
+  return new Intl.DateTimeFormat("da-DK", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Copenhagen"
+  }).format(date);
 }

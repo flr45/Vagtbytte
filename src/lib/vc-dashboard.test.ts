@@ -171,12 +171,14 @@ describe("VC-dashboard - opgaver", () => {
 describe("VC-dashboard - notifikationstekster", () => {
   it("tekniske notification enum-navne vises ikke i brugerfladen", () => {
     expect(notificationTypeLabel(NotificationType.TRANSFER_VC_APPROVED)).toBe("Godkendt af vagtcentralen");
+    expect(notificationTypeLabel(NotificationType.AVAILABILITY_ASSIGNED)).toBe("Vagt tildelt");
     expect(notificationTypeLabel(NotificationType.TEST)).toBe("Testnotifikation");
   });
 
   it("Åbn sag vises ikke på en testnotifikation uden gyldigt link", () => {
     expect(hasValidCaseLink("/vagtcentral")).toBe(false);
     expect(hasValidCaseLink("/vagtcentral/sager/abc123")).toBe(true);
+    expect(hasValidCaseLink("/brandmand/til-raadighed/abc123")).toBe(true);
   });
 });
 

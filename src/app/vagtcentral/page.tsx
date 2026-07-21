@@ -1,4 +1,4 @@
-import { UserRole } from "@prisma/client";
+import { AvailabilityStatus, UserRole } from "@prisma/client";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { TopBar } from "@/components/TopBar";
@@ -6,7 +6,27 @@ import { VcDashboard, type VcDashboardTransfer } from "@/components/VcDashboard"
 
 export default async function VagtcentralPage() {
   await requireRole(UserRole.VC);
-  const [awaitingApproval, activeTransfers, returnApprovals, recentlyHandled] = await Promise.all([
+  const [availableFirefighters, previousAvailabilities, awaitingApproval, activeTransfers, returnApprovals, recentlyHandled] = await Promise.all([
+    prisma.availability.findMany({
+      where: { status: AvailabilityStatus.AVAILABLE },
+      orderBy: [{ availableFrom: "asc" }, { user: { name: "asc" } }],
+      include: { user: true }
+    }),
+    prisma.availability.findMany({
+      where: {
+        status: {
+          in: [
+            AvailabilityStatus.ASSIGNED,
+            AvailabilityStatus.ACKNOWLEDGED,
+            AvailabilityStatus.CANCELLED,
+            AvailabilityStatus.EXPIRED
+          ]
+        }
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 20,
+      include: { user: true, assignedByUser: true }
+    }),
     prisma.shiftTransfer.findMany({
       where: { status: "RECEIVER_ACCEPTED_AWAITING_VC" },
       orderBy: { receiverRespondedAt: "asc" },
@@ -45,12 +65,33 @@ export default async function VagtcentralPage() {
       <VcDashboard
         activeTransfers={activeTransfers.map(serializeTransfer)}
         awaitingTransfers={awaitingApproval.map(serializeTransfer)}
+        availableFirefighters={availableFirefighters.map(serializeAvailability)}
+        previousAvailabilities={previousAvailabilities.map(serializeAvailability)}
         recentlyHandled={recentlyHandled.map(serializeTransfer)}
         returnTransfers={returnApprovals.map(serializeTransfer)}
         serverNow={new Date().toISOString()}
       />
     </>
   );
+}
+
+function serializeAvailability(
+  availability: Awaited<ReturnType<typeof prisma.availability.findMany>>[number] & {
+    user: { name: string };
+    assignedByUser?: { name: string } | null;
+  }
+) {
+  return {
+    id: availability.id,
+    userName: availability.user.name,
+    availableFrom: availability.availableFrom.toISOString(),
+    availableUntil: availability.availableUntil.toISOString(),
+    status: availability.status,
+    assignedAt: availability.assignedAt?.toISOString() ?? null,
+    acknowledgedAt: availability.acknowledgedAt?.toISOString() ?? null,
+    cancelledAt: availability.cancelledAt?.toISOString() ?? null,
+    expiredAt: availability.expiredAt?.toISOString() ?? null
+  };
 }
 
 function serializeTransfer(

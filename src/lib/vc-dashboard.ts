@@ -197,6 +197,7 @@ export function notificationTypeLabel(type: NotificationType) {
     RETURN_VC_REJECTED: "Tilbagelevering afvist af vagtcentralen",
     RETURN_EXECUTION_REMINDER: "Tilbagelevering skal bekræftes",
     RETURN_COMPLETED: "Tilbagelevering gennemført",
+    AVAILABILITY_ASSIGNED: "Vagt tildelt",
     TEST: "Testnotifikation"
   };
 
@@ -204,5 +205,7 @@ export function notificationTypeLabel(type: NotificationType) {
 }
 
 export function hasValidCaseLink(link: string | null | undefined) {
-  return Boolean(link && /^\/(brandmand\/anmodninger|vagtcentral\/sager)\/[A-Za-z0-9_-]+$/.test(link));
+  return Boolean(
+    link && /^\/(brandmand\/anmodninger|brandmand\/til-raadighed|vagtcentral\/sager)\/[A-Za-z0-9_-]+$/.test(link)
+  );
 }
