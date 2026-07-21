@@ -13,6 +13,13 @@ enum UserRole {
   ADMIN
 }
 
+enum TransferStatus {
+  AWAITING_RECEIVER
+  RECEIVER_ACCEPTED_AWAITING_VC
+  RECEIVER_REJECTED
+  CANCELLED
+}
+
 model User {
   id                 String     @id @default(cuid())
   name               String
@@ -28,9 +35,37 @@ model User {
   sessions           Session[]
   auditLogs          AuditLog[] @relation("ActorAuditLogs")
   targetedAuditLogs  AuditLog[] @relation("TargetAuditLogs")
+  givenTransfers     ShiftTransfer[] @relation("GivenTransfers")
+  receivedTransfers  ShiftTransfer[] @relation("ReceivedTransfers")
 
   @@index([role])
   @@index([isActive])
+}
+
+model ShiftTransfer {
+  id                             String         @id @default(cuid())
+  transferNumber                 String         @unique
+  giverUserId                    String
+  receiverUserId                 String
+  giverEmployeeNumberSnapshot    String
+  receiverEmployeeNumberSnapshot String
+  giverNameSnapshot              String
+  receiverNameSnapshot           String
+  requestedStartAt               DateTime
+  expectedEndAt                  DateTime?
+  comment                        String?
+  status                         TransferStatus @default(AWAITING_RECEIVER)
+  createdAt                      DateTime       @default(now())
+  updatedAt                      DateTime       @updatedAt
+  receiverRespondedAt            DateTime?
+  receiverResponseComment        String?
+  giver                          User           @relation("GivenTransfers", fields: [giverUserId], references: [id], onDelete: Restrict)
+  receiver                       User           @relation("ReceivedTransfers", fields: [receiverUserId], references: [id], onDelete: Restrict)
+
+  @@index([giverUserId])
+  @@index([receiverUserId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model Session {

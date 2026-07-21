@@ -35,3 +35,33 @@ export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, "Indtast den nuværende adgangskode"),
   newPassword: passwordSchema
 });
+
+const transferBaseSchema = z
+  .object({
+    giverEmployeeNumber: z.string().trim().min(1, "Medarbejdernummer A skal udfyldes"),
+    receiverEmployeeNumber: z.string().trim().min(1, "Medarbejdernummer B skal udfyldes"),
+    requestedStartAt: z.coerce.date({ invalid_type_error: "Starttidspunkt skal udfyldes" }),
+    expectedEndAt: z
+      .union([z.coerce.date(), z.literal("")])
+      .optional()
+      .transform((value) => (value === "" || value === undefined ? null : value)),
+    comment: z.string().trim().max(500, "Kommentaren må højst være 500 tegn").optional()
+  })
+  .refine((data) => !data.expectedEndAt || data.expectedEndAt > data.requestedStartAt, {
+    message: "Forventet sluttid skal ligge efter starttidspunktet.",
+    path: ["expectedEndAt"]
+  });
+
+export const transferCreateSchema = transferBaseSchema
+  .and(z.object({ confirmed: z.boolean() }))
+  .refine((data) => data.confirmed, {
+    message: "Du skal bekræfte, at oplysningerne er korrekte.",
+    path: ["confirmed"]
+  });
+
+export const transferLookupSchema = transferBaseSchema;
+
+export const transferResponseSchema = z.object({
+  transferId: z.string().min(1),
+  responseComment: z.string().trim().max(500, "Begrundelsen må højst være 500 tegn").optional()
+});

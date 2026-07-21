@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { UserRole } from "@prisma/client";
+import { UserRole, type TransferStatus } from "@prisma/client";
 import { prisma } from "./prisma";
 import { hashPassword, verifyPassword } from "./passwords";
 import {
@@ -11,9 +11,17 @@ import {
   firefighterUpdateSchema,
   loginSchema,
   passwordResetSchema,
+  transferCreateSchema,
+  transferLookupSchema,
+  transferResponseSchema,
   vcUpdateSchema
 } from "./validation";
 import { requirePasswordChangeUser, requireRole, roleHome, signIn, signOut } from "./auth";
+import {
+  canRespondToTransfer,
+  validateTransferParticipants,
+  type TransferParticipant
+} from "./transfer-rules";
 
 export type ActionState = {
   ok?: boolean;
@@ -30,6 +38,28 @@ function firstError(error: unknown) {
     return issues?.[0]?.message ?? "Formularen er ikke udfyldt korrekt.";
   }
   return "Der opstod en fejl.";
+}
+
+function optionalText(value: string | undefined) {
+  return value && value.length > 0 ? value : null;
+}
+
+async function findFirefighterByEmployeeNumber(employeeNumber: string) {
+  return prisma.user.findFirst({
+    where: { employeeNumber },
+    select: {
+      id: true,
+      name: true,
+      role: true,
+      employeeNumber: true,
+      isActive: true
+    }
+  });
+}
+
+async function nextTransferNumber() {
+  const count = await prisma.shiftTransfer.count();
+  return `VO-${String(count + 1).padStart(5, "0")}`;
 }
 
 export async function loginAction(_state: ActionState, formData: FormData): Promise<ActionState> {
@@ -320,4 +350,241 @@ export async function changePasswordAction(
   });
 
   redirect(roleHome[user.role]);
+}
+
+export async function lookupTransferParticipantsAction(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState & { giver?: TransferParticipant; receiver?: TransferParticipant }> {
+  const user = await requireRole(UserRole.BRANDFIGHTER);
+  const parsed = transferLookupSchema.safeParse({
+    giverEmployeeNumber: formData.get("giverEmployeeNumber"),
+    receiverEmployeeNumber: formData.get("receiverEmployeeNumber"),
+    requestedStartAt: formData.get("requestedStartAt"),
+    expectedEndAt: formData.get("expectedEndAt") ?? "",
+    comment: formData.get("comment") ?? "",
+    confirmed: false
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: firstError(parsed.error) };
+  }
+
+  const [giver, receiver] = await Promise.all([
+    findFirefighterByEmployeeNumber(parsed.data.giverEmployeeNumber),
+    findFirefighterByEmployeeNumber(parsed.data.receiverEmployeeNumber)
+  ]);
+
+  const result = validateTransferParticipants({
+    currentUserId: user.id,
+    giver,
+    receiver,
+    giverEmployeeNumber: parsed.data.giverEmployeeNumber,
+    receiverEmployeeNumber: parsed.data.receiverEmployeeNumber,
+    requestedStartAt: parsed.data.requestedStartAt,
+    expectedEndAt: parsed.data.expectedEndAt
+  });
+
+  if (!result.ok) {
+    await prisma.auditLog.create({
+      data: {
+        actorUserId: user.id,
+        actorRole: user.role,
+        action: "TRANSFER_VALIDATION_REJECTED",
+        description: result.message
+      }
+    });
+    return { ok: false, message: result.message };
+  }
+
+  return {
+    ok: true,
+    message: "Medarbejdernumrene er kontrolleret.",
+    giver: result.giver,
+    receiver: result.receiver
+  };
+}
+
+export async function createTransferAction(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const user = await requireRole(UserRole.BRANDFIGHTER);
+  const parsed = transferCreateSchema.safeParse({
+    giverEmployeeNumber: formData.get("giverEmployeeNumber"),
+    receiverEmployeeNumber: formData.get("receiverEmployeeNumber"),
+    requestedStartAt: formData.get("requestedStartAt"),
+    expectedEndAt: formData.get("expectedEndAt") ?? "",
+    comment: formData.get("comment") ?? "",
+    confirmed: formData.get("confirmed") === "on"
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: firstError(parsed.error) };
+  }
+
+  const [giver, receiver] = await Promise.all([
+    findFirefighterByEmployeeNumber(parsed.data.giverEmployeeNumber),
+    findFirefighterByEmployeeNumber(parsed.data.receiverEmployeeNumber)
+  ]);
+
+  const result = validateTransferParticipants({
+    currentUserId: user.id,
+    giver,
+    receiver,
+    giverEmployeeNumber: parsed.data.giverEmployeeNumber,
+    receiverEmployeeNumber: parsed.data.receiverEmployeeNumber,
+    requestedStartAt: parsed.data.requestedStartAt,
+    expectedEndAt: parsed.data.expectedEndAt
+  });
+
+  if (!result.ok) {
+    await prisma.auditLog.create({
+      data: {
+        actorUserId: user.id,
+        actorRole: user.role,
+        action: "TRANSFER_CREATE_REJECTED",
+        description: result.message
+      }
+    });
+    return { ok: false, message: result.message };
+  }
+
+  const transfer = await prisma.shiftTransfer.create({
+    data: {
+      transferNumber: await nextTransferNumber(),
+      giverUserId: result.giver.id,
+      receiverUserId: result.receiver.id,
+      giverEmployeeNumberSnapshot: result.giver.employeeNumber!,
+      receiverEmployeeNumberSnapshot: result.receiver.employeeNumber!,
+      giverNameSnapshot: result.giver.name,
+      receiverNameSnapshot: result.receiver.name,
+      requestedStartAt: parsed.data.requestedStartAt,
+      expectedEndAt: parsed.data.expectedEndAt,
+      comment: optionalText(parsed.data.comment),
+      status: "AWAITING_RECEIVER"
+    }
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actorUserId: user.id,
+      actorRole: user.role,
+      action: "TRANSFER_CREATED",
+      targetUserId: result.receiver.id,
+      description: `Vagtoverdragelse ${transfer.transferNumber} blev oprettet`
+    }
+  });
+
+  revalidatePath("/brandmand");
+  redirect(`/brandmand/anmodninger/${transfer.id}`);
+}
+
+async function respondToTransfer(input: {
+  transferId: string;
+  status: Extract<
+    TransferStatus,
+    "RECEIVER_ACCEPTED_AWAITING_VC" | "RECEIVER_REJECTED"
+  >;
+  responseComment?: string;
+}) {
+  const user = await requireRole(UserRole.BRANDFIGHTER);
+  const transfer = await prisma.shiftTransfer.findUnique({ where: { id: input.transferId } });
+
+  if (!transfer) {
+    return { ok: false, message: "Anmodningen blev ikke fundet." };
+  }
+
+  const permission = canRespondToTransfer({
+    userId: user.id,
+    receiverUserId: transfer.receiverUserId,
+    status: transfer.status
+  });
+
+  if (!permission.ok) {
+    await prisma.auditLog.create({
+      data: {
+        actorUserId: user.id,
+        actorRole: user.role,
+        action: "TRANSFER_RESPONSE_REJECTED",
+        targetUserId: transfer.receiverUserId,
+        description: permission.message
+      }
+    });
+    return { ok: false, message: permission.message };
+  }
+
+  await prisma.shiftTransfer.update({
+    where: { id: transfer.id },
+    data: {
+      status: input.status,
+      receiverRespondedAt: new Date(),
+      receiverResponseComment: optionalText(input.responseComment)
+    }
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actorUserId: user.id,
+      actorRole: user.role,
+      action:
+        input.status === "RECEIVER_ACCEPTED_AWAITING_VC"
+          ? "TRANSFER_ACCEPTED_BY_RECEIVER"
+          : "TRANSFER_REJECTED_BY_RECEIVER",
+      targetUserId: transfer.giverUserId,
+      description:
+        input.status === "RECEIVER_ACCEPTED_AWAITING_VC"
+          ? `Vagtoverdragelse ${transfer.transferNumber} blev accepteret af modtager`
+          : `Vagtoverdragelse ${transfer.transferNumber} blev afvist af modtager`
+    }
+  });
+
+  revalidatePath("/brandmand");
+  revalidatePath(`/brandmand/anmodninger/${transfer.id}`);
+  return {
+    ok: true,
+      message:
+      input.status === "RECEIVER_ACCEPTED_AWAITING_VC"
+        ? "Anmodningen er accepteret og afventer vagtcentralen."
+        : "Anmodningen er afvist."
+  };
+}
+
+export async function acceptTransferAction(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const parsed = transferResponseSchema.safeParse({
+    transferId: formData.get("transferId"),
+    responseComment: ""
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: firstError(parsed.error) };
+  }
+
+  return respondToTransfer({
+    transferId: parsed.data.transferId,
+    status: "RECEIVER_ACCEPTED_AWAITING_VC"
+  });
+}
+
+export async function rejectTransferAction(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const parsed = transferResponseSchema.safeParse({
+    transferId: formData.get("transferId"),
+    responseComment: formData.get("responseComment") ?? ""
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: firstError(parsed.error) };
+  }
+
+  return respondToTransfer({
+    transferId: parsed.data.transferId,
+    status: "RECEIVER_REJECTED",
+    responseComment: parsed.data.responseComment
+  });
 }
