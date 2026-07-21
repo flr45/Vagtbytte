@@ -2,12 +2,13 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   canManagePushSubscription,
   canReadNotification,
+  endpointHost,
+  publicKeyFingerprint,
   sendPushForNotification,
   setPushSenderForTests,
   markAllRead,
   markRead,
-  pushUrgencyForNotificationType,
-  sanitizePushError
+  pushUrgencyForNotificationType
 } from "./notifications";
 
 afterEach(() => {
@@ -55,8 +56,10 @@ describe("push-enheder", () => {
     expect(canManagePushSubscription({ userId: "a", subscriptionUserId: "b" })).toBe(false);
   });
 
-  it("pushfejl skjuler lange hemmeligheder", () => {
-    expect(sanitizePushError(new Error("secret abcdefghijklmnopqrstuvwxyzABCDEFG"))).toContain("[skjult]");
+  it("udleder kun host fra push-endpoint", () => {
+    expect(endpointHost("https://updates.push.services.mozilla.com/wpush/v2/hemmelig")).toBe(
+      "updates.push.services.mozilla.com"
+    );
   });
 
   it("permanent ugyldigt abonnement markeres som tilbagekaldt", async () => {
@@ -89,6 +92,43 @@ describe("push-enheder", () => {
 
     expect(repo.deliveries[0].status).toBe("FAILED");
     expect(repo.subscriptions[0].revokedAt).toBeNull();
+  });
+
+  it("gemmer fulde WebPushError-detaljer i lastError", async () => {
+    const repo = makePushRepo([
+      { id: "sub-1", endpoint: "https://push.test/path/secret-token", p256dh: "key", auth: "auth", revokedAt: null }
+    ]);
+    setPushSenderForTests(async () => {
+      const error = new Error("Received unexpected response code") as Error & {
+        statusCode: number;
+        headers: Record<string, string>;
+        body: string;
+      };
+      error.statusCode = 403;
+      error.headers = { "content-type": "text/plain" };
+      error.body = "invalid vapid token";
+      error.stack = "Error stacktrace";
+      throw error;
+    });
+
+    await sendPushForNotification(repo, "notification-1");
+
+    const parsed = JSON.parse(repo.deliveries[0].lastError ?? "{}");
+    expect(parsed).toMatchObject({
+      statusCode: 403,
+      headers: { "content-type": "text/plain" },
+      body: "invalid vapid token",
+      endpointHost: "push.test",
+      responseText: "invalid vapid token",
+      stacktrace: "Error stacktrace",
+      originalErrorMessage: "Received unexpected response code"
+    });
+    expect(parsed.vapid).toMatchObject({
+      endpointHost: "push.test",
+      publicKeyFingerprint: publicKeyFingerprint()
+    });
+    expect(repo.deliveries[0].lastError).not.toContain("secret-token");
+    expect(repo.deliveries[0].lastError).not.toContain(process.env.VAPID_PRIVATE_KEY ?? "definitely-not-present");
   });
 
   it("fejl på én push-enhed forhindrer ikke levering til andre enheder", async () => {
@@ -140,7 +180,7 @@ type TestSubscription = {
 };
 
 function makePushRepo(subscriptions: TestSubscription[]) {
-  const deliveries: Array<{ status: string; pushSubscriptionId?: string | null }> = [];
+  const deliveries: Array<{ status: string; pushSubscriptionId?: string | null; lastError?: string | null }> = [];
   const repo = {
     subscriptions,
     deliveries,
@@ -158,7 +198,7 @@ function makePushRepo(subscriptions: TestSubscription[]) {
       }
     },
     pushDelivery: {
-      async create({ data }: { data: { status: string; pushSubscriptionId?: string | null } }) {
+      async create({ data }: { data: { status: string; pushSubscriptionId?: string | null; lastError?: string | null } }) {
         deliveries.push(data);
         return data;
       }
@@ -178,6 +218,6 @@ function makePushRepo(subscriptions: TestSubscription[]) {
 
   return repo as unknown as Parameters<typeof sendPushForNotification>[0] & {
     subscriptions: TestSubscription[];
-    deliveries: Array<{ status: string; pushSubscriptionId?: string | null }>;
+    deliveries: Array<{ status: string; pushSubscriptionId?: string | null; lastError?: string | null }>;
   };
 }

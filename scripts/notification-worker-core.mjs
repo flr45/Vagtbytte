@@ -1,12 +1,72 @@
+import { createHash } from "crypto";
 import webpush from "web-push";
-
-function sanitizePushError(error) {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.slice(0, 240).replace(/[A-Za-z0-9_-]{28,}/g, "[skjult]");
-}
 
 function isPermanentPushError(error) {
   return error && (error.statusCode === 404 || error.statusCode === 410);
+}
+
+function endpointHost(endpoint) {
+  try {
+    return new URL(endpoint).host;
+  } catch {
+    return "ugyldigt-endpoint";
+  }
+}
+
+function publicKeyFingerprint(publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {
+  return publicKey ? createHash("sha256").update(publicKey).digest("hex").slice(0, 16) : "mangler";
+}
+
+function stringifyErrorValue(value) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  if (Buffer.isBuffer(value)) {
+    return value.toString("utf8");
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function webPushErrorDetails(error, endpoint) {
+  const statusCode = error?.statusCode ?? null;
+  const details = {
+    statusCode,
+    headers: error?.headers ?? null,
+    body: stringifyErrorValue(error?.body),
+    endpointHost: endpointHost(endpoint),
+    responseText: stringifyErrorValue(error?.response?.text ?? error?.response?.body ?? error?.body),
+    stacktrace: error?.stack ?? null,
+    originalErrorMessage: error instanceof Error ? error.message : String(error),
+    vapid:
+      statusCode === 401 || statusCode === 403
+        ? {
+            subject: process.env.VAPID_SUBJECT ?? "mangler",
+            endpointHost: endpointHost(endpoint),
+            publicKeyFingerprint: publicKeyFingerprint()
+          }
+        : undefined
+  };
+
+  return JSON.stringify(details, null, 2);
+}
+
+function logWebPushError(error, endpoint) {
+  const details = webPushErrorDetails(error, endpoint);
+  console.error("WEB_PUSH_DELIVERY_FAILED", details);
+  if (isPermanentPushError(error)) {
+    console.error("WEB_PUSH_SUBSCRIPTION_REVOKED", {
+      reason: `Permanent pushfejl HTTP ${error?.statusCode}`,
+      endpointHost: endpointHost(endpoint)
+    });
+  }
+  return details;
 }
 
 async function pushSender(input) {
@@ -149,6 +209,7 @@ async function sendPushForNotification(prisma, notificationId) {
       });
     } catch (error) {
       const permanent = isPermanentPushError(error);
+      const details = logWebPushError(error, subscription.endpoint);
       await prisma.pushDelivery.create({
         data: {
           notificationId: notification.id,
@@ -156,7 +217,7 @@ async function sendPushForNotification(prisma, notificationId) {
           status: permanent ? "PERMANENT_FAILURE" : "FAILED",
           attemptCount: 1,
           failedAt: new Date(),
-          lastError: sanitizePushError(error)
+          lastError: details
         }
       });
       if (permanent) {

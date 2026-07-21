@@ -1,4 +1,5 @@
 import type { NotificationType, PrismaClient } from "@prisma/client";
+import { createHash } from "crypto";
 import webpush from "web-push";
 
 export type NotificationRepo = Pick<
@@ -45,11 +46,6 @@ export async function createNotifications(repo: NotificationRepo, inputs: Notifi
   }
 }
 
-export function sanitizePushError(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.slice(0, 240).replace(/[A-Za-z0-9_-]{28,}/g, "[skjult]");
-}
-
 export type PushPayload = {
   notificationId: string;
   endpoint: string;
@@ -68,6 +64,78 @@ let pushSenderForTests: PushSender | null = null;
 
 export function setPushSenderForTests(sender: PushSender | null) {
   pushSenderForTests = sender;
+}
+
+export function endpointHost(endpoint: string) {
+  try {
+    return new URL(endpoint).host;
+  } catch {
+    return "ugyldigt-endpoint";
+  }
+}
+
+export function publicKeyFingerprint(publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {
+  return publicKey ? createHash("sha256").update(publicKey).digest("hex").slice(0, 16) : "mangler";
+}
+
+export function webPushErrorDetails(error: unknown, endpoint: string) {
+  const maybeError = error as {
+    statusCode?: number;
+    headers?: unknown;
+    body?: unknown;
+    response?: { text?: unknown; body?: unknown };
+    message?: string;
+    stack?: string;
+  };
+  const statusCode = maybeError?.statusCode ?? null;
+  const details = {
+    statusCode,
+    headers: maybeError?.headers ?? null,
+    body: stringifyErrorValue(maybeError?.body),
+    endpointHost: endpointHost(endpoint),
+    responseText: stringifyErrorValue(maybeError?.response?.text ?? maybeError?.response?.body ?? maybeError?.body),
+    stacktrace: maybeError?.stack ?? null,
+    originalErrorMessage: error instanceof Error ? error.message : String(error),
+    vapid:
+      statusCode === 401 || statusCode === 403
+        ? {
+            subject: process.env.VAPID_SUBJECT ?? "mangler",
+            endpointHost: endpointHost(endpoint),
+            publicKeyFingerprint: publicKeyFingerprint()
+          }
+        : undefined
+  };
+
+  return JSON.stringify(details, null, 2);
+}
+
+export function logWebPushError(error: unknown, endpoint: string) {
+  const details = webPushErrorDetails(error, endpoint);
+  console.error("WEB_PUSH_DELIVERY_FAILED", details);
+  if (isPermanentPushError(error)) {
+    console.error("WEB_PUSH_SUBSCRIPTION_REVOKED", {
+      reason: `Permanent pushfejl HTTP ${(error as { statusCode?: number })?.statusCode}`,
+      endpointHost: endpointHost(endpoint)
+    });
+  }
+  return details;
+}
+
+function stringifyErrorValue(value: unknown) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  if (Buffer.isBuffer(value)) {
+    return value.toString("utf8");
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
 }
 
 export async function sendPushForNotification(
@@ -133,7 +201,7 @@ export async function sendPushForNotification(
       });
     } catch (error) {
       failed += 1;
-      const message = sanitizePushError(error);
+      const message = logWebPushError(error, subscription.endpoint);
       const permanent = isPermanentPushError(error);
       await repo.pushDelivery.create({
         data: {
