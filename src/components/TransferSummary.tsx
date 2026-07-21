@@ -1,12 +1,13 @@
 import Link from "next/link";
-import type { TransferStatus } from "@prisma/client";
-import { statusLabel } from "@/lib/transfer-rules";
+import type { ExpectedEndMode, TransferStatus } from "@prisma/client";
+import { expectedEndLabel, statusLabel } from "@/lib/transfer-rules";
 
 export type TransferSummaryItem = {
   id: string;
   transferNumber: string;
   status: TransferStatus;
   requestedStartAt: Date;
+  expectedEndMode: ExpectedEndMode;
   expectedEndAt: Date | null;
   comment: string | null;
   receiverResponseComment: string | null;
@@ -75,11 +76,9 @@ export function TransferList({
                 Modpart: {transfer.counterpartName} - {transfer.counterpartEmployeeNumber}
               </p>
               <p className="text-sm text-zinc-700">Start: {formatDateTime(transfer.requestedStartAt)}</p>
-              {transfer.expectedEndAt ? (
-                <p className="text-sm text-zinc-700">
-                  Forventet sluttid: {formatDateTime(transfer.expectedEndAt)}
-                </p>
-              ) : null}
+              <p className="text-sm text-zinc-700">
+                Forventet tilbagelevering: {expectedEndLabel(transfer, formatDateTime)}
+              </p>
               {transfer.comment ? <p className="text-sm text-zinc-700">Kommentar: {transfer.comment}</p> : null}
               {transfer.receiverResponseComment ? (
                 <p className="text-sm text-zinc-700">Begrundelse: {transfer.receiverResponseComment}</p>

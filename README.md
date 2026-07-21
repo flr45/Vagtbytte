@@ -96,6 +96,15 @@ Admin kan ikke udgive sig for at være brandmand og får ikke adgang til vagtcen
 - Testnotifikationer
 - Planlagte start- og forventet-sluttid-notifikationer via lokal worker
 
+## Forventet tilbagelevering
+
+Ved oprettelse vælger brandmanden enten `Bestemt tidspunkt` eller `Til vagt slut`.
+Et bestemt tidspunkt bruges kun som påmindelse og afslutter aldrig sagen automatisk.
+Tilbagelevering kræver stadig manuel oprettelse fra B, accept fra A og godkendelse fra vagtcentralen.
+
+Migrationen til `expectedEndMode` behandler eksisterende lokale sager sådan:
+sager med `expectedEndAt` bliver `SPECIFIC_TIME`, og sager uden `expectedEndAt` bliver `UNTIL_SHIFT_END`.
+
 ## Ikke implementeret endnu
 
 - Historik for vagtoverdragelser

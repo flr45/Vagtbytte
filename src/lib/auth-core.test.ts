@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { UserRole } from "@prisma/client";
-import { authenticateLogin, hashSessionToken, type AuthRepository, type AuthUser } from "./auth-core";
+import {
+  authenticateLogin,
+  hashSessionToken,
+  resolveCurrentUserFromSession,
+  shouldDeleteCookieOnLogout,
+  type AuthRepository,
+  type AuthUser
+} from "./auth-core";
 import { hashPassword } from "./passwords";
 
 function makeRepo(options: {
@@ -113,5 +120,69 @@ describe("hashSessionToken", () => {
     const token = "hemmelig-session";
     expect(hashSessionToken(token)).not.toBe(token);
     expect(hashSessionToken(token)).toHaveLength(64);
+  });
+});
+
+describe("resolveCurrentUserFromSession", () => {
+  it("udløbet session returnerer null", async () => {
+    const user = await firefighter();
+    const result = resolveCurrentUserFromSession(
+      {
+        id: "session-1",
+        expiresAt: new Date("2026-07-21T10:00:00.000Z"),
+        user
+      },
+      new Date("2026-07-21T11:00:00.000Z")
+    );
+
+    expect(result).toBeNull();
+  });
+
+  it("deaktiveret bruger returnerer null", async () => {
+    const user = await firefighter("Brandmand123!", false);
+    const result = resolveCurrentUserFromSession(
+      {
+        id: "session-1",
+        expiresAt: new Date("2026-07-21T12:00:00.000Z"),
+        user
+      },
+      new Date("2026-07-21T11:00:00.000Z")
+    );
+
+    expect(result).toBeNull();
+  });
+
+  it("ugyldig session returnerer null", () => {
+    expect(resolveCurrentUserFromSession(null)).toBeNull();
+  });
+
+  it("getCurrentUser-core forsøger ikke at ændre cookies", async () => {
+    const user = await firefighter();
+    const cookieStore = {
+      deleted: false,
+      setCalled: false,
+      delete() {
+        this.deleted = true;
+      },
+      set() {
+        this.setCalled = true;
+      }
+    };
+
+    const result = resolveCurrentUserFromSession({
+      id: "session-1",
+      expiresAt: new Date(Date.now() + 1000),
+      user
+    });
+
+    expect(result?.id).toBe(user.id);
+    expect(cookieStore.deleted).toBe(false);
+    expect(cookieStore.setCalled).toBe(false);
+  });
+});
+
+describe("logout-cookie", () => {
+  it("logout sletter fortsat session-cookien når token findes", () => {
+    expect(shouldDeleteCookieOnLogout("token")).toBe(true);
   });
 });

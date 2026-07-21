@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { expectedEndLabel } from "@/lib/transfer-rules";
 import { TopBar } from "@/components/TopBar";
 import { VcReturnDecisionForms, VcTransferDecisionForms } from "@/components/VcDecisionForms";
 import { formatDateTime, StatusBadge } from "@/components/TransferSummary";
@@ -47,8 +48,8 @@ export default async function VcTransferDetailPage({ params }: { params: Promise
             />
             <Detail label="Starttidspunkt" value={formatDateTime(transfer.requestedStartAt)} />
             <Detail
-              label="Forventet sluttid"
-              value={transfer.expectedEndAt ? formatDateTime(transfer.expectedEndAt) : "Ikke angivet"}
+              label="Forventet tilbagelevering"
+              value={expectedEndLabel(transfer, formatDateTime)}
             />
             {transfer.comment ? <Detail label="Kommentar fra A" value={transfer.comment} /> : null}
             {transfer.receiverRespondedAt ? (
@@ -61,7 +62,7 @@ export default async function VcTransferDetailPage({ params }: { params: Promise
             {transfer.vcComment ? <Detail label="VC-kommentar" value={transfer.vcComment} /> : null}
           </dl>
           <p className="rounded-md bg-amber-50 p-3 text-sm font-semibold text-amber-950">
-            Forventet sluttid medfører ikke automatisk tilbagelevering.
+            Forventet tilbagelevering medfører ikke automatisk tilbagelevering.
           </p>
           {transfer.status === "RECEIVER_ACCEPTED_AWAITING_VC" ? (
             <VcTransferDecisionForms transferId={transfer.id} />

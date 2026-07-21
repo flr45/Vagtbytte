@@ -2,7 +2,13 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { UserRole } from "@prisma/client";
 import { prisma } from "./prisma";
-import { authenticateLogin, hashSessionToken, type AuthRepository } from "./auth-core";
+import {
+  authenticateLogin,
+  hashSessionToken,
+  resolveCurrentUserFromSession,
+  shouldDeleteCookieOnLogout,
+  type AuthRepository
+} from "./auth-core";
 import { roleHome } from "./roles";
 
 export const SESSION_COOKIE_NAME = "vagtoverdragelse_session";
@@ -70,6 +76,7 @@ export async function signIn(identifier: string, password: string) {
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
       path: "/",
+      maxAge: Math.floor((result.expiresAt.getTime() - Date.now()) / 1000),
       expires: result.expiresAt
     });
   }
@@ -90,17 +97,7 @@ export async function getCurrentUser() {
     include: { user: true }
   });
 
-  if (!session || session.expiresAt < new Date() || !session.user.isActive) {
-    cookieStore.delete(SESSION_COOKIE_NAME);
-    return null;
-  }
-
-  await prisma.session.update({
-    where: { id: session.id },
-    data: { lastSeenAt: new Date() }
-  });
-
-  return session.user;
+  return resolveCurrentUserFromSession(session);
 }
 
 export async function requireUser() {
@@ -137,7 +134,7 @@ export async function signOut() {
   const cookieStore = await cookies();
   const rawToken = cookieStore.get(SESSION_COOKIE_NAME)?.value;
 
-  if (rawToken) {
+  if (shouldDeleteCookieOnLogout(rawToken) && rawToken) {
     const session = await prisma.session.findUnique({
       where: { tokenHash: hashSessionToken(rawToken) },
       include: { user: true }

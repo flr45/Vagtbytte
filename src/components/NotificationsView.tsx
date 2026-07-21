@@ -5,6 +5,7 @@ import {
   markNotificationReadAction,
   removePushSubscriptionAction
 } from "@/lib/actions";
+import { hasValidCaseLink, notificationTypeLabel } from "@/lib/vc-dashboard";
 import { formatDateTime } from "./TransferSummary";
 import { PushManager } from "./PushManager";
 
@@ -51,7 +52,9 @@ export function NotificationsView({
             >
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <p className="text-xs font-semibold uppercase text-zinc-600">{notification.type}</p>
+                  <p className="text-xs font-semibold uppercase text-zinc-600">
+                    {notificationTypeLabel(notification.type)}
+                  </p>
                   <h3 className="mt-1 text-lg font-bold">{notification.title}</h3>
                 </div>
                 <span className="w-fit rounded-full bg-white px-3 py-1 text-xs font-semibold text-zinc-700">
@@ -63,12 +66,14 @@ export function NotificationsView({
                 {formatDateTime(notification.publishedAt ?? notification.createdAt)}
               </p>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <Link
-                  className="focus-ring inline-flex min-h-12 items-center justify-center rounded-md bg-brand-red px-5 font-semibold text-white"
-                  href={notification.link}
-                >
-                  Åbn sag
-                </Link>
+                {hasValidCaseLink(notification.link) ? (
+                  <Link
+                    className="focus-ring inline-flex min-h-12 items-center justify-center rounded-md bg-brand-red px-5 font-semibold text-white"
+                    href={notification.link}
+                  >
+                    Åbn sag
+                  </Link>
+                ) : null}
                 {!notification.readAt ? (
                   <form action={markNotificationReadAction}>
                     <input name="notificationId" type="hidden" value={notification.id} />

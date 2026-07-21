@@ -1,4 +1,4 @@
-import { UserRole, type ReturnRequestStatus, type TransferStatus } from "@prisma/client";
+import { UserRole, type ExpectedEndMode, type ReturnRequestStatus, type TransferStatus } from "@prisma/client";
 
 export type TransferParticipant = {
   id: string;
@@ -12,6 +12,7 @@ export type TransferCreateInput = {
   giverEmployeeNumber: string;
   receiverEmployeeNumber: string;
   requestedStartAt: Date;
+  expectedEndMode: ExpectedEndMode;
   expectedEndAt?: Date | null;
 };
 
@@ -46,6 +47,7 @@ export function validateTransferParticipants(input: {
   giverEmployeeNumber: string;
   receiverEmployeeNumber: string;
   requestedStartAt: Date;
+  expectedEndMode?: ExpectedEndMode;
   expectedEndAt?: Date | null;
 }): TransferValidationResult {
   if (!input.giverEmployeeNumber.trim() || !input.receiverEmployeeNumber.trim()) {
@@ -72,8 +74,16 @@ export function validateTransferParticipants(input: {
     return { ok: false, message: "Starttidspunkt skal udfyldes korrekt." };
   }
 
+  if (input.expectedEndMode === "SPECIFIC_TIME" && !input.expectedEndAt) {
+    return { ok: false, message: "Forventet tilbageleveringstidspunkt skal udfyldes." };
+  }
+
+  if (input.expectedEndMode === "UNTIL_SHIFT_END" && input.expectedEndAt) {
+    return { ok: false, message: "Til vagtens slutning må ikke have dato eller klokkeslæt." };
+  }
+
   if (input.expectedEndAt && input.expectedEndAt <= input.requestedStartAt) {
-    return { ok: false, message: "Forventet sluttid skal ligge efter starttidspunktet." };
+    return { ok: false, message: "Forventet tilbageleveringstidspunkt skal ligge efter starttidspunktet." };
   }
 
   return { ok: true, giver: input.giver, receiver: input.receiver };
@@ -182,4 +192,11 @@ export function canVcDecideReturn(input: {
 
 export function isExpectedEndOverdue(expectedEndAt: Date | null, now = new Date()) {
   return Boolean(expectedEndAt && expectedEndAt < now);
+}
+
+export function expectedEndLabel(input: { expectedEndMode: ExpectedEndMode; expectedEndAt: Date | null }, formatter: (date: Date) => string) {
+  if (input.expectedEndMode === "UNTIL_SHIFT_END") {
+    return "Til vagtens slutning";
+  }
+  return input.expectedEndAt ? formatter(input.expectedEndAt) : "Mangler tidspunkt";
 }

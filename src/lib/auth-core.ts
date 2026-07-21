@@ -37,6 +37,14 @@ export type AuthRepository = {
   }): Promise<void>;
 };
 
+export type SessionUser = AuthUser;
+
+export type SessionRecord = {
+  id: string;
+  expiresAt: Date;
+  user: SessionUser;
+};
+
 export type LoginResult =
   | { ok: true; user: AuthUser; rawToken: string; expiresAt: Date }
   | { ok: false; message: string; reason: "RATE_LIMITED" | "INVALID" | "INACTIVE" };
@@ -57,6 +65,26 @@ export function newSessionToken() {
 
 export function sessionExpiry() {
   return new Date(Date.now() + 1000 * 60 * 60 * 12);
+}
+
+export function resolveCurrentUserFromSession(session: SessionRecord | null, now = new Date()) {
+  if (!session) {
+    return null;
+  }
+
+  if (session.expiresAt < now) {
+    return null;
+  }
+
+  if (!session.user.isActive) {
+    return null;
+  }
+
+  return session.user;
+}
+
+export function shouldDeleteCookieOnLogout(rawToken: string | undefined | null) {
+  return Boolean(rawToken);
 }
 
 export async function authenticateLogin(input: {

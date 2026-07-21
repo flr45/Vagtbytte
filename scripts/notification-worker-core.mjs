@@ -1,3 +1,5 @@
+import webpush from "web-push";
+
 function sanitizePushError(error) {
   const message = error instanceof Error ? error.message : String(error);
   return message.slice(0, 240).replace(/[A-Za-z0-9_-]{28,}/g, "[skjult]");
@@ -12,17 +14,25 @@ async function pushSender(input) {
     return;
   }
 
-  if (!input.endpoint.startsWith("https://")) {
-    const error = new Error("Permanent ugyldigt push-endpoint");
-    error.statusCode = 410;
-    throw error;
+  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  const privateKey = process.env.VAPID_PRIVATE_KEY;
+  const subject = process.env.VAPID_SUBJECT;
+
+  if (!publicKey || !privateKey || !subject) {
+    throw new Error("VAPID-nøgler mangler");
   }
 
-  await fetch(input.endpoint, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ title: input.title, body: input.body, link: input.link })
-  });
+  webpush.setVapidDetails(subject, publicKey, privateKey);
+  await webpush.sendNotification(
+    {
+      endpoint: input.endpoint,
+      keys: {
+        p256dh: input.p256dh,
+        auth: input.auth
+      }
+    },
+    JSON.stringify({ title: input.title, body: input.body, link: input.link })
+  );
 }
 
 async function shouldCancelScheduledNotification(prisma, notificationId) {
@@ -36,7 +46,11 @@ async function shouldCancelScheduledNotification(prisma, notificationId) {
   }
 
   if (notification.type === "TRANSFER_EXPECTED_END") {
-    return notification.shiftTransfer.status === "COMPLETED";
+    return (
+      notification.shiftTransfer.status === "COMPLETED" ||
+      notification.shiftTransfer.expectedEndMode === "UNTIL_SHIFT_END" ||
+      !notification.shiftTransfer.expectedEndAt
+    );
   }
 
   if (notification.type === "TRANSFER_STARTED") {
@@ -76,6 +90,8 @@ async function sendPushForNotification(prisma, notificationId) {
     try {
       await pushSender({
         endpoint: subscription.endpoint,
+        p256dh: subscription.p256dh,
+        auth: subscription.auth,
         title: notification.title,
         body: notification.body,
         link: notification.link

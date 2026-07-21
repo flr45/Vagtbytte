@@ -40,6 +40,7 @@ function validate(overrides: Partial<Parameters<typeof validateTransferParticipa
     giverEmployeeNumber: "1001",
     receiverEmployeeNumber: "1002",
     requestedStartAt: start,
+    expectedEndMode: "SPECIFIC_TIME",
     expectedEndAt: end,
     ...overrides
   });
@@ -73,6 +74,22 @@ describe("vagtoverdragelse - oprettelse", () => {
 
   it("forventet sluttid før starttid afvises", () => {
     expect(validate({ expectedEndAt: new Date("2026-07-21T09:00:00.000Z") }).ok).toBe(false);
+  });
+
+  it("brandmand kan vælge bestemt tidspunkt", () => {
+    expect(validate({ expectedEndMode: "SPECIFIC_TIME", expectedEndAt: end }).ok).toBe(true);
+  });
+
+  it("bestemt tidspunkt kræver expectedEndAt", () => {
+    expect(validate({ expectedEndMode: "SPECIFIC_TIME", expectedEndAt: null }).ok).toBe(false);
+  });
+
+  it("brandmand kan vælge til vagt slut", () => {
+    expect(validate({ expectedEndMode: "UNTIL_SHIFT_END", expectedEndAt: null }).ok).toBe(true);
+  });
+
+  it("til vagt slut kræver expectedEndAt som null", () => {
+    expect(validate({ expectedEndMode: "UNTIL_SHIFT_END", expectedEndAt: end }).ok).toBe(false);
   });
 
   it("forventet sluttid ændrer ikke automatisk status", () => {
@@ -180,6 +197,11 @@ describe("del 3 - vagtcentral", () => {
   it("godkendelse ændrer status til aktiv", () => {
     expect(statusLabel(TransferStatus.VC_APPROVED_ACTIVE)).toBe("Aktiv vagtoverdragelse");
   });
+
+  it("dobbelt behandling af samme sag afvises", () => {
+    expect(canVcDecideTransfer({ role: UserRole.VC, status: TransferStatus.VC_APPROVED_ACTIVE }).ok).toBe(false);
+    expect(canVcDecideTransfer({ role: UserRole.VC, status: TransferStatus.VC_REJECTED }).ok).toBe(false);
+  });
 });
 
 describe("del 3 - tilbagelevering", () => {
@@ -255,6 +277,26 @@ describe("del 3 - tilbagelevering", () => {
         role: UserRole.VC,
         transferStatus: TransferStatus.RETURN_AWAITING_ORIGINAL,
         returnStatus: "AWAITING_ORIGINAL"
+      }).ok
+    ).toBe(false);
+  });
+
+  it("brandmand kan ikke kalde dashboardets VC-handlinger for tilbagelevering", () => {
+    expect(
+      canVcDecideReturn({
+        role: UserRole.BRANDFIGHTER,
+        transferStatus: TransferStatus.RETURN_ACCEPTED_AWAITING_VC,
+        returnStatus: "ORIGINAL_ACCEPTED_AWAITING_VC"
+      }).ok
+    ).toBe(false);
+  });
+
+  it("admin kan ikke kalde dashboardets VC-handlinger for tilbagelevering", () => {
+    expect(
+      canVcDecideReturn({
+        role: UserRole.ADMIN,
+        transferStatus: TransferStatus.RETURN_ACCEPTED_AWAITING_VC,
+        returnStatus: "ORIGINAL_ACCEPTED_AWAITING_VC"
       }).ok
     ).toBe(false);
   });

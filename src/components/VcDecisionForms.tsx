@@ -10,19 +10,43 @@ import {
 import { ActionMessage } from "./ActionMessage";
 import { SubmitButton } from "./SubmitButton";
 
-export function VcTransferDecisionForms({ transferId }: { transferId: string }) {
+export function VcTransferDecisionForms({
+  transferId,
+  direct = false,
+  confirmationText = "Vil du godkende denne vagtoverdragelse?"
+}: {
+  transferId: string;
+  direct?: boolean;
+  confirmationText?: string;
+}) {
   const [approveState, approveAction] = useActionState(approveTransferByVcAction, {});
   const [rejectState, rejectAction] = useActionState(rejectTransferByVcAction, {});
 
   return (
-    <div className="grid gap-4">
-      <form action={approveAction} className="grid gap-3 rounded-md border border-brand-line p-4">
+    <div className={direct ? "grid gap-3 lg:grid-cols-2" : "grid gap-4"}>
+      <form
+        action={approveAction}
+        className="grid gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-4"
+        onSubmit={(event) => {
+          if (!window.confirm(confirmationText)) {
+            event.preventDefault();
+          }
+        }}
+      >
         <input name="transferId" type="hidden" value={transferId} />
         <CommentField label="Kommentar ved godkendelse" />
         <ActionMessage message={approveState.message} ok={approveState.ok} />
         <SubmitButton pendingText="Godkender...">Godkend vagtoverdragelse</SubmitButton>
       </form>
-      <form action={rejectAction} className="grid gap-3 rounded-md border border-brand-line p-4">
+      <form
+        action={rejectAction}
+        className="grid gap-3 rounded-md border border-zinc-300 bg-white p-4"
+        onSubmit={(event) => {
+          if (!window.confirm("Vil du afvise denne vagtoverdragelse?")) {
+            event.preventDefault();
+          }
+        }}
+      >
         <input name="transferId" type="hidden" value={transferId} />
         <CommentField label="Begrundelse ved afvisning" required />
         <ActionMessage message={rejectState.message} ok={rejectState.ok} />
@@ -37,19 +61,43 @@ export function VcTransferDecisionForms({ transferId }: { transferId: string }) 
   );
 }
 
-export function VcReturnDecisionForms({ returnRequestId }: { returnRequestId: string }) {
+export function VcReturnDecisionForms({
+  returnRequestId,
+  direct = false,
+  confirmationText = "Vil du godkende denne tilbagelevering?"
+}: {
+  returnRequestId: string;
+  direct?: boolean;
+  confirmationText?: string;
+}) {
   const [approveState, approveAction] = useActionState(approveReturnByVcAction, {});
   const [rejectState, rejectAction] = useActionState(rejectReturnByVcAction, {});
 
   return (
-    <div className="grid gap-4">
-      <form action={approveAction} className="grid gap-3 rounded-md border border-brand-line p-4">
+    <div className={direct ? "grid gap-3 lg:grid-cols-2" : "grid gap-4"}>
+      <form
+        action={approveAction}
+        className="grid gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-4"
+        onSubmit={(event) => {
+          if (!window.confirm(confirmationText)) {
+            event.preventDefault();
+          }
+        }}
+      >
         <input name="returnRequestId" type="hidden" value={returnRequestId} />
         <CommentField label="Kommentar ved godkendelse" />
         <ActionMessage message={approveState.message} ok={approveState.ok} />
         <SubmitButton pendingText="Godkender...">Godkend tilbagelevering</SubmitButton>
       </form>
-      <form action={rejectAction} className="grid gap-3 rounded-md border border-brand-line p-4">
+      <form
+        action={rejectAction}
+        className="grid gap-3 rounded-md border border-zinc-300 bg-white p-4"
+        onSubmit={(event) => {
+          if (!window.confirm("Vil du afvise denne tilbagelevering?")) {
+            event.preventDefault();
+          }
+        }}
+      >
         <input name="returnRequestId" type="hidden" value={returnRequestId} />
         <CommentField label="Begrundelse ved afvisning" required />
         <ActionMessage message={rejectState.message} ok={rejectState.ok} />

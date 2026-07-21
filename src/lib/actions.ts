@@ -389,6 +389,7 @@ export async function lookupTransferParticipantsAction(
     giverEmployeeNumber: formData.get("giverEmployeeNumber"),
     receiverEmployeeNumber: formData.get("receiverEmployeeNumber"),
     requestedStartAt: formData.get("requestedStartAt"),
+    expectedEndMode: formData.get("expectedEndMode"),
     expectedEndAt: formData.get("expectedEndAt") ?? "",
     comment: formData.get("comment") ?? "",
     confirmed: false
@@ -410,6 +411,7 @@ export async function lookupTransferParticipantsAction(
     giverEmployeeNumber: parsed.data.giverEmployeeNumber,
     receiverEmployeeNumber: parsed.data.receiverEmployeeNumber,
     requestedStartAt: parsed.data.requestedStartAt,
+    expectedEndMode: parsed.data.expectedEndMode,
     expectedEndAt: parsed.data.expectedEndAt
   });
 
@@ -442,6 +444,7 @@ export async function createTransferAction(
     giverEmployeeNumber: formData.get("giverEmployeeNumber"),
     receiverEmployeeNumber: formData.get("receiverEmployeeNumber"),
     requestedStartAt: formData.get("requestedStartAt"),
+    expectedEndMode: formData.get("expectedEndMode"),
     expectedEndAt: formData.get("expectedEndAt") ?? "",
     comment: formData.get("comment") ?? "",
     confirmed: formData.get("confirmed") === "on"
@@ -463,6 +466,7 @@ export async function createTransferAction(
     giverEmployeeNumber: parsed.data.giverEmployeeNumber,
     receiverEmployeeNumber: parsed.data.receiverEmployeeNumber,
     requestedStartAt: parsed.data.requestedStartAt,
+    expectedEndMode: parsed.data.expectedEndMode,
     expectedEndAt: parsed.data.expectedEndAt
   });
 
@@ -488,6 +492,7 @@ export async function createTransferAction(
       giverNameSnapshot: result.giver.name,
       receiverNameSnapshot: result.receiver.name,
       requestedStartAt: parsed.data.requestedStartAt,
+      expectedEndMode: parsed.data.expectedEndMode,
       expectedEndAt: parsed.data.expectedEndAt,
       comment: optionalText(parsed.data.comment),
       status: "AWAITING_RECEIVER"
@@ -649,8 +654,8 @@ async function decideTransferByVc(input: {
   }
 
   const now = new Date();
-  const updatedTransfer = await prisma.shiftTransfer.update({
-    where: { id: transfer.id },
+  const decision = await prisma.shiftTransfer.updateMany({
+    where: { id: transfer.id, status: "RECEIVER_ACCEPTED_AWAITING_VC" },
     data: {
       status: input.approve ? "VC_APPROVED_ACTIVE" : "VC_REJECTED",
       vcDecidedAt: now,
@@ -659,6 +664,11 @@ async function decideTransferByVc(input: {
       activatedAt: input.approve ? now : null
     }
   });
+  if (decision.count !== 1) {
+    return { ok: false, message: "Sagen er allerede behandlet." };
+  }
+
+  const updatedTransfer = await prisma.shiftTransfer.findUniqueOrThrow({ where: { id: transfer.id } });
   await notifyVcTransferDecision(updatedTransfer, vc, input.approve);
 
   await prisma.auditLog.create({
@@ -952,8 +962,8 @@ async function decideReturnByVc(input: {
   }
 
   const now = new Date();
-  const updatedReturnRequest = await prisma.returnRequest.update({
-    where: { id: returnRequest.id },
+  const decision = await prisma.returnRequest.updateMany({
+    where: { id: returnRequest.id, status: "ORIGINAL_ACCEPTED_AWAITING_VC" },
     data: {
       status: input.approve ? "VC_APPROVED_COMPLETED" : "VC_REJECTED",
       vcDecidedAt: now,
@@ -962,6 +972,11 @@ async function decideReturnByVc(input: {
       completedAt: input.approve ? now : null
     }
   });
+  if (decision.count !== 1) {
+    return { ok: false, message: "Tilbageleveringen er allerede behandlet." };
+  }
+
+  const updatedReturnRequest = await prisma.returnRequest.findUniqueOrThrow({ where: { id: returnRequest.id } });
 
   const updatedTransfer = await prisma.shiftTransfer.update({
     where: { id: returnRequest.transferId },

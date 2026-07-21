@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { canViewTransfer } from "@/lib/transfer-rules";
+import { canViewTransfer, expectedEndLabel } from "@/lib/transfer-rules";
 import { TopBar } from "@/components/TopBar";
 import { ReturnRequestCreateForm, ReturnRequestResponseForms } from "@/components/ReturnRequestForms";
 import { TransferResponseForms } from "@/components/TransferResponseForms";
@@ -57,7 +57,9 @@ export default async function TransferDetailPage({
     isGiver &&
     transfer.status === "RETURN_AWAITING_ORIGINAL" &&
     activeReturn?.status === "AWAITING_ORIGINAL";
-  const isOverdue = Boolean(transfer.expectedEndAt && transfer.expectedEndAt < new Date());
+  const isOverdue = Boolean(
+    transfer.expectedEndMode === "SPECIFIC_TIME" && transfer.expectedEndAt && transfer.expectedEndAt < new Date()
+  );
 
   return (
     <>
@@ -82,8 +84,8 @@ export default async function TransferDetailPage({
             />
             <Detail label="Starttidspunkt" value={formatDateTime(transfer.requestedStartAt)} />
             <Detail
-              label="Forventet sluttid"
-              value={transfer.expectedEndAt ? formatDateTime(transfer.expectedEndAt) : "Ikke angivet"}
+              label="Forventet tilbagelevering"
+              value={expectedEndLabel(transfer, formatDateTime)}
             />
             <Detail label="Oprettet" value={formatDateTime(transfer.createdAt)} />
             {transfer.comment ? <Detail label="Kommentar" value={transfer.comment} /> : null}
@@ -94,11 +96,11 @@ export default async function TransferDetailPage({
             {transfer.vcComment ? <Detail label="VC-kommentar" value={transfer.vcComment} /> : null}
           </dl>
           <p className="rounded-md bg-amber-50 p-3 text-sm font-semibold text-amber-950">
-            Forventet sluttid er kun en påmindelse. Vagten tilbageleveres ikke automatisk.
+            Forventet tilbagelevering er kun en påmindelse. Vagten tilbageleveres ikke automatisk.
           </p>
           {isOverdue ? (
             <p className="rounded-md bg-red-50 p-3 text-sm font-semibold text-red-950">
-              Forventet sluttid er overskredet. Vagtoverdragelsen fortsætter, indtil en tilbagelevering er godkendt af vagtcentralen.
+              Forventet tilbageleveringstidspunkt er overskredet. Vagtoverdragelsen fortsætter, indtil en tilbagelevering er godkendt af vagtcentralen.
             </p>
           ) : null}
           {canRespond ? <TransferResponseForms transferId={transfer.id} /> : null}

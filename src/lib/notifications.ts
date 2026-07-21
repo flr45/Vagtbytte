@@ -1,4 +1,5 @@
 import type { NotificationType, PrismaClient } from "@prisma/client";
+import webpush from "web-push";
 
 export type NotificationRepo = Pick<
   PrismaClient,
@@ -49,6 +50,23 @@ export function sanitizePushError(error: unknown) {
   return message.slice(0, 240).replace(/[A-Za-z0-9_-]{28,}/g, "[skjult]");
 }
 
+export type PushPayload = {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  title: string;
+  body: string;
+  link: string;
+};
+
+type PushSender = (input: PushPayload) => Promise<void>;
+
+let pushSenderForTests: PushSender | null = null;
+
+export function setPushSenderForTests(sender: PushSender | null) {
+  pushSenderForTests = sender;
+}
+
 export async function sendPushForNotification(repo: NotificationRepo, notificationId: string) {
   const notification = await repo.notification.findUnique({
     where: { id: notificationId },
@@ -81,6 +99,8 @@ export async function sendPushForNotification(repo: NotificationRepo, notificati
     try {
       await pushSender({
         endpoint: subscription.endpoint,
+        p256dh: subscription.p256dh,
+        auth: subscription.auth,
         title: notification.title,
         body: notification.body,
         link: notification.link
@@ -199,7 +219,11 @@ async function shouldCancelScheduledNotification(repo: NotificationRepo, notific
   }
 
   if (notification.type === "TRANSFER_EXPECTED_END") {
-    return notification.shiftTransfer.status === "COMPLETED";
+    return (
+      notification.shiftTransfer.status === "COMPLETED" ||
+      notification.shiftTransfer.expectedEndMode === "UNTIL_SHIFT_END" ||
+      !notification.shiftTransfer.expectedEndAt
+    );
   }
 
   if (notification.type === "TRANSFER_STARTED") {
@@ -211,29 +235,47 @@ async function shouldCancelScheduledNotification(repo: NotificationRepo, notific
   return false;
 }
 
-function isPermanentPushError(error: unknown) {
+export function isPermanentPushError(error: unknown) {
   const statusCode = (error as { statusCode?: number })?.statusCode;
   return statusCode === 404 || statusCode === 410;
 }
 
-async function pushSender(input: { endpoint: string; title: string; body: string; link: string }) {
+function configureVapid() {
+  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  const privateKey = process.env.VAPID_PRIVATE_KEY;
+  const subject = process.env.VAPID_SUBJECT;
+
+  if (!publicKey || !privateKey || !subject) {
+    throw new Error("VAPID-nøgler mangler");
+  }
+
+  webpush.setVapidDetails(subject, publicKey, privateKey);
+}
+
+async function pushSender(input: PushPayload) {
+  if (pushSenderForTests) {
+    await pushSenderForTests(input);
+    return;
+  }
+
   if (process.env.NOTIFICATIONS_DISABLE_PUSH === "true") {
     return;
   }
 
-  if (!input.endpoint.startsWith("https://")) {
-    const error = new Error("Permanent ugyldigt push-endpoint") as Error & { statusCode: number };
-    error.statusCode = 410;
-    throw error;
-  }
+  configureVapid();
 
-  await fetch(input.endpoint, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
+  await webpush.sendNotification(
+    {
+      endpoint: input.endpoint,
+      keys: {
+        p256dh: input.p256dh,
+        auth: input.auth
+      }
+    },
+    JSON.stringify({
       title: input.title,
       body: input.body,
       link: input.link
     })
-  });
+  );
 }

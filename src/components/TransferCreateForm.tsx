@@ -9,6 +9,7 @@ type FormValues = {
   giverEmployeeNumber: string;
   receiverEmployeeNumber: string;
   requestedStartAt: string;
+  expectedEndMode: "SPECIFIC_TIME" | "UNTIL_SHIFT_END" | "";
   expectedEndAt: string;
   comment: string;
 };
@@ -17,6 +18,7 @@ const initialValues: FormValues = {
   giverEmployeeNumber: "",
   receiverEmployeeNumber: "",
   requestedStartAt: "",
+  expectedEndMode: "",
   expectedEndAt: "",
   comment: ""
 };
@@ -54,6 +56,14 @@ export function TransferCreateForm({ defaultEmployeeNumber }: { defaultEmployeeN
             </p>
             <p className="font-semibold">
               Overtager: {lookupState.receiver.name} - {lookupState.receiver.employeeNumber}
+            </p>
+            <p className="font-semibold">
+              Forventet tilbagelevering:{" "}
+              {values.expectedEndMode === "SPECIFIC_TIME"
+                ? values.expectedEndAt
+                : values.expectedEndMode === "UNTIL_SHIFT_END"
+                  ? "Til vagtens slutning"
+                  : "Ikke valgt"}
             </p>
           </div>
           {Object.entries(values).map(([name, value]) => (
@@ -114,15 +124,52 @@ function FormFields({
         />
       </label>
       <label className="grid gap-2 text-sm font-semibold text-zinc-800">
-        Forventet slutdato og sluttid
-        <input
-          className="focus-ring min-h-12 rounded-md border border-zinc-300 bg-white px-3 text-base"
-          name="expectedEndAt"
-          onChange={(event) => update("expectedEndAt", event.target.value)}
-          type="datetime-local"
-          value={values.expectedEndAt}
-        />
+        Forventet tilbagelevering
+        <span className="grid gap-2 sm:grid-cols-2">
+          <label className="flex min-h-12 items-center gap-3 rounded-md border border-zinc-300 bg-white px-3">
+            <input
+              checked={values.expectedEndMode === "SPECIFIC_TIME"}
+              className="h-5 w-5 accent-brand-red"
+              name="expectedEndMode"
+              onChange={() => update("expectedEndMode", "SPECIFIC_TIME")}
+              required
+              type="radio"
+              value="SPECIFIC_TIME"
+            />
+            Bestemt tidspunkt
+          </label>
+          <label className="flex min-h-12 items-center gap-3 rounded-md border border-zinc-300 bg-white px-3">
+            <input
+              checked={values.expectedEndMode === "UNTIL_SHIFT_END"}
+              className="h-5 w-5 accent-brand-red"
+              name="expectedEndMode"
+              onChange={() => {
+                update("expectedEndMode", "UNTIL_SHIFT_END");
+                update("expectedEndAt", "");
+              }}
+              required
+              type="radio"
+              value="UNTIL_SHIFT_END"
+            />
+            Til vagt slut
+          </label>
+        </span>
       </label>
+      {values.expectedEndMode === "SPECIFIC_TIME" ? (
+        <label className="grid gap-2 text-sm font-semibold text-zinc-800">
+          Forventet tilbageleveringsdato og tidspunkt
+          <input
+            className="focus-ring min-h-12 rounded-md border border-zinc-300 bg-white px-3 text-base"
+            name="expectedEndAt"
+            onChange={(event) => update("expectedEndAt", event.target.value)}
+            required
+            type="datetime-local"
+            value={values.expectedEndAt}
+          />
+        </label>
+      ) : (
+        <input name="expectedEndAt" type="hidden" value="" />
+      )}
       <label className="grid gap-2 text-sm font-semibold text-zinc-800">
         Kommentar
         <textarea

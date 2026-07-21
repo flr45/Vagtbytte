@@ -1,3 +1,11 @@
+self.addEventListener("install", (event) => {
+  event.waitUntil(self.skipWaiting());
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 self.addEventListener("push", (event) => {
   let data = {};
   try {
@@ -21,16 +29,20 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const link = event.notification.data && event.notification.data.link ? event.notification.data.link : "/";
+  const targetUrl = new URL(link, self.location.origin).href;
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
       for (const client of clients) {
-        if ("focus" in client) {
-          client.navigate(link);
+        const clientUrl = new URL(client.url);
+        if (clientUrl.origin === self.location.origin && "focus" in client) {
+          if ("navigate" in client) {
+            client.navigate(targetUrl);
+          }
           return client.focus();
         }
       }
-      return self.clients.openWindow(link);
+      return self.clients.openWindow(targetUrl);
     })
   );
 });

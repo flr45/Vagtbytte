@@ -25,6 +25,11 @@ enum TransferStatus {
   CANCELLED
 }
 
+enum ExpectedEndMode {
+  SPECIFIC_TIME
+  UNTIL_SHIFT_END
+}
+
 enum ReturnRequestStatus {
   AWAITING_ORIGINAL
   ORIGINAL_ACCEPTED_AWAITING_VC
@@ -93,6 +98,7 @@ model ShiftTransfer {
   giverNameSnapshot              String
   receiverNameSnapshot           String
   requestedStartAt               DateTime
+  expectedEndMode                ExpectedEndMode @default(UNTIL_SHIFT_END)
   expectedEndAt                  DateTime?
   comment                        String?
   status                         TransferStatus @default(AWAITING_RECEIVER)

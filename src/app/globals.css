@@ -25,3 +25,32 @@ select {
 .focus-ring {
   @apply focus:outline-none focus:ring-2 focus:ring-brand-red focus:ring-offset-2;
 }
+
+@keyframes vc-critical-pulse {
+  0%,
+  100% {
+    background-color: #991b1b;
+    border-color: #7f1d1d;
+  }
+  50% {
+    background-color: #dc2626;
+    border-color: #991b1b;
+  }
+}
+
+.vc-pulse {
+  animation: vc-critical-pulse 1s ease-in-out infinite;
+}
+
+.vc-card-pulse {
+  animation: vc-critical-pulse 1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vc-pulse,
+  .vc-card-pulse {
+    animation: none;
+    background-color: #7f1d1d;
+    border-color: #7f1d1d;
+  }
+}

@@ -2,64 +2,87 @@ import { UserRole } from "@prisma/client";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { TopBar } from "@/components/TopBar";
-import { VcTransferList } from "@/components/VcTransferList";
+import { VcDashboard, type VcDashboardTransfer } from "@/components/VcDashboard";
 
 export default async function VagtcentralPage() {
   await requireRole(UserRole.VC);
   const [awaitingApproval, activeTransfers, returnApprovals, recentlyHandled] = await Promise.all([
     prisma.shiftTransfer.findMany({
       where: { status: "RECEIVER_ACCEPTED_AWAITING_VC" },
-      orderBy: { receiverRespondedAt: "asc" }
+      orderBy: { receiverRespondedAt: "asc" },
+      include: { returnRequests: { orderBy: { createdAt: "desc" } } }
     }),
     prisma.shiftTransfer.findMany({
       where: { status: { in: ["VC_APPROVED_ACTIVE", "RETURN_AWAITING_ORIGINAL"] } },
-      orderBy: { activatedAt: "desc" }
+      orderBy: { activatedAt: "desc" },
+      include: { returnRequests: { orderBy: { createdAt: "desc" } } }
     }),
     prisma.shiftTransfer.findMany({
       where: { status: "RETURN_ACCEPTED_AWAITING_VC" },
-      orderBy: { updatedAt: "asc" }
+      orderBy: { updatedAt: "asc" },
+      include: { returnRequests: { orderBy: { createdAt: "desc" } } }
     }),
     prisma.shiftTransfer.findMany({
       where: { status: { in: ["VC_REJECTED", "RECEIVER_REJECTED", "COMPLETED"] } },
       orderBy: { updatedAt: "desc" },
-      take: 10
+      take: 10,
+      include: { returnRequests: { orderBy: { createdAt: "desc" } } }
     })
   ]);
 
   return (
     <>
       <TopBar title="Vagtcentral" />
-      <main className="mx-auto grid w-full max-w-4xl gap-6 px-4 py-6">
-        <section className="rounded-lg border border-brand-line bg-white p-5 shadow-sm">
-          <h1 className="text-3xl font-bold">Vagtcentral</h1>
-          <p className="mt-3 text-base text-zinc-700">
-            {awaitingApproval.length} sag(er) afventer VC-godkendelse.
-          </p>
-          <p className="mt-3 rounded-md bg-amber-50 p-3 text-sm font-semibold text-amber-950">
-            Forventet sluttid medfører ikke automatisk tilbagelevering.
-          </p>
-        </section>
-        <VcTransferList
-          emptyText="Ingen sager afventer godkendelse."
-          title="Afventer godkendelse"
-          transfers={awaitingApproval}
-        />
-        <VcTransferList
-          emptyText="Ingen aktive vagtoverdragelser."
-          title="Aktive vagtoverdragelser"
-          transfers={activeTransfers}
-        />
-        <VcTransferList
-          emptyText="Ingen tilbageleveringer afventer godkendelse."
-          title="Tilbageleveringer til godkendelse"
-          transfers={returnApprovals}
-        />
-        <VcTransferList
-          emptyText="Ingen behandlede sager endnu."
-          title="Senest behandlede"
-          transfers={recentlyHandled}
-        />
-      </main>
+      <VcDashboard
+        activeTransfers={activeTransfers.map(serializeTransfer)}
+        awaitingTransfers={awaitingApproval.map(serializeTransfer)}
+        recentlyHandled={recentlyHandled.map(serializeTransfer)}
+        returnTransfers={returnApprovals.map(serializeTransfer)}
+        serverNow={new Date().toISOString()}
+      />
     </>
   );
+}
+
+function serializeTransfer(
+  transfer: Awaited<ReturnType<typeof prisma.shiftTransfer.findMany>>[number] & {
+    returnRequests: Array<{
+      id: string;
+      returnNumber: string;
+      requestedReturnAt: Date;
+      comment: string | null;
+      originalRespondedAt: Date | null;
+      originalResponseComment: string | null;
+      status: string;
+      createdAt: Date;
+    }>;
+  }
+): VcDashboardTransfer {
+  return {
+    id: transfer.id,
+    transferNumber: transfer.transferNumber,
+    status: transfer.status,
+    giverNameSnapshot: transfer.giverNameSnapshot,
+    giverEmployeeNumberSnapshot: transfer.giverEmployeeNumberSnapshot,
+    receiverNameSnapshot: transfer.receiverNameSnapshot,
+    receiverEmployeeNumberSnapshot: transfer.receiverEmployeeNumberSnapshot,
+    requestedStartAt: transfer.requestedStartAt.toISOString(),
+    expectedEndMode: transfer.expectedEndMode,
+    expectedEndAt: transfer.expectedEndAt?.toISOString() ?? null,
+    comment: transfer.comment,
+    receiverRespondedAt: transfer.receiverRespondedAt?.toISOString() ?? null,
+    receiverResponseComment: transfer.receiverResponseComment,
+    activatedAt: transfer.activatedAt?.toISOString() ?? null,
+    updatedAt: transfer.updatedAt.toISOString(),
+    returnRequests: transfer.returnRequests.map((request) => ({
+      id: request.id,
+      returnNumber: request.returnNumber,
+      requestedReturnAt: request.requestedReturnAt.toISOString(),
+      comment: request.comment,
+      originalRespondedAt: request.originalRespondedAt?.toISOString() ?? null,
+      originalResponseComment: request.originalResponseComment,
+      status: request.status,
+      createdAt: request.createdAt.toISOString()
+    }))
+  };
 }

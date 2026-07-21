@@ -2,14 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { savePushSubscriptionAction, sendTestNotificationAction } from "@/lib/actions";
+import { activateBrowserPush } from "@/lib/push-client";
 import { ActionMessage } from "./ActionMessage";
-
-function urlBase64ToUint8Array(base64String: string) {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = window.atob(base64);
-  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
-}
 
 export function PushManager({ publicKey }: { publicKey?: string }) {
   const [message, setMessage] = useState<string>();
@@ -18,38 +12,9 @@ export function PushManager({ publicKey }: { publicKey?: string }) {
 
   async function activatePush() {
     setMessage(undefined);
-
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-      setOk(false);
-      setMessage("Browseren understøtter ikke push-notifikationer.");
-      return;
-    }
-
-    if (!publicKey) {
-      setOk(false);
-      setMessage("Push kan ikke aktiveres, fordi VAPID-public-key mangler.");
-      return;
-    }
-
-    const permission = await Notification.requestPermission();
-    if (permission !== "granted") {
-      setOk(false);
-      setMessage("Tilladelse afvist.");
-      return;
-    }
-
-    const registration = await navigator.serviceWorker.register("/sw.js");
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey)
-    });
-    const json = subscription.toJSON();
-    const result = await savePushSubscriptionAction({
-      endpoint: json.endpoint,
-      p256dh: json.keys?.p256dh,
-      auth: json.keys?.auth,
-      userAgent: navigator.userAgent,
-      deviceName: "Browser"
+    const result = await activateBrowserPush({
+      publicKey,
+      saveSubscription: savePushSubscriptionAction
     });
     setOk(Boolean(result.ok));
     setMessage(result.message);

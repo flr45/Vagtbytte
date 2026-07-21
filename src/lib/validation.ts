@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { passwordSchema } from "./passwords";
 
+const expectedEndModeSchema = z.enum(["SPECIFIC_TIME", "UNTIL_SHIFT_END"], {
+  required_error: "Vælg forventet tilbagelevering"
+});
+
 export const loginSchema = z.object({
   identifier: z.string().trim().min(1, "Udfyld medarbejdernummer eller brugernavn"),
   password: z.string().min(1, "Udfyld adgangskode")
@@ -41,14 +45,23 @@ const transferBaseSchema = z
     giverEmployeeNumber: z.string().trim().min(1, "Medarbejdernummer A skal udfyldes"),
     receiverEmployeeNumber: z.string().trim().min(1, "Medarbejdernummer B skal udfyldes"),
     requestedStartAt: z.coerce.date({ invalid_type_error: "Starttidspunkt skal udfyldes" }),
+    expectedEndMode: expectedEndModeSchema,
     expectedEndAt: z
       .union([z.coerce.date(), z.literal("")])
       .optional()
       .transform((value) => (value === "" || value === undefined ? null : value)),
     comment: z.string().trim().max(500, "Kommentaren må højst være 500 tegn").optional()
   })
+  .refine((data) => data.expectedEndMode !== "SPECIFIC_TIME" || Boolean(data.expectedEndAt), {
+    message: "Forventet tilbageleveringstidspunkt skal udfyldes.",
+    path: ["expectedEndAt"]
+  })
+  .refine((data) => data.expectedEndMode !== "UNTIL_SHIFT_END" || data.expectedEndAt === null, {
+    message: "Til vagtens slutning må ikke have dato eller klokkeslæt.",
+    path: ["expectedEndAt"]
+  })
   .refine((data) => !data.expectedEndAt || data.expectedEndAt > data.requestedStartAt, {
-    message: "Forventet sluttid skal ligge efter starttidspunktet.",
+    message: "Forventet tilbageleveringstidspunkt skal ligge efter starttidspunktet.",
     path: ["expectedEndAt"]
   });
 

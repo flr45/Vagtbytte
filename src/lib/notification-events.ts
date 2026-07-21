@@ -135,7 +135,7 @@ export async function scheduleTransferReminders(transfer: ShiftTransfer, vcUserI
     }))
   );
 
-  if (transfer.expectedEndAt) {
+  if (shouldScheduleExpectedEndNotification(transfer)) {
     await createNotifications(
       prisma,
       recipients.map((recipientUserId) => ({
@@ -150,6 +150,13 @@ export async function scheduleTransferReminders(transfer: ShiftTransfer, vcUserI
       }))
     );
   }
+}
+
+export function shouldScheduleExpectedEndNotification(input: {
+  expectedEndMode: "SPECIFIC_TIME" | "UNTIL_SHIFT_END";
+  expectedEndAt: Date | null;
+}) {
+  return input.expectedEndMode === "SPECIFIC_TIME" && Boolean(input.expectedEndAt);
 }
 
 export async function notifyReturnCreated(transfer: ShiftTransfer, request: ReturnRequest) {
