@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { TransferStatus, UserRole } from "@prisma/client";
 import {
   canCreateReturnRequest,
+  canCancelTransfer,
   canOriginalRespondToReturn,
   canRespondToTransfer,
   canVcConfirmReturnExecution,
@@ -106,6 +107,116 @@ describe("vagtoverdragelse - adgang", () => {
 
   it("en tredje brandmand kan ikke se anmodningen", () => {
     expect(canViewTransfer({ userId: "tredje", giverUserId: giver.id, receiverUserId: receiver.id })).toBe(false);
+  });
+});
+
+describe("vagtoverdragelse - annullering", () => {
+  it("A kan annullere egen afventende sag", () => {
+    expect(
+      canCancelTransfer({
+        role: UserRole.BRANDFIGHTER,
+        userId: giver.id,
+        giverUserId: giver.id,
+        status: TransferStatus.AWAITING_RECEIVER,
+        hasOpenReturnRequest: false
+      }).ok
+    ).toBe(true);
+  });
+
+  it("B kan ikke annullere sagen", () => {
+    expect(
+      canCancelTransfer({
+        role: UserRole.BRANDFIGHTER,
+        userId: receiver.id,
+        giverUserId: giver.id,
+        status: TransferStatus.AWAITING_RECEIVER,
+        hasOpenReturnRequest: false
+      }).ok
+    ).toBe(false);
+  });
+
+  it("en anden brandmand kan ikke annullere sagen", () => {
+    expect(
+      canCancelTransfer({
+        role: UserRole.BRANDFIGHTER,
+        userId: "tredje",
+        giverUserId: giver.id,
+        status: TransferStatus.AWAITING_RECEIVER,
+        hasOpenReturnRequest: false
+      }).ok
+    ).toBe(false);
+  });
+
+  it("admin kan ikke omgå rollen", () => {
+    expect(
+      canCancelTransfer({
+        role: UserRole.ADMIN,
+        userId: giver.id,
+        giverUserId: giver.id,
+        status: TransferStatus.AWAITING_RECEIVER,
+        hasOpenReturnRequest: false
+      }).ok
+    ).toBe(false);
+  });
+
+  it("aktiv sag kan ikke annulleres", () => {
+    expect(
+      canCancelTransfer({
+        role: UserRole.BRANDFIGHTER,
+        userId: giver.id,
+        giverUserId: giver.id,
+        status: TransferStatus.VC_APPROVED_ACTIVE,
+        hasOpenReturnRequest: false
+      }).ok
+    ).toBe(false);
+  });
+
+  it("gennemført sag kan ikke annulleres", () => {
+    expect(
+      canCancelTransfer({
+        role: UserRole.BRANDFIGHTER,
+        userId: giver.id,
+        giverUserId: giver.id,
+        status: TransferStatus.COMPLETED,
+        hasOpenReturnRequest: false
+      }).ok
+    ).toBe(false);
+  });
+
+  it("begrundelse er obligatorisk efter B-accept", () => {
+    expect(
+      canCancelTransfer({
+        role: UserRole.BRANDFIGHTER,
+        userId: giver.id,
+        giverUserId: giver.id,
+        status: TransferStatus.RECEIVER_ACCEPTED_AWAITING_VC,
+        hasOpenReturnRequest: false,
+        reason: ""
+      }).ok
+    ).toBe(false);
+    expect(
+      canCancelTransfer({
+        role: UserRole.BRANDFIGHTER,
+        userId: giver.id,
+        giverUserId: giver.id,
+        status: TransferStatus.RECEIVER_ACCEPTED_AWAITING_VC,
+        hasOpenReturnRequest: false,
+        reason: "Fejl i tidspunkt"
+      }).ok
+    ).toBe(true);
+  });
+
+  it("åben tilbagelevering blokerer annullering", () => {
+    expect(
+      canCancelTransfer({
+        role: UserRole.BRANDFIGHTER,
+        userId: giver.id,
+        giverUserId: giver.id,
+        status: TransferStatus.VC_APPROVED_AWAITING_ACTIVATION,
+        hasOpenReturnRequest: true,
+        reason: "Skal ændres"
+      }).ok
+    ).toBe(false);
   });
 });
 

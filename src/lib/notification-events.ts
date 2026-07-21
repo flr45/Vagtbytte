@@ -157,6 +157,35 @@ export async function notifyTransferActivated(transfer: ShiftTransfer) {
   }
 }
 
+export async function notifyTransferCancelled(transfer: ShiftTransfer, reason: string | null) {
+  const vcUsers =
+    transfer.status === "RECEIVER_ACCEPTED_AWAITING_VC" || transfer.status === "VC_APPROVED_AWAITING_ACTIVATION"
+      ? await prisma.user.findMany({ where: { role: "VC", isActive: true } })
+      : [];
+  const reasonText = reason ? ` Begrundelse: ${reason}` : "";
+
+  await createNotifications(prisma, [
+    {
+      recipientUserId: transfer.receiverUserId,
+      shiftTransferId: transfer.id,
+      type: "TRANSFER_CANCELLED",
+      title: "Vagtoverdragelse annulleret",
+      body: `${transfer.giverNameSnapshot} har annulleret vagtoverdragelsen.${reasonText}`,
+      link: `/brandmand/anmodninger/${transfer.id}`,
+      uniqueKey: `transfer:${transfer.id}:cancelled:receiver`
+    },
+    ...vcUsers.map((vc) => ({
+      recipientUserId: vc.id,
+      shiftTransferId: transfer.id,
+      type: "TRANSFER_CANCELLED" as const,
+      title: "Vagtoverdragelse annulleret",
+      body: `En vagtoverdragelse er annulleret af ${transfer.giverNameSnapshot}.${reasonText}`,
+      link: `/vagtcentral/sager/${transfer.id}`,
+      uniqueKey: `transfer:${transfer.id}:cancelled:vc:${vc.id}`
+    }))
+  ]);
+}
+
 export async function notifyReturnCreated(transfer: ShiftTransfer, request: ReturnRequest) {
   await createNotifications(prisma, [
     {

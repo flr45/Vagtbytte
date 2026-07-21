@@ -69,6 +69,42 @@ export function canVcConfirmReturnExecution(input: {
   return { ok: true, message: "Tilbageleveringen kan bekræftes." };
 }
 
+export function canCancelTransfer(input: {
+  role: UserRole;
+  userId: string;
+  giverUserId: string;
+  status: TransferStatus;
+  hasOpenReturnRequest: boolean;
+  reason?: string | null;
+}) {
+  if (input.role !== UserRole.BRANDFIGHTER) {
+    return { ok: false, message: "Kun brandmanden, der oprettede vagtoverdragelsen, kan annullere den." };
+  }
+
+  if (input.userId !== input.giverUserId) {
+    return { ok: false, message: "Du kan kun annullere vagtoverdragelser, du selv har oprettet." };
+  }
+
+  if (input.hasOpenReturnRequest) {
+    return { ok: false, message: "Vagtoverdragelsen kan ikke annulleres, fordi der findes en åben tilbagelevering." };
+  }
+
+  const allowedStatuses: TransferStatus[] = [
+    "AWAITING_RECEIVER",
+    "RECEIVER_ACCEPTED_AWAITING_VC",
+    "VC_APPROVED_AWAITING_ACTIVATION"
+  ];
+  if (!allowedStatuses.includes(input.status)) {
+    return { ok: false, message: "Vagtoverdragelsen kan ikke annulleres i den nuværende status." };
+  }
+
+  if (input.status !== "AWAITING_RECEIVER" && !input.reason?.trim()) {
+    return { ok: false, message: "Skriv en begrundelse, når modtager eller vagtcentral allerede har behandlet sagen." };
+  }
+
+  return { ok: true, message: "Vagtoverdragelsen kan annulleres." };
+}
+
 export function validateTransferParticipants(input: {
   currentUserId: string;
   giver: TransferParticipant | null;

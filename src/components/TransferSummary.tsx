@@ -13,6 +13,8 @@ export type TransferSummaryItem = {
   receiverResponseComment: string | null;
   vcDecision?: string | null;
   vcComment?: string | null;
+  cancelledAt?: Date | null;
+  cancellationReason?: string | null;
   counterpartName: string;
   counterpartEmployeeNumber: string;
 };
@@ -88,6 +90,12 @@ export function TransferList({
               ) : null}
               {transfer.vcDecision ? <p className="text-sm text-zinc-700">VC: {transfer.vcDecision}</p> : null}
               {transfer.vcComment ? <p className="text-sm text-zinc-700">VC-kommentar: {transfer.vcComment}</p> : null}
+              {transfer.cancelledAt ? (
+                <p className="text-sm text-zinc-700">Annulleret: {formatDateTime(transfer.cancelledAt)}</p>
+              ) : null}
+              {transfer.cancellationReason ? (
+                <p className="text-sm text-zinc-700">Annulleringsbegrundelse: {transfer.cancellationReason}</p>
+              ) : null}
             </Link>
           ))}
         </div>

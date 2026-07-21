@@ -17,6 +17,7 @@ import {
   pushSubscriptionSchema,
   returnRequestCreateSchema,
   returnRequestResponseSchema,
+  transferCancelSchema,
   transferCreateSchema,
   transferLookupSchema,
   transferResponseSchema,
@@ -33,6 +34,7 @@ import {
   canRespondToTransfer,
   canCreateReturnRequest,
   canOriginalRespondToReturn,
+  canCancelTransfer,
   canVcDecideReturn,
   canVcDecideTransfer,
   canVcConfirmReturnExecution,
@@ -40,7 +42,7 @@ import {
   validateTransferParticipants,
   type TransferParticipant
 } from "./transfer-rules";
-import { createNotification, sendPushForNotification } from "./notifications";
+import { cancelFutureTransferNotifications, createNotification, sendPushForNotification } from "./notifications";
 import {
   notifyOriginalReturnResponse,
   notifyReceiverAccepted,
@@ -50,6 +52,7 @@ import {
   notifyVcReturnDecision,
   notifyVcTransferDecision,
   notifyTransferActivated,
+  notifyTransferCancelled,
   notifyReturnExecutionCompleted
 } from "./notification-events";
 
@@ -642,6 +645,108 @@ export async function rejectTransferAction(
     status: "RECEIVER_REJECTED",
     responseComment: parsed.data.responseComment
   });
+}
+
+export async function cancelTransferAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireRole(UserRole.BRANDFIGHTER);
+  const parsed = transferCancelSchema.safeParse({
+    transferId: formData.get("transferId"),
+    cancellationReason: formData.get("cancellationReason") ?? ""
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: firstError(parsed.error) };
+  }
+
+  const reason = optionalText(parsed.data.cancellationReason);
+  const openReturnStatuses = [
+    "AWAITING_ORIGINAL",
+    "ORIGINAL_ACCEPTED_AWAITING_VC",
+    "VC_APPROVED_AWAITING_EXECUTION"
+  ] as const;
+  const result = await prisma.$transaction(async (tx) => {
+    const transfer = await tx.shiftTransfer.findUnique({
+      where: { id: parsed.data.transferId },
+      include: {
+        returnRequests: {
+          where: { status: { in: [...openReturnStatuses] } }
+        }
+      }
+    });
+
+    if (!transfer) {
+      return { ok: false, message: "Sagen blev ikke fundet." };
+    }
+
+    const permission = canCancelTransfer({
+      role: user.role,
+      userId: user.id,
+      giverUserId: transfer.giverUserId,
+      status: transfer.status,
+      hasOpenReturnRequest: transfer.returnRequests.length > 0,
+      reason
+    });
+    if (!permission.ok) {
+      await tx.auditLog.create({
+        data: {
+          actorUserId: user.id,
+          actorRole: user.role,
+          action: "TRANSFER_CANCEL_REJECTED",
+          targetUserId: transfer.receiverUserId,
+          description: permission.message
+        }
+      });
+      return { ok: false, message: permission.message };
+    }
+
+    const now = new Date();
+    const cancelled = await tx.shiftTransfer.updateMany({
+      where: {
+        id: transfer.id,
+        status: {
+          in: ["AWAITING_RECEIVER", "RECEIVER_ACCEPTED_AWAITING_VC", "VC_APPROVED_AWAITING_ACTIVATION"]
+        }
+      },
+      data: {
+        status: "CANCELLED",
+        cancelledAt: now,
+        cancelledByUserId: user.id,
+        cancellationReason: reason
+      }
+    });
+
+    if (cancelled.count !== 1) {
+      return { ok: false, message: "Vagtoverdragelsen er allerede behandlet." };
+    }
+
+    await cancelFutureTransferNotifications(tx, transfer.id);
+    await tx.auditLog.create({
+      data: {
+        actorUserId: user.id,
+        actorRole: user.role,
+        action: "TRANSFER_CANCELLED",
+        targetUserId: transfer.receiverUserId,
+        description: `Vagtoverdragelse ${transfer.transferNumber} blev annulleret`
+      }
+    });
+
+    return { ok: true, transfer };
+  });
+
+  if (!result.ok || !("transfer" in result)) {
+    return result;
+  }
+  const transferToNotify = result.transfer;
+  if (!transferToNotify) {
+    return { ok: false, message: "Vagtoverdragelsen er allerede behandlet." };
+  }
+
+  await notifyTransferCancelled(transferToNotify, reason);
+  revalidatePath("/brandmand");
+  revalidatePath(`/brandmand/anmodninger/${parsed.data.transferId}`);
+  revalidatePath("/vagtcentral");
+  revalidatePath(`/vagtcentral/sager/${parsed.data.transferId}`);
+  return { ok: true, message: "Vagtoverdragelsen er annulleret" };
 }
 
 async function decideTransferByVc(input: {

@@ -17,6 +17,9 @@ export default async function FirefighterPage() {
       orderBy: { createdAt: "desc" }
     })
   ]);
+  const activeRequestsToMe = requestsToMe.filter((transfer) => transfer.status !== "CANCELLED");
+  const activeMyCreatedRequests = myCreatedRequests.filter((transfer) => transfer.status !== "CANCELLED");
+  const cancelledTransfers = [...requestsToMe, ...myCreatedRequests].filter((transfer) => transfer.status === "CANCELLED");
 
   return (
     <>
@@ -44,7 +47,7 @@ export default async function FirefighterPage() {
         <TransferList
           emptyText="Der er ingen anmodninger rettet til dig."
           title="Anmodninger til mig"
-          transfers={requestsToMe.map((transfer) => ({
+          transfers={activeRequestsToMe.map((transfer) => ({
             id: transfer.id,
             transferNumber: transfer.transferNumber,
             status: transfer.status,
@@ -55,6 +58,8 @@ export default async function FirefighterPage() {
             receiverResponseComment: transfer.receiverResponseComment,
             vcDecision: transfer.vcDecision,
             vcComment: transfer.vcComment,
+            cancelledAt: transfer.cancelledAt,
+            cancellationReason: transfer.cancellationReason,
             counterpartName: transfer.giverNameSnapshot,
             counterpartEmployeeNumber: transfer.giverEmployeeNumberSnapshot
           }))}
@@ -62,7 +67,7 @@ export default async function FirefighterPage() {
         <TransferList
           emptyText="Du har ikke oprettet nogen anmodninger."
           title="Mine oprettede anmodninger"
-          transfers={myCreatedRequests.map((transfer) => ({
+          transfers={activeMyCreatedRequests.map((transfer) => ({
             id: transfer.id,
             transferNumber: transfer.transferNumber,
             status: transfer.status,
@@ -73,10 +78,41 @@ export default async function FirefighterPage() {
             receiverResponseComment: transfer.receiverResponseComment,
             vcDecision: transfer.vcDecision,
             vcComment: transfer.vcComment,
+            cancelledAt: transfer.cancelledAt,
+            cancellationReason: transfer.cancellationReason,
             counterpartName: transfer.receiverNameSnapshot,
             counterpartEmployeeNumber: transfer.receiverEmployeeNumberSnapshot
           }))}
         />
+        <details className="grid gap-3">
+          <summary className="cursor-pointer text-xl font-bold">Tidligere sager</summary>
+          <div className="mt-3">
+            <TransferList
+              emptyText="Der er ingen tidligere annullerede sager."
+              title="Annullerede vagtoverdragelser"
+              transfers={cancelledTransfers.map((transfer) => ({
+                id: transfer.id,
+                transferNumber: transfer.transferNumber,
+                status: transfer.status,
+                requestedStartAt: transfer.requestedStartAt,
+                expectedEndMode: transfer.expectedEndMode,
+                expectedEndAt: transfer.expectedEndAt,
+                comment: transfer.comment,
+                receiverResponseComment: transfer.receiverResponseComment,
+                vcDecision: transfer.vcDecision,
+                vcComment: transfer.vcComment,
+                cancelledAt: transfer.cancelledAt,
+                cancellationReason: transfer.cancellationReason,
+                counterpartName:
+                  transfer.giverUserId === user.id ? transfer.receiverNameSnapshot : transfer.giverNameSnapshot,
+                counterpartEmployeeNumber:
+                  transfer.giverUserId === user.id
+                    ? transfer.receiverEmployeeNumberSnapshot
+                    : transfer.giverEmployeeNumberSnapshot
+              }))}
+            />
+          </div>
+        </details>
       </main>
     </>
   );

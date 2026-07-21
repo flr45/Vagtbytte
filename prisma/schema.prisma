@@ -51,6 +51,7 @@ enum NotificationType {
   TRANSFER_ACTIVATION_REMINDER
   TRANSFER_ACTIVATED
   TRANSFER_EXPECTED_END
+  TRANSFER_CANCELLED
   RETURN_CREATED
   RETURN_ORIGINAL_ACCEPTED
   RETURN_ORIGINAL_REJECTED
@@ -119,6 +120,9 @@ model ShiftTransfer {
   activatedAt                    DateTime?
   activationConfirmedAt          DateTime?
   activationConfirmedByUserId    String?
+  cancelledAt                    DateTime?
+  cancelledByUserId              String?
+  cancellationReason             String?
   completedAt                    DateTime?
   giver                          User           @relation("GivenTransfers", fields: [giverUserId], references: [id], onDelete: Restrict)
   receiver                       User           @relation("ReceivedTransfers", fields: [receiverUserId], references: [id], onDelete: Restrict)
@@ -130,6 +134,7 @@ model ShiftTransfer {
   @@index([status])
   @@index([createdAt])
   @@index([activationConfirmedByUserId])
+  @@index([cancelledByUserId])
 }
 
 model ReturnRequest {

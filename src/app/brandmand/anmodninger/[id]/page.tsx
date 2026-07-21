@@ -3,8 +3,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { canViewTransfer, expectedEndLabel } from "@/lib/transfer-rules";
+import { canCancelTransfer, canViewTransfer, expectedEndLabel } from "@/lib/transfer-rules";
 import { TopBar } from "@/components/TopBar";
+import { CancelTransferForm } from "@/components/CancelTransferForm";
 import { ReturnRequestCreateForm, ReturnRequestResponseForms } from "@/components/ReturnRequestForms";
 import { TransferResponseForms } from "@/components/TransferResponseForms";
 import { formatDateTime, StatusBadge } from "@/components/TransferSummary";
@@ -60,6 +61,14 @@ export default async function TransferDetailPage({
   const isOverdue = Boolean(
     transfer.expectedEndMode === "SPECIFIC_TIME" && transfer.expectedEndAt && transfer.expectedEndAt < new Date()
   );
+  const canCancel = canCancelTransfer({
+    role: user.role,
+    userId: user.id,
+    giverUserId: transfer.giverUserId,
+    status: transfer.status,
+    hasOpenReturnRequest: Boolean(activeReturn),
+    reason: transfer.status === "AWAITING_RECEIVER" ? null : "ui-preview"
+  }).ok;
 
   return (
     <>
@@ -94,6 +103,8 @@ export default async function TransferDetailPage({
             ) : null}
             {transfer.vcDecision ? <Detail label="VC's afgørelse" value={transfer.vcDecision} /> : null}
             {transfer.vcComment ? <Detail label="VC-kommentar" value={transfer.vcComment} /> : null}
+            {transfer.cancelledAt ? <Detail label="Annulleret" value={formatDateTime(transfer.cancelledAt)} /> : null}
+            {transfer.cancellationReason ? <Detail label="Annulleringsbegrundelse" value={transfer.cancellationReason} /> : null}
           </dl>
           <p className="rounded-md bg-amber-50 p-3 text-sm font-semibold text-amber-950">
             Forventet tilbagelevering er kun en påmindelse. Vagten tilbageleveres ikke automatisk.
@@ -107,6 +118,7 @@ export default async function TransferDetailPage({
           {canCreateReturn ? (
             <ReturnRequestCreateForm transferId={transfer.id} originalName={transfer.giverNameSnapshot} />
           ) : null}
+          {canCancel ? <CancelTransferForm status={transfer.status} transferId={transfer.id} /> : null}
           {activeReturn ? (
             <section className="grid gap-3 rounded-md border border-brand-line p-4">
               <h2 className="text-xl font-bold">Aktiv tilbagelevering</h2>

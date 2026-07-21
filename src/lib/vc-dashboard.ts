@@ -158,6 +158,7 @@ export function notificationTypeLabel(type: NotificationType) {
     TRANSFER_ACTIVATION_REMINDER: "Vagtskifte skal bekræftes",
     TRANSFER_ACTIVATED: "Vagtskifte gennemført",
     TRANSFER_EXPECTED_END: "Forventet sluttid nået",
+    TRANSFER_CANCELLED: "Vagtoverdragelse annulleret",
     RETURN_CREATED: "Ny tilbagelevering",
     RETURN_ORIGINAL_ACCEPTED: "Tilbagelevering accepteret",
     RETURN_ORIGINAL_REJECTED: "Tilbagelevering afvist",
