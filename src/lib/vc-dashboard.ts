@@ -48,13 +48,16 @@ export function getVcPriority(deadlineAt: Date | null, now = new Date()): VcPrio
   }
 
   const msRemaining = deadlineAt.getTime() - now.getTime();
-  if (msRemaining <= minute) {
+  if (msRemaining < minute) {
     return "critical";
   }
   if (msRemaining <= 5 * minute) {
     return "red";
   }
-  return "yellow";
+  if (msRemaining <= 15 * minute) {
+    return "yellow";
+  }
+  return "green";
 }
 
 export function getVcDashboardStatus(tasks: VcDashboardTask[], now = new Date()): VcDashboardStatus {
@@ -83,7 +86,7 @@ export function getVcDashboardStatus(tasks: VcDashboardTask[], now = new Date())
     return {
       priority,
       taskCount: actionableTasks.length,
-      text: "HASTER - opgave kræver handling nu",
+      text: "Handling nu",
       livePrefix: "",
       ariaLive: "assertive"
     };
@@ -93,19 +96,47 @@ export function getVcDashboardStatus(tasks: VcDashboardTask[], now = new Date())
     return {
       priority,
       taskCount: actionableTasks.length,
-      text: "Opgave kræver handling",
-      livePrefix: "inden for",
+      text: "Handling snart",
+      livePrefix: "om",
       ariaLive: "assertive"
+    };
+  }
+
+  if (priority === "yellow") {
+    return {
+      priority,
+      taskCount: actionableTasks.length,
+      text: "Handling på vej",
+      livePrefix: "om",
+      ariaLive: "polite"
     };
   }
 
   return {
     priority,
     taskCount: actionableTasks.length,
-    text: `${actionableTasks.length} opgave${actionableTasks.length === 1 ? "" : "r"} afventer`,
-    livePrefix: "næste opgave om",
+    text: "Roligt",
+    livePrefix: "næste om",
     ariaLive: "polite"
   };
+}
+
+export function formatShortCountdown(deadlineAt: Date | null, now = new Date()) {
+  if (!deadlineAt) {
+    return "nu";
+  }
+
+  const diff = deadlineAt.getTime() - now.getTime();
+  if (diff <= 0) {
+    return "forsinket";
+  }
+
+  const totalSeconds = Math.ceil(diff / 1000);
+  if (totalSeconds < 60) {
+    return `${totalSeconds} sek`;
+  }
+
+  return `${Math.ceil(totalSeconds / 60)} min`;
 }
 
 export function formatCountdown(deadlineAt: Date | null, now = new Date()) {
@@ -132,19 +163,19 @@ export function formatCountdown(deadlineAt: Date | null, now = new Date()) {
 }
 
 export function priorityLabel(priority: VcPriority, deadlineAt: Date | null, now = new Date()) {
-  if (deadlineAt && deadlineAt.getTime() < now.getTime()) {
-    return "Tidsfrist overskredet";
+  if (deadlineAt && deadlineAt.getTime() <= now.getTime()) {
+    return "Handling forsinket";
   }
   if (priority === "critical") {
-    return "Kræver handling nu";
+    return "Handling nu";
   }
   if (priority === "red") {
-    return "Haster";
+    return "Handling snart";
   }
   if (priority === "yellow") {
-    return "Afventer";
+    return deadlineAt ? `Handling om ${formatShortCountdown(deadlineAt, now)}` : "Handling om lidt";
   }
-  return "Ajour";
+  return deadlineAt ? `Handling om ${formatShortCountdown(deadlineAt, now)}` : "Roligt";
 }
 
 export function notificationTypeLabel(type: NotificationType) {

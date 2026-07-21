@@ -7,6 +7,7 @@ import type { TransferStatus } from "@prisma/client";
 import { statusLabel } from "@/lib/transfer-rules";
 import {
   formatCountdown,
+  formatShortCountdown,
   getVcDashboardStatus,
   getVcPriority,
   priorityLabel,
@@ -21,7 +22,7 @@ import {
   VcTransferDecisionForms
 } from "./VcDecisionForms";
 import { formatDateTime, StatusBadge } from "./TransferSummary";
-import { CheckIcon, InboxIcon } from "./Icons";
+import { AlertTriangleIcon, CheckIcon, ClockIcon, InboxIcon } from "./Icons";
 
 export type VcDashboardTransfer = {
   id: string;
@@ -246,14 +247,23 @@ function StatusBar({
   now: Date;
 }) {
   const tone = {
-    green: "border-emerald-700 bg-emerald-700 text-white",
-    yellow: "border-amber-400 bg-amber-300 text-amber-950",
+    green: "border-emerald-200 bg-emerald-50 text-emerald-950",
+    yellow: "border-amber-300 bg-amber-200 text-amber-950",
     red: "border-red-700 bg-red-700 text-white",
-    critical: "vc-pulse border-red-900 bg-red-800 text-white"
+    critical: "vc-pulse border-red-800 bg-red-700 text-white"
   } satisfies Record<VcPriority, string>;
-  const countdown = nextDeadline ? formatCountdown(nextDeadline, now).replace(/^Om /, "") : "";
+  const countdown = nextDeadline ? formatShortCountdown(nextDeadline, now) : "";
   const message =
-    status.livePrefix && countdown ? `${status.text} - ${status.livePrefix} ${countdown}` : status.text;
+    !nextDeadline
+      ? status.text
+      : nextDeadline.getTime() <= now.getTime()
+      ? "Handling forsinket"
+      : status.priority === "critical"
+        ? `Handling om ${countdown}`
+      : status.livePrefix && countdown
+        ? `${status.text} ${status.livePrefix} ${countdown}`
+        : status.text;
+  const Icon = status.priority === "green" ? CheckIcon : status.priority === "yellow" ? ClockIcon : AlertTriangleIcon;
 
   return (
     <section
@@ -261,7 +271,7 @@ function StatusBar({
       className={`flex min-h-24 items-center gap-4 rounded-2xl border px-5 py-4 shadow-lg ${tone[status.priority]}`}
     >
       <span aria-hidden="true" className="grid size-12 shrink-0 place-items-center rounded-full bg-white/20">
-        <CheckIcon className="size-6" />
+        <Icon className="size-6" />
       </span>
       <div>
         <p className="text-2xl font-bold">{message}</p>
@@ -292,9 +302,9 @@ function ActionCard({
         : parseDate(returnRequest?.requestedReturnAt);
   const priority = getVcPriority(deadline, now);
   const border = {
-    green: "border-l-emerald-600",
-    yellow: "border-l-amber-400",
-    red: "border-l-red-600",
+    green: "border-l-emerald-500 bg-emerald-50/40",
+    yellow: "border-l-amber-400 bg-amber-50/60",
+    red: "border-l-red-600 bg-red-50/30",
     critical: "vc-card-pulse border-l-red-800"
   } satisfies Record<VcPriority, string>;
 
@@ -321,6 +331,12 @@ function ActionCard({
             {priorityLabel(priority, deadline, now)}
           </span>
         </div>
+      </div>
+      <div className="grid w-fit gap-1 rounded-2xl border border-zinc-100 bg-white/80 px-4 py-3 shadow-sm">
+        <p className="text-xs font-bold uppercase text-zinc-500">
+          {deadline && deadline.getTime() <= now.getTime() ? "Handling" : "Handling om"}
+        </p>
+        <p className="text-2xl font-black text-zinc-950">{formatShortCountdown(deadline, now)}</p>
       </div>
       {type === "TRANSFER" || type === "ACTIVATION" ? (
         <TransferDetails deadline={deadline} now={now} transfer={transfer} />

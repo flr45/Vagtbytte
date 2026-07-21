@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { NotificationType, TransferStatus } from "@prisma/client";
 import {
   formatCountdown,
+  formatShortCountdown,
   getVcDashboardStatus,
   getVcPriority,
   hasValidCaseLink,
@@ -20,20 +21,31 @@ describe("VC-dashboard - statusbjælke", () => {
     });
   });
 
-  it("viser gul status, når nærmeste frist er mere end 5 minutter væk", () => {
-    expect(getVcDashboardStatus([task({ deadlineAt: minutesFromNow(18) })], now).priority).toBe("yellow");
+  it("viser grøn status, når nærmeste frist er mere end 15 minutter væk", () => {
+    expect(getVcDashboardStatus([task({ deadlineAt: minutesFromNow(16) })], now).priority).toBe("green");
+  });
+
+  it("viser gul status fra og med 15 minutter før handling", () => {
+    expect(getVcDashboardStatus([task({ deadlineAt: minutesFromNow(15) })], now).priority).toBe("yellow");
+  });
+
+  it("viser gul status 10 minutter før handling", () => {
+    expect(getVcDashboardStatus([task({ deadlineAt: minutesFromNow(10) })], now).priority).toBe("yellow");
   });
 
   it("viser rød status, når nærmeste frist er mellem 1 og 5 minutter væk", () => {
-    expect(getVcDashboardStatus([task({ deadlineAt: minutesFromNow(4) })], now).priority).toBe("red");
+    expect(getVcDashboardStatus([task({ deadlineAt: minutesFromNow(5) })], now).priority).toBe("red");
+    expect(getVcDashboardStatus([task({ deadlineAt: minutesFromNow(2) })], now).priority).toBe("red");
   });
 
-  it("viser blinkende rød status, når fristen er højst 1 minut væk", () => {
-    expect(getVcDashboardStatus([task({ deadlineAt: secondsFromNow(45) })], now).priority).toBe("critical");
+  it("viser blinkende rød status, når fristen er under 1 minut væk", () => {
+    expect(getVcDashboardStatus([task({ deadlineAt: secondsFromNow(59) })], now).priority).toBe("critical");
   });
 
   it("viser blinkende rød status, når fristen er overskredet", () => {
-    expect(getVcDashboardStatus([task({ deadlineAt: minutesFromNow(-2) })], now).priority).toBe("critical");
+    expect(getVcDashboardStatus([task({ deadlineAt: secondsFromNow(0) })], now).priority).toBe("critical");
+    expect(getVcDashboardStatus([task({ deadlineAt: minutesFromNow(-10) })], now).priority).toBe("critical");
+    expect(formatShortCountdown(secondsFromNow(0), now)).toBe("forsinket");
   });
 
   it("den mest kritiske opgave bestemmer bjælkens farve", () => {
@@ -112,7 +124,7 @@ describe("VC-dashboard - statusbjælke", () => {
   });
 
   it("bjælken opdateres efter afvisning", () => {
-    const before = getVcDashboardStatus([task({ deadlineAt: minutesFromNow(18) })], now);
+    const before = getVcDashboardStatus([task({ deadlineAt: minutesFromNow(15) })], now);
     const after = getVcDashboardStatus([], now);
 
     expect(before.priority).toBe("yellow");

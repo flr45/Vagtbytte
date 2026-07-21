@@ -69,12 +69,26 @@ select {
 @keyframes vc-critical-pulse {
   0%,
   100% {
+    background-color: #b42318;
+    border-color: #991b1b;
+  }
+  50% {
     background-color: #991b1b;
     border-color: #7f1d1d;
   }
+}
+
+@keyframes vc-card-critical-pulse {
+  0%,
+  100% {
+    background-color: #ffffff;
+    border-left-color: #991b1b;
+    box-shadow: 0 10px 30px rgba(153, 27, 27, 0.08);
+  }
   50% {
-    background-color: #dc2626;
-    border-color: #991b1b;
+    background-color: #fef2f2;
+    border-left-color: #b42318;
+    box-shadow: 0 14px 34px rgba(153, 27, 27, 0.14);
   }
 }
 
@@ -83,7 +97,7 @@ select {
 }
 
 .vc-card-pulse {
-  animation: vc-critical-pulse 1s ease-in-out infinite;
+  animation: vc-card-critical-pulse 1s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -99,7 +113,15 @@ select {
   .vc-pulse,
   .vc-card-pulse {
     animation: none;
-    background-color: #7f1d1d;
+  }
+
+  .vc-pulse {
+    background-color: #991b1b;
     border-color: #7f1d1d;
+  }
+
+  .vc-card-pulse {
+    background-color: #ffffff;
+    border-left-color: #991b1b;
   }
 }
