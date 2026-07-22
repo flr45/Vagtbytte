@@ -8,6 +8,7 @@ import {
   hasValidCaseLink,
   notificationTypeLabel,
   sortVcTasksByDeadline,
+  sortVcTasksByPriority,
   type VcDashboardTask
 } from "./vc-dashboard";
 
@@ -160,6 +161,21 @@ describe("VC-dashboard - opgaver", () => {
     );
 
     expect(sorted.map((item) => item.id)).toEqual(["først", "nu", "sen"]);
+  });
+
+  it("opgaver sorteres efter visuel prioritet og derefter kortest tid", () => {
+    const sorted = sortVcTasksByPriority(
+      [
+        task({ id: "grøn", deadlineAt: minutesFromNow(16) }),
+        task({ id: "gul", deadlineAt: minutesFromNow(10) }),
+        task({ id: "rød", deadlineAt: minutesFromNow(2) }),
+        task({ id: "under-et-minut", deadlineAt: secondsFromNow(45) }),
+        task({ id: "overskredet", deadlineAt: secondsFromNow(0) })
+      ],
+      now
+    );
+
+    expect(sorted.map((item) => item.id)).toEqual(["overskredet", "under-et-minut", "rød", "gul", "grøn"]);
   });
 
   it("live nedtælling bruger dansk tekst", () => {

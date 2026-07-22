@@ -11,7 +11,7 @@ import {
   getVcDashboardStatus,
   getVcPriority,
   priorityLabel,
-  sortVcTasksByDeadline,
+  sortVcTasksByPriority,
   type VcPriority
 } from "@/lib/vc-dashboard";
 import {
@@ -111,7 +111,7 @@ export function VcDashboard({
     ],
     [activeTransfers, awaitingTransfers, returnTransfers, now]
   );
-  const sortedTasks = useMemo(() => sortVcTasksByDeadline(tasks, now), [tasks, now]);
+  const sortedTasks = useMemo(() => sortVcTasksByPriority(tasks, now), [tasks, now]);
   const dashboardStatus = getVcDashboardStatus(sortedTasks, now);
   const nextDeadlineMs = sortedTasks[0]?.deadlineAt?.getTime() ?? nowMs;
   const fastTick = nextDeadlineMs - nowMs <= 5 * 60 * 1000;
@@ -743,19 +743,35 @@ function StatusTimeline({
   const steps =
     type === "RETURN" || type === "RETURN_EXECUTION"
       ? [
-          { label: "Oprettet", at: parseDate(returnRequest?.createdAt), done: Boolean(returnRequest?.createdAt) },
-          { label: "A accepterede", at: parseDate(returnRequest?.originalRespondedAt), done: Boolean(returnRequest?.originalRespondedAt) },
-          { label: "Afventer VC", at: null, done: type === "RETURN" },
-          { label: "Godkendt", at: parseDate(returnRequest?.vcDecidedAt), done: Boolean(returnRequest?.vcDecidedAt) }
+          { label: "Oprettet", at: parseDate(returnRequest?.createdAt), done: Boolean(returnRequest?.createdAt), current: false },
+          {
+            label: "A accepterede",
+            at: parseDate(returnRequest?.originalRespondedAt),
+            done: Boolean(returnRequest?.originalRespondedAt),
+            current: false
+          },
+          { label: "Afventer VC", at: null, done: false, current: type === "RETURN" },
+          { label: "Godkendt", at: parseDate(returnRequest?.vcDecidedAt), done: Boolean(returnRequest?.vcDecidedAt), current: false }
         ]
       : [
-          { label: "Oprettet", at: parseDate(transfer.requestedStartAt), done: true },
-          { label: "B accepterede", at: parseDate(transfer.receiverRespondedAt), done: Boolean(transfer.receiverRespondedAt) },
-          { label: "Afventer VC", at: null, done: transfer.status === "RECEIVER_ACCEPTED_AWAITING_VC" },
-          { label: "Godkendt", at: parseDate(transfer.vcDecidedAt), done: Boolean(transfer.vcDecidedAt) || transfer.status === "VC_APPROVED_ACTIVE" }
+          { label: "Oprettet", at: parseDate(transfer.requestedStartAt), done: true, current: false },
+          {
+            label: "B accepterede",
+            at: parseDate(transfer.receiverRespondedAt),
+            done: Boolean(transfer.receiverRespondedAt),
+            current: false
+          },
+          { label: "Afventer VC", at: null, done: false, current: transfer.status === "RECEIVER_ACCEPTED_AWAITING_VC" },
+          {
+            label: "Godkendt",
+            at: parseDate(transfer.vcDecidedAt),
+            done: Boolean(transfer.vcDecidedAt) || transfer.status === "VC_APPROVED_ACTIVE",
+            current: false
+          }
         ];
 
-  const firstPendingIndex = steps.findIndex((step) => !step.done);
+  const explicitCurrentIndex = steps.findIndex((step) => step.current);
+  const firstPendingIndex = explicitCurrentIndex === -1 ? steps.findIndex((step) => !step.done) : explicitCurrentIndex;
   const currentIndex = firstPendingIndex === -1 ? steps.length - 1 : firstPendingIndex;
 
   return (

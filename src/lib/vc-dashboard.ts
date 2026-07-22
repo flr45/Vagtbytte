@@ -42,6 +42,26 @@ export function sortVcTasksByDeadline<T extends Pick<VcDashboardTask, "deadlineA
   });
 }
 
+export function sortVcTasksByPriority<T extends Pick<VcDashboardTask, "deadlineAt" | "awaitingSince">>(
+  tasks: T[],
+  now = new Date()
+) {
+  return [...tasks].sort((a, b) => {
+    const aRank = vcPriorityRank(a.deadlineAt, now);
+    const bRank = vcPriorityRank(b.deadlineAt, now);
+    if (aRank !== bRank) {
+      return aRank - bRank;
+    }
+
+    const aTime = a.deadlineAt?.getTime() ?? now.getTime();
+    const bTime = b.deadlineAt?.getTime() ?? now.getTime();
+    if (aTime !== bTime) {
+      return aTime - bTime;
+    }
+    return (a.awaitingSince?.getTime() ?? 0) - (b.awaitingSince?.getTime() ?? 0);
+  });
+}
+
 export function getVcPriority(deadlineAt: Date | null, now = new Date()): VcPriority {
   if (!deadlineAt) {
     return "critical";
@@ -58,6 +78,26 @@ export function getVcPriority(deadlineAt: Date | null, now = new Date()): VcPrio
     return "yellow";
   }
   return "green";
+}
+
+function vcPriorityRank(deadlineAt: Date | null, now: Date) {
+  if (!deadlineAt) {
+    return 1;
+  }
+  const msRemaining = deadlineAt.getTime() - now.getTime();
+  if (msRemaining <= 0) {
+    return 0;
+  }
+  if (msRemaining < minute) {
+    return 1;
+  }
+  if (msRemaining <= 5 * minute) {
+    return 2;
+  }
+  if (msRemaining <= 15 * minute) {
+    return 3;
+  }
+  return 4;
 }
 
 export function getVcDashboardStatus(tasks: VcDashboardTask[], now = new Date()): VcDashboardStatus {
@@ -79,7 +119,7 @@ export function getVcDashboardStatus(tasks: VcDashboardTask[], now = new Date())
     };
   }
 
-  const [nextTask] = sortVcTasksByDeadline(actionableTasks, now);
+  const [nextTask] = sortVcTasksByPriority(actionableTasks, now);
   const priority = getVcPriority(getVcTaskDeadline(nextTask), now);
 
   if (priority === "critical") {
