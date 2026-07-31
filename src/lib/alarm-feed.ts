@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "crypto";
-import { Prisma } from "@prisma/client";
+import { NotificationType, Prisma } from "@prisma/client";
+import { createNotification } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 
 export type AlarmFeedMessageInput = {
@@ -27,6 +28,7 @@ export type AlarmFeedAlarm = {
 };
 
 const FOLLOW_UP_WINDOW_MS = 30 * 60 * 1000;
+const ALARM_NOTIFICATION_TYPE = "ALARM_MESSAGE" as NotificationType;
 
 export function createDeduplicationKey(input: AlarmFeedMessageInput) {
   return createHash("sha256")
@@ -51,7 +53,7 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
 
   const deduplicationKey = createDeduplicationKey({ ...input, senderNumber, rawMessage });
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const duplicate = await tx.$queryRaw<Array<{ id: string; alarmId: string; sequenceNumber: number }>>(
       Prisma.sql`SELECT "id", "alarmId", "sequenceNumber"
                  FROM "AlarmMessage"
@@ -105,6 +107,53 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
 
     return { created: true, id: messageId, alarmId, sequenceNumber };
   });
+
+  if (result.created) {
+    await notifyActiveFirefighters({
+      alarmId: result.alarmId,
+      messageId: result.id,
+      sequenceNumber: result.sequenceNumber,
+      rawMessage
+    });
+  }
+
+  return result;
+}
+
+async function notifyActiveFirefighters(input: {
+  alarmId: string;
+  messageId: string;
+  sequenceNumber: number;
+  rawMessage: string;
+}) {
+  const firefighters = await prisma.user.findMany({
+    where: { role: "BRANDFIGHTER", isActive: true },
+    select: { id: true }
+  });
+
+  const title = input.sequenceNumber === 1 ? "🚨 Ny alarm" : `🚨 Sending ${input.sequenceNumber}`;
+  const body = truncateForPush(input.rawMessage, 220);
+
+  for (const firefighter of firefighters) {
+    try {
+      await createNotification(prisma, {
+        recipientUserId: firefighter.id,
+        type: ALARM_NOTIFICATION_TYPE,
+        title,
+        body,
+        link: "/brandmand/alarmer",
+        uniqueKey: `alarm:${input.alarmId}:message:${input.messageId}:user:${firefighter.id}`,
+        publishNow: true
+      });
+    } catch (error) {
+      console.error("ALARM_NOTIFICATION_FAILED", {
+        alarmId: input.alarmId,
+        messageId: input.messageId,
+        recipientUserId: firefighter.id,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
 }
 
 export async function listRecentAlarms(limit = 25): Promise<AlarmFeedAlarm[]> {
@@ -133,6 +182,11 @@ export async function listRecentAlarms(limit = 25): Promise<AlarmFeedAlarm[]> {
   }
 
   return alarms.map((alarm) => ({ ...alarm, messages: messagesByAlarm.get(alarm.id) ?? [] }));
+}
+
+function truncateForPush(value: string, maxLength: number) {
+  const compact = value.replace(/\s+/g, " ").trim();
+  return compact.length <= maxLength ? compact : `${compact.slice(0, maxLength - 1)}…`;
 }
 
 function normalizePhoneNumber(value: string) {
