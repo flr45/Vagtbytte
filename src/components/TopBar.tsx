@@ -28,6 +28,12 @@ export async function TopBar({ title }: { title: string }) {
               Forside
             </a>
           ) : null}
+          {user?.role === "BRANDFIGHTER" ? (
+            <a className="app-button-secondary min-h-11 px-3 text-sm" href="/brandmand/alarmer">
+              <span aria-hidden="true">🚨</span>
+              Alarmfeed
+            </a>
+          ) : null}
           {user?.role !== "ADMIN" ? (
             <a
               className="app-button-secondary relative min-h-11 min-w-11 px-3 text-sm"

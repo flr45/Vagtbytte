@@ -362,6 +362,9 @@ export function isPermanentPushError(error: unknown) {
 }
 
 export function pushUrgencyForNotificationType(type: NotificationType): "normal" | "high" {
+  if (type === "ALARM_MESSAGE") {
+    return "high";
+  }
   const highUrgencyTypes: NotificationType[] = [
     "TRANSFER_CREATED",
     "TRANSFER_RECEIVER_ACCEPTED",

@@ -1,0 +1,22 @@
+[Unit]
+Description=SBR Portal SMS Alarmfeed Worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/opt/sbr-portal
+EnvironmentFile=/etc/sbr-alarm-feed.env
+ExecStart=/usr/bin/python3 /opt/sbr-portal/scripts/alarm-sms-worker.py
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/sbr-alarm-feed
+
+[Install]
+WantedBy=multi-user.target
