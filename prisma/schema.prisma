@@ -89,6 +89,7 @@ model User {
   passwordHash           String
   isActive               Boolean            @default(true)
   mustChangePassword     Boolean            @default(false)
+  alarmStations          String[]           @default([])
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
   lastLoginAt            DateTime?
@@ -311,7 +312,7 @@ model AuditLog {
   targetUserId    String?
   shiftTransferId String?
   returnRequestId String?
-  availabilityId  String?
+  availabilityId String?
   description     String
   createdAt       DateTime  @default(now())
   actor           User?     @relation("ActorAuditLogs", fields: [actorUserId], references: [id], onDelete: SetNull)
