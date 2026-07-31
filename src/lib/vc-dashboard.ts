@@ -238,6 +238,7 @@ export function notificationTypeLabel(type: NotificationType) {
     RETURN_EXECUTION_REMINDER: "Tilbagelevering skal bekræftes",
     RETURN_COMPLETED: "Tilbagelevering gennemført",
     AVAILABILITY_ASSIGNED: "Vagt tildelt",
+    ALARM_MESSAGE: "Alarmmelding",
     TEST: "Testnotifikation"
   };
 
