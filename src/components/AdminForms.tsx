@@ -8,6 +8,7 @@ import {
   updateVcAction
 } from "@/lib/actions";
 import { ActionMessage } from "./ActionMessage";
+import { AlarmStationSelector } from "./AlarmStationSelector";
 import { Checkbox, Field } from "./Field";
 import { SubmitButton } from "./SubmitButton";
 
@@ -17,6 +18,7 @@ type UserListItem = {
   employeeNumber: string | null;
   loginIdentifier: string;
   isActive: boolean;
+  alarmStations: string[];
 };
 
 export function CreateFirefighterForm() {
@@ -87,6 +89,9 @@ function FirefighterEditForm({ user }: { user: UserListItem }) {
         <ActionMessage message={editState.message} ok={editState.ok} />
         <SubmitButton>Gem brandmand</SubmitButton>
       </form>
+      <div className="mt-5 border-t border-brand-line pt-4">
+        <AlarmStationSelector userId={user.id} initialStations={user.alarmStations} />
+      </div>
       <form action={resetAction} className="mt-5 grid gap-4 border-t border-brand-line pt-4">
         <input name="userId" type="hidden" value={user.id} />
         <Field
