@@ -25,6 +25,7 @@ export default async function AdminPage() {
         employeeNumber: true,
         loginIdentifier: true,
         isActive: true,
+        alarmStations: true,
         updatedAt: true
       }
     }),
@@ -78,9 +79,7 @@ export default async function AdminPage() {
                     <td className="py-3 pr-4">{user.employeeNumber ?? "-"}</td>
                     <td className="py-3 pr-4">{roleLabel(user.role)}</td>
                     <td className="py-3 pr-4">{user.isActive ? "Aktiv" : "Deaktiveret"}</td>
-                    <td className="py-3 pr-4">
-                      {formatDateTime(user.updatedAt)}
-                    </td>
+                    <td className="py-3 pr-4">{formatDateTime(user.updatedAt)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -106,9 +105,7 @@ export default async function AdminPage() {
                     <article key={log.id} className="border-b border-zinc-100 pb-3">
                       <p className="text-sm font-bold">{log.action}</p>
                       <p className="mt-1 text-sm text-zinc-700">{log.description}</p>
-                      <p className="mt-1 text-xs text-zinc-500">
-                        {formatDateTime(log.createdAt)}
-                      </p>
+                      <p className="mt-1 text-xs text-zinc-500">{formatDateTime(log.createdAt)}</p>
                     </article>
                   ))
                 )}
