@@ -23,12 +23,14 @@ export type AlarmFeedAlarm = {
   id: string;
   status: "ACTIVE" | "CLOSED";
   senderNumber: string;
+  stationCode: string | null;
   openedAt: Date;
   messages: AlarmFeedMessage[];
 };
 
 const FOLLOW_UP_WINDOW_MS = 30 * 60 * 1000;
 const ALARM_NOTIFICATION_TYPE = "ALARM_MESSAGE" as NotificationType;
+const STATION_CODES = new Set(["A", "S", "K", "L", "R"]);
 
 export function createDeduplicationKey(input: AlarmFeedMessageInput) {
   return createHash("sha256")
@@ -43,6 +45,12 @@ export function createDeduplicationKey(input: AlarmFeedMessageInput) {
     .digest("hex");
 }
 
+export function detectStationCode(rawMessage: string) {
+  const match = rawMessage.match(/\(([ASKLR])\)/i);
+  const code = match?.[1]?.toUpperCase() ?? null;
+  return code && STATION_CODES.has(code) ? code : null;
+}
+
 export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
   const senderNumber = normalizePhoneNumber(input.senderNumber);
   const rawMessage = input.rawMessage.trim();
@@ -52,6 +60,7 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
   }
 
   const deduplicationKey = createDeduplicationKey({ ...input, senderNumber, rawMessage });
+  const detectedStationCode = detectStationCode(rawMessage);
 
   const result = await prisma.$transaction(async (tx) => {
     const duplicate = await tx.$queryRaw<Array<{ id: string; alarmId: string; sequenceNumber: number }>>(
@@ -62,12 +71,12 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
     );
 
     if (duplicate[0]) {
-      return { created: false, ...duplicate[0] };
+      return { created: false, ...duplicate[0], stationCode: null as string | null };
     }
 
     const windowStart = new Date(input.receivedAt.getTime() - FOLLOW_UP_WINDOW_MS);
-    const activeAlarm = await tx.$queryRaw<Array<{ id: string }>>(
-      Prisma.sql`SELECT "id"
+    const activeAlarm = await tx.$queryRaw<Array<{ id: string; stationCode: string | null }>>(
+      Prisma.sql`SELECT "id", "stationCode"
                  FROM "Alarm"
                  WHERE "status" = 'ACTIVE'::"AlarmStatus"
                    AND "senderNumber" = ${senderNumber}
@@ -78,12 +87,19 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
     );
 
     const alarmId = activeAlarm[0]?.id ?? randomUUID();
+    const stationCode = activeAlarm[0]?.stationCode ?? detectedStationCode;
 
     if (!activeAlarm[0]) {
       await tx.$executeRaw(
         Prisma.sql`INSERT INTO "Alarm"
-          ("id", "status", "source", "senderNumber", "openedAt", "createdAt", "updatedAt")
-          VALUES (${alarmId}, 'ACTIVE'::"AlarmStatus", 'SMS', ${senderNumber}, ${input.receivedAt}, NOW(), NOW())`
+          ("id", "status", "source", "senderNumber", "stationCode", "openedAt", "createdAt", "updatedAt")
+          VALUES (${alarmId}, 'ACTIVE'::"AlarmStatus", 'SMS', ${senderNumber}, ${stationCode}, ${input.receivedAt}, NOW(), NOW())`
+      );
+    } else if (!activeAlarm[0].stationCode && detectedStationCode) {
+      await tx.$executeRaw(
+        Prisma.sql`UPDATE "Alarm"
+                   SET "stationCode" = ${detectedStationCode}, "updatedAt" = NOW()
+                   WHERE "id" = ${alarmId}`
       );
     }
 
@@ -105,33 +121,47 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
       Prisma.sql`UPDATE "Alarm" SET "updatedAt" = NOW() WHERE "id" = ${alarmId}`
     );
 
-    return { created: true, id: messageId, alarmId, sequenceNumber };
+    return {
+      created: true,
+      id: messageId,
+      alarmId,
+      sequenceNumber,
+      stationCode: stationCode ?? detectedStationCode
+    };
   });
 
-  if (result.created) {
-    await notifyActiveFirefighters({
+  if (result.created && result.stationCode) {
+    await notifyStationFirefighters({
       alarmId: result.alarmId,
       messageId: result.id,
       sequenceNumber: result.sequenceNumber,
-      rawMessage
+      rawMessage,
+      stationCode: result.stationCode
     });
   }
 
   return result;
 }
 
-async function notifyActiveFirefighters(input: {
+async function notifyStationFirefighters(input: {
   alarmId: string;
   messageId: string;
   sequenceNumber: number;
   rawMessage: string;
+  stationCode: string;
 }) {
   const firefighters = await prisma.user.findMany({
-    where: { role: "BRANDFIGHTER", isActive: true },
+    where: {
+      role: "BRANDFIGHTER",
+      isActive: true,
+      alarmStations: { has: input.stationCode }
+    },
     select: { id: true }
   });
 
-  const title = input.sequenceNumber === 1 ? "🚨 Ny alarm" : `🚨 Sending ${input.sequenceNumber}`;
+  const title = input.sequenceNumber === 1
+    ? `🚨 Ny alarm (${input.stationCode})`
+    : `🚨 Sending ${input.sequenceNumber} (${input.stationCode})`;
   const body = truncateForPush(input.rawMessage, 220);
 
   for (const firefighter of firefighters) {
@@ -149,6 +179,7 @@ async function notifyActiveFirefighters(input: {
       console.error("ALARM_NOTIFICATION_FAILED", {
         alarmId: input.alarmId,
         messageId: input.messageId,
+        stationCode: input.stationCode,
         recipientUserId: firefighter.id,
         error: error instanceof Error ? error.message : String(error)
       });
@@ -158,7 +189,7 @@ async function notifyActiveFirefighters(input: {
 
 export async function listRecentAlarms(limit = 25): Promise<AlarmFeedAlarm[]> {
   const alarms = await prisma.$queryRaw<Array<Omit<AlarmFeedAlarm, "messages">>>(
-    Prisma.sql`SELECT "id", "status", "senderNumber", "openedAt"
+    Prisma.sql`SELECT "id", "status", "senderNumber", "stationCode", "openedAt"
                FROM "Alarm"
                ORDER BY "openedAt" DESC
                LIMIT ${limit}`
