@@ -2,11 +2,15 @@ ALTER TYPE "NotificationType" ADD VALUE IF NOT EXISTS 'ALARM_MESSAGE';
 
 CREATE TYPE "AlarmStatus" AS ENUM ('ACTIVE', 'CLOSED');
 
+ALTER TABLE "User"
+ADD COLUMN "alarmStations" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
+
 CREATE TABLE "Alarm" (
     "id" TEXT NOT NULL,
     "status" "AlarmStatus" NOT NULL DEFAULT 'ACTIVE',
     "source" TEXT NOT NULL DEFAULT 'SMS',
     "senderNumber" TEXT NOT NULL,
+    "stationCode" TEXT,
     "openedAt" TIMESTAMP(3) NOT NULL,
     "closedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -32,6 +36,7 @@ CREATE TABLE "AlarmMessage" (
 CREATE UNIQUE INDEX "AlarmMessage_deduplicationKey_key" ON "AlarmMessage"("deduplicationKey");
 CREATE UNIQUE INDEX "AlarmMessage_alarmId_sequenceNumber_key" ON "AlarmMessage"("alarmId", "sequenceNumber");
 CREATE INDEX "Alarm_status_openedAt_idx" ON "Alarm"("status", "openedAt");
+CREATE INDEX "Alarm_stationCode_openedAt_idx" ON "Alarm"("stationCode", "openedAt");
 CREATE INDEX "AlarmMessage_alarmId_receivedAt_idx" ON "AlarmMessage"("alarmId", "receivedAt");
 CREATE INDEX "AlarmMessage_senderNumber_receivedAt_idx" ON "AlarmMessage"("senderNumber", "receivedAt");
 
