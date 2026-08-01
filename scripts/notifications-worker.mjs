@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { publishDueNotifications } from "./notification-worker-core.mjs";
+import { monitorSmsGateway } from "./system-monitor.mjs";
 
 const prisma = new PrismaClient();
 
@@ -22,20 +23,35 @@ const heartbeatIntervalMs = positiveInterval(
   300000,
   "NOTIFICATIONS_WORKER_HEARTBEAT_MS"
 );
+const smsGatewayMonitorIntervalMs = positiveInterval(
+  process.env.SMS_GATEWAY_MONITOR_INTERVAL_MS,
+  60000,
+  "SMS_GATEWAY_MONITOR_INTERVAL_MS"
+);
 
 let timer = null;
 let activeRun = null;
 let stopping = false;
 let lastHeartbeatAt = 0;
+let lastSmsGatewayCheckAt = 0;
 
 console.log(
-  `Notifikations-worker startet. Interval: ${intervalMs} ms. Heartbeat: ${heartbeatIntervalMs} ms.`
+  `Notifikations-worker startet. Interval: ${intervalMs} ms. Heartbeat: ${heartbeatIntervalMs} ms. SMS-overvågning: ${smsGatewayMonitorIntervalMs} ms.`
 );
 
 async function tick() {
   try {
-    const result = await publishDueNotifications(prisma);
     const now = Date.now();
+
+    if (now - lastSmsGatewayCheckAt >= smsGatewayMonitorIntervalMs) {
+      const monitorResult = await monitorSmsGateway(prisma, new Date(now));
+      lastSmsGatewayCheckAt = now;
+      if (monitorResult.changed) {
+        console.log(`SMS_GATEWAY_STATE_CHANGED: ${monitorResult.state}`);
+      }
+    }
+
+    const result = await publishDueNotifications(prisma);
 
     if (now - lastHeartbeatAt >= heartbeatIntervalMs) {
       await prisma.auditLog.create({

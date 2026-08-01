@@ -2,8 +2,11 @@ import { UserRole } from "@prisma/client";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { listRecentAlarms } from "@/lib/alarm-feed";
+import {
+  loadAlarmStatisticsRows,
+  summarizeAlarmStatistics
+} from "@/lib/alarm-statistics";
 import { prisma } from "@/lib/prisma";
-import { STATIONS, stationLabel } from "@/lib/stations";
 import { AdminAlarmManagement } from "@/components/AdminAlarmManagement";
 import { TopBar } from "@/components/TopBar";
 import { CreateFirefighterForm, FirefighterEditForms, VcForm } from "@/components/AdminForms";
@@ -12,61 +15,49 @@ import { formatDateTime } from "@/components/TransferSummary";
 export default async function AdminPage() {
   await requireRole(UserRole.ADMIN);
 
-  const now = new Date();
-  const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-  const [
-    users,
-    vc,
-    auditLogs,
-    totalAlarms,
-    alarmsLastDay,
-    alarmsLastWeek,
-    alarmsLastMonth,
-    messageAggregate,
-    stationStatistics,
-    recentAlarms
-  ] = await Promise.all([
-    prisma.user.findMany({
-      where: {
-        role: UserRole.BRANDFIGHTER,
-        loginIdentifier: { not: "__deleted_user__" }
-      },
-      orderBy: [{ stationCode: "asc" }, { name: "asc" }],
-      select: {
-        id: true,
-        name: true,
-        employeeNumber: true,
-        loginIdentifier: true,
-        isActive: true,
-        stationCode: true,
-        alarmStations: true,
-        hasAdminAccess: true
-      }
-    }),
-    prisma.user.findFirst({
-      where: { role: UserRole.VC },
-      select: { loginIdentifier: true, isActive: true }
-    }),
-    prisma.auditLog.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 8,
-      select: { id: true, action: true, description: true, createdAt: true }
-    }),
-    prisma.alarmStatistic.count(),
-    prisma.alarmStatistic.count({ where: { openedAt: { gte: oneDayAgo } } }),
-    prisma.alarmStatistic.count({ where: { openedAt: { gte: sevenDaysAgo } } }),
-    prisma.alarmStatistic.count({ where: { openedAt: { gte: thirtyDaysAgo } } }),
-    prisma.alarmStatistic.aggregate({ _sum: { messageCount: true } }),
-    prisma.alarmStatistic.groupBy({
-      by: ["stationCode"],
-      _count: { _all: true },
-      orderBy: { _count: { stationCode: "desc" } }
-    }),
-    listRecentAlarms(5)
-  ]);
+  const [users, vc, auditLogs, alarmStatistics, recentAlarms, latestSystemMonitorEvent] =
+    await Promise.all([
+      prisma.user.findMany({
+        where: {
+          role: UserRole.BRANDFIGHTER,
+          loginIdentifier: { not: "__deleted_user__" }
+        },
+        orderBy: [{ stationCode: "asc" }, { name: "asc" }],
+        select: {
+          id: true,
+          name: true,
+          employeeNumber: true,
+          loginIdentifier: true,
+          isActive: true,
+          stationCode: true,
+          alarmStations: true,
+          hasAdminAccess: true
+        }
+      }),
+      prisma.user.findFirst({
+        where: { role: UserRole.VC },
+        select: { loginIdentifier: true, isActive: true }
+      }),
+      prisma.auditLog.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 8,
+        select: { id: true, action: true, description: true, createdAt: true }
+      }),
+      loadAlarmStatisticsRows(),
+      listRecentAlarms(5),
+      prisma.auditLog.findFirst({
+        where: {
+          action: {
+            in: ["SMS_GATEWAY_ONLINE", "SMS_GATEWAY_DEGRADED", "SMS_GATEWAY_OFFLINE"]
+          }
+        },
+        orderBy: { createdAt: "desc" },
+        select: { action: true, description: true, createdAt: true }
+      })
+    ]);
+  const summary = summarizeAlarmStatistics(alarmStatistics.rows);
+  const smsSystemHasProblem =
+    latestSystemMonitorEvent && latestSystemMonitorEvent.action !== "SMS_GATEWAY_ONLINE";
 
   return (
     <>
@@ -77,45 +68,64 @@ export default async function AdminPage() {
           <p className="mt-2 text-base text-zinc-700">
             Administrer brugere, stationer, alarmer og vagtcentralens fælles login.
           </p>
-          <Link
-            className="focus-ring mt-4 inline-flex min-h-12 items-center justify-center rounded-md border border-zinc-300 px-5 font-semibold text-zinc-900"
-            href="/admin/systemstatus"
-          >
-            Se systemstatus
-          </Link>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link className="app-button-secondary" href="/admin/systemstatus">
+              Se systemstatus
+            </Link>
+            <Link className="app-button-secondary" href="/admin/alarmstatistik">
+              Se fuld alarmstatistik
+            </Link>
+          </div>
         </section>
 
+        {smsSystemHasProblem ? (
+          <section className="rounded-lg border border-red-300 bg-red-50 p-4 shadow-sm" role="alert">
+            <p className="text-lg font-black text-red-950">SMS-systemet kræver opmærksomhed</p>
+            <p className="mt-1 break-words text-sm font-semibold text-red-900">
+              {latestSystemMonitorEvent.description}
+            </p>
+            <p className="mt-2 text-xs font-semibold text-red-700">
+              Registreret {formatDateTime(latestSystemMonitorEvent.createdAt)}
+            </p>
+            <Link className="app-button-danger mt-4" href="/admin/systemstatus">
+              Åbn systemstatus
+            </Link>
+          </section>
+        ) : null}
+
         <section className="rounded-lg border border-brand-line bg-white p-4">
-          <h2 className="text-xl font-bold">Alarmstatistik</h2>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-xl font-bold">Alarmstatistik</h2>
+              <p className="mt-1 text-sm text-zinc-600">
+                Senest nulstillet: {alarmStatistics.resetAt ? formatDateTime(alarmStatistics.resetAt) : "Aldrig"}
+              </p>
+            </div>
+            <Link className="app-button-secondary" href="/admin/alarmstatistik">
+              Detaljer, eksport og nulstilling
+            </Link>
+          </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <StatCard label="Alle alarmer" value={totalAlarms} />
-            <StatCard label="Seneste døgn" value={alarmsLastDay} />
-            <StatCard label="Seneste 7 dage" value={alarmsLastWeek} />
-            <StatCard label="Seneste 30 dage" value={alarmsLastMonth} />
-            <StatCard label="Sendinger i alt" value={messageAggregate._sum.messageCount ?? 0} />
+            <StatCard label="Alarmer" value={summary.totalAlarms} />
+            <StatCard label="Sendinger" value={summary.totalMessages} />
+            <StatCard label="ISL" value={summary.islAlarms} />
+            <StatCard label="Ukendt station" value={summary.unknownAlarms} />
+            <StatCard
+              label="Gns. sendinger"
+              value={Number(summary.averageMessagesPerAlarm.toFixed(1))}
+            />
           </div>
           <details className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50">
             <summary className="focus-ring cursor-pointer rounded-lg px-4 py-3 font-bold">
               Fordeling på stationer
             </summary>
             <div className="grid gap-2 border-t border-zinc-200 p-4 sm:grid-cols-2 lg:grid-cols-3">
-              {STATIONS.map((station) => {
-                const row = stationStatistics.find((item) => item.stationCode === station.code);
-                return (
-                  <div className="rounded-lg bg-white p-3" key={station.code}>
-                    <p className="font-bold">{station.label}</p>
-                    <p className="text-2xl font-black">{row?._count._all ?? 0}</p>
-                  </div>
-                );
-              })}
-              {stationStatistics
-                .filter((item) => !STATIONS.some((station) => station.code === item.stationCode))
-                .map((item) => (
-                  <div className="rounded-lg bg-white p-3" key={item.stationCode ?? "unknown"}>
-                    <p className="font-bold">{stationLabel(item.stationCode)}</p>
-                    <p className="text-2xl font-black">{item._count._all}</p>
-                  </div>
-                ))}
+              {summary.byStation.map((station) => (
+                <div className="rounded-lg bg-white p-3" key={station.key}>
+                  <p className="font-bold">{station.label}</p>
+                  <p className="text-2xl font-black">{station.count}</p>
+                </div>
+              ))}
             </div>
           </details>
         </section>
@@ -186,7 +196,9 @@ function StatCard({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-lg border border-zinc-100 bg-zinc-50 p-4">
       <p className="text-sm font-semibold text-zinc-600">{label}</p>
-      <p className="mt-1 text-3xl font-black text-zinc-950">{value}</p>
+      <p className="mt-1 text-3xl font-black text-zinc-950">
+        {value.toLocaleString("da-DK", { maximumFractionDigits: 1 })}
+      </p>
     </div>
   );
 }
