@@ -1,6 +1,8 @@
 import { PrismaClient } from "@prisma/client";
 import { publishDueNotifications } from "./notification-worker-core.mjs";
 import { monitorSmsGateway } from "./system-monitor.mjs";
+import { runAutomaticBackupIfDue } from "./backup-core.mjs";
+import { processDueEmailReports } from "./email-report-core.mjs";
 
 const prisma = new PrismaClient();
 
@@ -28,15 +30,27 @@ const smsGatewayMonitorIntervalMs = positiveInterval(
   60000,
   "SMS_GATEWAY_MONITOR_INTERVAL_MS"
 );
+const backupMonitorIntervalMs = positiveInterval(
+  process.env.BACKUP_MONITOR_INTERVAL_MS,
+  300000,
+  "BACKUP_MONITOR_INTERVAL_MS"
+);
+const emailReportMonitorIntervalMs = positiveInterval(
+  process.env.EMAIL_REPORT_MONITOR_INTERVAL_MS,
+  60000,
+  "EMAIL_REPORT_MONITOR_INTERVAL_MS"
+);
 
 let timer = null;
 let activeRun = null;
 let stopping = false;
 let lastHeartbeatAt = 0;
 let lastSmsGatewayCheckAt = 0;
+let lastBackupCheckAt = 0;
+let lastEmailReportCheckAt = 0;
 
 console.log(
-  `Notifikations-worker startet. Interval: ${intervalMs} ms. Heartbeat: ${heartbeatIntervalMs} ms. SMS-overvågning: ${smsGatewayMonitorIntervalMs} ms.`
+  `Notifikations-worker startet. Interval: ${intervalMs} ms. Heartbeat: ${heartbeatIntervalMs} ms. SMS-overvågning: ${smsGatewayMonitorIntervalMs} ms. Backupkontrol: ${backupMonitorIntervalMs} ms. Mailrapport: ${emailReportMonitorIntervalMs} ms.`
 );
 
 async function tick() {
@@ -48,6 +62,24 @@ async function tick() {
       lastSmsGatewayCheckAt = now;
       if (monitorResult.changed) {
         console.log(`SMS_GATEWAY_STATE_CHANGED: ${monitorResult.state}`);
+      }
+    }
+
+    if (now - lastBackupCheckAt >= backupMonitorIntervalMs) {
+      const backupResult = await runAutomaticBackupIfDue(prisma, new Date(now));
+      lastBackupCheckAt = now;
+      if (backupResult.created) {
+        console.log(`AUTOMATIC_BACKUP_CREATED: ${backupResult.backup.fileName}`);
+      } else if (backupResult.error) {
+        console.error(`AUTOMATIC_BACKUP_FAILED: ${backupResult.error}`);
+      }
+    }
+
+    if (now - lastEmailReportCheckAt >= emailReportMonitorIntervalMs) {
+      const emailResult = await processDueEmailReports(prisma, new Date(now));
+      lastEmailReportCheckAt = now;
+      if (emailResult.sent || emailResult.failed) {
+        console.log(`EMAIL_REPORTS: sendt=${emailResult.sent}, fejl=${emailResult.failed}`);
       }
     }
 

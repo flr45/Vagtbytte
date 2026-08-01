@@ -34,6 +34,11 @@ export async function TopBar({ title }: { title: string }) {
               Alarmfeed
             </a>
           ) : null}
+          {user?.role === "VC" ? (
+            <a className="app-button-secondary min-h-11 px-3 text-sm" href="/vagtcentral/historik">
+              Historik
+            </a>
+          ) : null}
           {user?.hasAdminAccess && user.role !== "ADMIN" ? (
             <a className="app-button-secondary min-h-11 px-3 text-sm" href="/admin">
               Administration
