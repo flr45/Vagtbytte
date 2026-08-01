@@ -3,6 +3,7 @@ import { publishDueNotifications } from "./notification-worker-core.mjs";
 import { monitorSmsGateway } from "./system-monitor.mjs";
 import { runAutomaticBackupIfDue } from "./backup-core.mjs";
 import { processDueEmailReports } from "./email-report-core.mjs";
+import { runDataRetention } from "./data-retention.mjs";
 
 const prisma = new PrismaClient();
 
@@ -40,6 +41,11 @@ const emailReportMonitorIntervalMs = positiveInterval(
   60000,
   "EMAIL_REPORT_MONITOR_INTERVAL_MS"
 );
+const dataRetentionIntervalMs = positiveInterval(
+  process.env.DATA_RETENTION_INTERVAL_MS,
+  21600000,
+  "DATA_RETENTION_INTERVAL_MS"
+);
 
 let timer = null;
 let activeRun = null;
@@ -48,9 +54,10 @@ let lastHeartbeatAt = 0;
 let lastSmsGatewayCheckAt = 0;
 let lastBackupCheckAt = 0;
 let lastEmailReportCheckAt = 0;
+let lastDataRetentionAt = 0;
 
 console.log(
-  `Notifikations-worker startet. Interval: ${intervalMs} ms. Heartbeat: ${heartbeatIntervalMs} ms. SMS-overvågning: ${smsGatewayMonitorIntervalMs} ms. Backupkontrol: ${backupMonitorIntervalMs} ms. Mailrapport: ${emailReportMonitorIntervalMs} ms.`
+  `Notifikations-worker startet. Interval: ${intervalMs} ms. Heartbeat: ${heartbeatIntervalMs} ms. SMS-overvågning: ${smsGatewayMonitorIntervalMs} ms. Backupkontrol: ${backupMonitorIntervalMs} ms. Mailrapport: ${emailReportMonitorIntervalMs} ms. Dataretention: ${dataRetentionIntervalMs} ms.`
 );
 
 async function tick() {
@@ -80,6 +87,24 @@ async function tick() {
       lastEmailReportCheckAt = now;
       if (emailResult.sent || emailResult.failed) {
         console.log(`EMAIL_REPORTS: sendt=${emailResult.sent}, fejl=${emailResult.failed}`);
+      }
+    }
+
+    if (now - lastDataRetentionAt >= dataRetentionIntervalMs) {
+      const retentionResult = await runDataRetention(prisma, new Date(now));
+      lastDataRetentionAt = now;
+      if (
+        retentionResult.alarmsDeleted ||
+        retentionResult.alarmNotificationsDeleted ||
+        retentionResult.backupsDeleted ||
+        retentionResult.backupErrors?.length
+      ) {
+        console.log(
+          `DATA_RETENTION: alarmer=${retentionResult.alarmsDeleted}, ` +
+            `alarmnotifikationer=${retentionResult.alarmNotificationsDeleted}, ` +
+            `backups=${retentionResult.backupsDeleted}, ` +
+            `backupfejl=${retentionResult.backupErrors?.length ?? 0}`
+        );
       }
     }
 
