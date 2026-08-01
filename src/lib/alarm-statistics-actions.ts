@@ -12,9 +12,12 @@ export type AlarmStatisticsActionState = {
 };
 
 export async function resetAlarmStatisticsAction(
-  _state: AlarmStatisticsActionState,
-  _formData: FormData
+  state: AlarmStatisticsActionState,
+  formData: FormData
 ): Promise<AlarmStatisticsActionState> {
+  void state;
+  void formData;
+
   const admin = await requireRole(UserRole.ADMIN);
   const resetAt = new Date();
 
