@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "crypto";
 import { NotificationType, Prisma } from "@prisma/client";
 import { createNotification } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
+import { isStationCode } from "@/lib/stations";
 
 export type AlarmFeedMessageInput = {
   senderNumber: string;
@@ -30,7 +31,7 @@ export type AlarmFeedAlarm = {
 
 const FOLLOW_UP_WINDOW_MS = 30 * 60 * 1000;
 const ALARM_NOTIFICATION_TYPE = "ALARM_MESSAGE" as NotificationType;
-const STATION_CODES = new Set(["A", "S", "K", "L", "R"]);
+const MAX_STORED_ALARMS = 5;
 
 export function createDeduplicationKey(input: AlarmFeedMessageInput) {
   return createHash("sha256")
@@ -46,9 +47,9 @@ export function createDeduplicationKey(input: AlarmFeedMessageInput) {
 }
 
 export function detectStationCode(rawMessage: string) {
-  const match = rawMessage.match(/\(([ASKLR])\)/i);
+  const match = rawMessage.match(/\((ISL|[ASKLR])\)/i);
   const code = match?.[1]?.toUpperCase() ?? null;
-  return code && STATION_CODES.has(code) ? code : null;
+  return isStationCode(code) ? code : null;
 }
 
 export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
@@ -63,15 +64,13 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
   const detectedStationCode = detectStationCode(rawMessage);
 
   const result = await prisma.$transaction(async (tx) => {
-    const duplicate = await tx.$queryRaw<Array<{ id: string; alarmId: string; sequenceNumber: number }>>(
-      Prisma.sql`SELECT "id", "alarmId", "sequenceNumber"
-                 FROM "AlarmMessage"
-                 WHERE "deduplicationKey" = ${deduplicationKey}
-                 LIMIT 1`
-    );
+    const duplicate = await tx.alarmMessage.findUnique({
+      where: { deduplicationKey },
+      select: { id: true, alarmId: true, sequenceNumber: true }
+    });
 
-    if (duplicate[0]) {
-      return { created: false, ...duplicate[0], stationCode: null as string | null };
+    if (duplicate) {
+      return { created: false, ...duplicate, stationCode: null as string | null };
     }
 
     const windowStart = new Date(input.receivedAt.getTime() - FOLLOW_UP_WINDOW_MS);
@@ -90,36 +89,72 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
     const stationCode = activeAlarm[0]?.stationCode ?? detectedStationCode;
 
     if (!activeAlarm[0]) {
-      await tx.$executeRaw(
-        Prisma.sql`INSERT INTO "Alarm"
-          ("id", "status", "source", "senderNumber", "stationCode", "openedAt", "createdAt", "updatedAt")
-          VALUES (${alarmId}, 'ACTIVE'::"AlarmStatus", 'SMS', ${senderNumber}, ${stationCode}, ${input.receivedAt}, NOW(), NOW())`
-      );
+      await tx.alarm.create({
+        data: {
+          id: alarmId,
+          senderNumber,
+          stationCode,
+          openedAt: input.receivedAt
+        }
+      });
     } else if (!activeAlarm[0].stationCode && detectedStationCode) {
-      await tx.$executeRaw(
-        Prisma.sql`UPDATE "Alarm"
-                   SET "stationCode" = ${detectedStationCode}, "updatedAt" = NOW()
-                   WHERE "id" = ${alarmId}`
-      );
+      await tx.alarm.update({
+        where: { id: alarmId },
+        data: { stationCode: detectedStationCode }
+      });
     }
 
-    const sequenceRows = await tx.$queryRaw<Array<{ next: number }>>(
-      Prisma.sql`SELECT COALESCE(MAX("sequenceNumber"), 0) + 1 AS "next"
-                 FROM "AlarmMessage"
-                 WHERE "alarmId" = ${alarmId}`
-    );
-    const sequenceNumber = Number(sequenceRows[0]?.next ?? 1);
+    const highestSequence = await tx.alarmMessage.aggregate({
+      where: { alarmId },
+      _max: { sequenceNumber: true }
+    });
+    const sequenceNumber = (highestSequence._max.sequenceNumber ?? 0) + 1;
     const messageId = randomUUID();
 
-    await tx.$executeRaw(
-      Prisma.sql`INSERT INTO "AlarmMessage"
-        ("id", "alarmId", "sequenceNumber", "senderNumber", "rawMessage", "receivedAt", "sourceMessageId", "deduplicationKey", "createdAt")
-        VALUES (${messageId}, ${alarmId}, ${sequenceNumber}, ${senderNumber}, ${rawMessage}, ${input.receivedAt}, ${input.sourceMessageId ?? null}, ${deduplicationKey}, NOW())`
-    );
+    await tx.alarmMessage.create({
+      data: {
+        id: messageId,
+        alarmId,
+        sequenceNumber,
+        senderNumber,
+        rawMessage,
+        receivedAt: input.receivedAt,
+        sourceMessageId: input.sourceMessageId ?? null,
+        deduplicationKey
+      }
+    });
 
-    await tx.$executeRaw(
-      Prisma.sql`UPDATE "Alarm" SET "updatedAt" = NOW() WHERE "id" = ${alarmId}`
-    );
+    await tx.alarm.update({
+      where: { id: alarmId },
+      data: { updatedAt: new Date() }
+    });
+
+    await tx.alarmStatistic.upsert({
+      where: { alarmId },
+      update: {
+        stationCode: stationCode ?? detectedStationCode,
+        lastMessageAt: input.receivedAt,
+        messageCount: { increment: 1 }
+      },
+      create: {
+        alarmId,
+        stationCode: stationCode ?? detectedStationCode,
+        openedAt: input.receivedAt,
+        lastMessageAt: input.receivedAt,
+        messageCount: 1
+      }
+    });
+
+    const obsoleteAlarms = await tx.alarm.findMany({
+      orderBy: [{ openedAt: "desc" }, { createdAt: "desc" }],
+      skip: MAX_STORED_ALARMS,
+      select: { id: true }
+    });
+    if (obsoleteAlarms.length > 0) {
+      await tx.alarm.deleteMany({
+        where: { id: { in: obsoleteAlarms.map((alarm) => alarm.id) } }
+      });
+    }
 
     return {
       created: true,
@@ -159,9 +194,10 @@ async function notifyStationFirefighters(input: {
     select: { id: true }
   });
 
-  const title = input.sequenceNumber === 1
-    ? `🚨 Ny alarm (${input.stationCode})`
-    : `🚨 Sending ${input.sequenceNumber} (${input.stationCode})`;
+  const title =
+    input.sequenceNumber === 1
+      ? `🚨 Ny alarm (${input.stationCode})`
+      : `🚨 Sending ${input.sequenceNumber} (${input.stationCode})`;
   const body = truncateForPush(input.rawMessage, 220);
 
   for (const firefighter of firefighters) {
@@ -187,32 +223,33 @@ async function notifyStationFirefighters(input: {
   }
 }
 
-export async function listRecentAlarms(limit = 25): Promise<AlarmFeedAlarm[]> {
-  const alarms = await prisma.$queryRaw<Array<Omit<AlarmFeedAlarm, "messages">>>(
-    Prisma.sql`SELECT "id", "status", "senderNumber", "stationCode", "openedAt"
-               FROM "Alarm"
-               ORDER BY "openedAt" DESC
-               LIMIT ${limit}`
-  );
+export async function listRecentAlarms(limit = MAX_STORED_ALARMS): Promise<AlarmFeedAlarm[]> {
+  const alarms = await prisma.alarm.findMany({
+    orderBy: [{ openedAt: "desc" }, { createdAt: "desc" }],
+    take: Math.min(Math.max(limit, 1), MAX_STORED_ALARMS),
+    include: {
+      messages: {
+        orderBy: [{ receivedAt: "asc" }, { sequenceNumber: "asc" }],
+        select: {
+          id: true,
+          alarmId: true,
+          sequenceNumber: true,
+          senderNumber: true,
+          rawMessage: true,
+          receivedAt: true
+        }
+      }
+    }
+  });
 
-  if (alarms.length === 0) return [];
-
-  const alarmIds = alarms.map((alarm) => alarm.id);
-  const messages = await prisma.$queryRaw<AlarmFeedMessage[]>(
-    Prisma.sql`SELECT "id", "alarmId", "sequenceNumber", "senderNumber", "rawMessage", "receivedAt"
-               FROM "AlarmMessage"
-               WHERE "alarmId" IN (${Prisma.join(alarmIds)})
-               ORDER BY "receivedAt" ASC, "sequenceNumber" ASC`
-  );
-
-  const messagesByAlarm = new Map<string, AlarmFeedMessage[]>();
-  for (const message of messages) {
-    const current = messagesByAlarm.get(message.alarmId) ?? [];
-    current.push(message);
-    messagesByAlarm.set(message.alarmId, current);
-  }
-
-  return alarms.map((alarm) => ({ ...alarm, messages: messagesByAlarm.get(alarm.id) ?? [] }));
+  return alarms.map((alarm) => ({
+    id: alarm.id,
+    status: alarm.status,
+    senderNumber: alarm.senderNumber,
+    stationCode: alarm.stationCode,
+    openedAt: alarm.openedAt,
+    messages: alarm.messages
+  }));
 }
 
 function truncateForPush(value: string, maxLength: number) {
