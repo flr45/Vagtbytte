@@ -16,11 +16,11 @@ self.addEventListener("push", (event) => {
 
   const isAlarmNotification =
     data.link === "/brandmand/alarmer" || String(data.tag || "").startsWith("alarm:");
-  const title = data.title || "Vagtbytte";
+  const title = data.title || "SBR Portal";
   const options = {
     body: isAlarmNotification
-      ? "Åbn Vagtbytte for at se alarmmeldingen."
-      : data.body || "Der er en ny besked i Vagtbytte.",
+      ? "Åbn SBR Portal for at se alarmmeldingen."
+      : data.body || "Der er en ny besked i SBR Portal.",
     icon: "/icon.svg",
     badge: "/icon-192.png",
     tag: data.tag || data.notificationId || undefined,
