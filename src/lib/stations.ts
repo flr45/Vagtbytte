@@ -1,6 +1,6 @@
 export const STATIONS = [
   { code: "A", label: "Slagelse" },
-  { code: "B", label: "Station B" },
+  { code: "B", label: "Storebælt" },
   { code: "S", label: "Sorø" },
   { code: "K", label: "Korsør" },
   { code: "L", label: "Skælskør" },
