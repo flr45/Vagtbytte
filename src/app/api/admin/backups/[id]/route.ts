@@ -18,7 +18,9 @@ export async function GET(
     return NextResponse.json({ error: "Backupfilen blev ikke fundet" }, { status: 404 });
   }
 
-  if (backup.fileName !== backup.fileName.split(/[\\/]/).at(-1) || !backup.fileName.endsWith(".vagtbackup.gz")) {
+  const validExtension =
+    backup.fileName.endsWith(".vagtbackup.enc") || backup.fileName.endsWith(".vagtbackup.gz");
+  if (backup.fileName !== backup.fileName.split(/[\\/]/).at(-1) || !validExtension) {
     return NextResponse.json({ error: "Ugyldigt backupfilnavn" }, { status: 400 });
   }
 
@@ -28,7 +30,7 @@ export async function GET(
     return new NextResponse(file, {
       status: 200,
       headers: {
-        "Content-Type": "application/gzip",
+        "Content-Type": backup.fileName.endsWith(".enc") ? "application/octet-stream" : "application/gzip",
         "Content-Disposition": `attachment; filename="${backup.fileName}"`,
         "Content-Length": String(file.byteLength),
         "Cache-Control": "no-store"
