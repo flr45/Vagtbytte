@@ -47,9 +47,15 @@ export function createDeduplicationKey(input: AlarmFeedMessageInput) {
 }
 
 export function detectStationCode(rawMessage: string) {
-  const match = rawMessage.match(/\((ISL|[ASKLR])\)/i);
-  const code = match?.[1]?.toUpperCase() ?? null;
-  return isStationCode(code) ? code : null;
+  const parenthesizedMatch = rawMessage.match(/\((ISL|[ASKLR])\)/i);
+  const parenthesizedCode = parenthesizedMatch?.[1]?.toUpperCase() ?? null;
+
+  if (isStationCode(parenthesizedCode)) {
+    return parenthesizedCode;
+  }
+
+  const hasStandaloneIsl = /(^|[^A-Z0-9])ISL(?=$|[^A-Z0-9])/i.test(rawMessage);
+  return hasStandaloneIsl ? "ISL" : null;
 }
 
 export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
