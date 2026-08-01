@@ -12,6 +12,7 @@ export type AuthUser = {
   passwordHash: string;
   isActive: boolean;
   mustChangePassword: boolean;
+  hasAdminAccess: boolean;
 };
 
 export type AuthRepository = {
