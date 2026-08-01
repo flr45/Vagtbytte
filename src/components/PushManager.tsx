@@ -17,11 +17,13 @@ import { ActionMessage } from "./ActionMessage";
 export function PushManager({
   publicKey,
   serverDeviceCount = 0,
-  latestDelivery
+  latestDelivery,
+  showDiagnostics = false
 }: {
   publicKey?: string;
   serverDeviceCount?: number;
   latestDelivery?: { status: string; at: string | null } | null;
+  showDiagnostics?: boolean;
 }) {
   const [message, setMessage] = useState<string>();
   const [ok, setOk] = useState<boolean>();
@@ -175,26 +177,28 @@ export function PushManager({
           Send testpush til denne enhed
         </button>
       </div>
-      <div className="grid gap-1 rounded-md bg-zinc-50 p-3 text-sm text-zinc-700">
-        <p>Browserpermission: {permissionLabel(permission)}</p>
-        <p>display-mode standalone: {displayModeStandalone ? "Ja" : "Nej"}</p>
-        <p>Standalone: {displayModeStandalone || navigatorStandalone ? "Ja" : "Nej"}</p>
-        <p>navigator.standalone: {navigatorStandalone ? "Ja" : "Nej"}</p>
-        <p>display-mode: {displayModeStandalone ? "standalone" : "andet"}</p>
-        <p>Manifest fundet: {manifestFound ? "Ja" : "Nej"}</p>
-        <p>Notification.permission: {permission}</p>
-        <p>Service worker: {serviceWorkerActive ? "Aktiv" : "Ikke aktiv"}</p>
-        <p>Service worker state: {serviceWorkerState}</p>
-        <p>Service worker scope: {serviceWorkerScope}</p>
-        <p>Lokal subscription endpoint: {endpoint ? "Findes" : "Findes ikke"}</p>
-        <p>Pushsubscription på denne enhed: {hasSubscription ? "Aktiv" : "Mangler"}</p>
-        <p>Serverregistrering: {serverRegistrationActive ? "Findes" : "Findes ikke"}</p>
-        <p>Registrerede enheder i alt: {serverDeviceCount}</p>
-        <p>
-          Seneste testnotifikation:{" "}
-          {latestDelivery?.at ? `${latestDelivery.status} ${latestDelivery.at}` : "Ingen registreret"}
-        </p>
-      </div>
+      {showDiagnostics ? (
+        <div className="grid gap-1 rounded-md bg-zinc-50 p-3 text-sm text-zinc-700">
+          <p>Browserpermission: {permissionLabel(permission)}</p>
+          <p>display-mode standalone: {displayModeStandalone ? "Ja" : "Nej"}</p>
+          <p>Standalone: {displayModeStandalone || navigatorStandalone ? "Ja" : "Nej"}</p>
+          <p>navigator.standalone: {navigatorStandalone ? "Ja" : "Nej"}</p>
+          <p>display-mode: {displayModeStandalone ? "standalone" : "andet"}</p>
+          <p>Manifest fundet: {manifestFound ? "Ja" : "Nej"}</p>
+          <p>Notification.permission: {permission}</p>
+          <p>Service worker: {serviceWorkerActive ? "Aktiv" : "Ikke aktiv"}</p>
+          <p>Service worker state: {serviceWorkerState}</p>
+          <p>Service worker scope: {serviceWorkerScope}</p>
+          <p>Lokal subscription endpoint: {endpoint ? "Findes" : "Findes ikke"}</p>
+          <p>Pushsubscription på denne enhed: {hasSubscription ? "Aktiv" : "Mangler"}</p>
+          <p>Serverregistrering: {serverRegistrationActive ? "Findes" : "Findes ikke"}</p>
+          <p>Registrerede enheder i alt: {serverDeviceCount}</p>
+          <p>
+            Seneste testnotifikation:{" "}
+            {latestDelivery?.at ? `${latestDelivery.status} ${latestDelivery.at}` : "Ingen registreret"}
+          </p>
+        </div>
+      ) : null}
       <ActionMessage message={message} ok={ok} />
     </section>
   );
