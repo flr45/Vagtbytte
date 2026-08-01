@@ -2,11 +2,13 @@
 
 import { useActionState } from "react";
 import {
-  acknowledgeAvailabilityAction,
-  assignAvailabilityByVcAction,
   cancelAvailabilityAction,
   createAvailabilityAction
 } from "@/lib/actions";
+import {
+  assignAvailabilityDirectlyByVcAction,
+  removeAvailabilityAssignmentByVcAction
+} from "@/lib/availability-vc-actions";
 import { ActionMessage } from "./ActionMessage";
 import { SubmitButton } from "./SubmitButton";
 
@@ -77,7 +79,7 @@ export function VcAssignAvailabilityForm({
 }: {
   availabilityId: string;
 }) {
-  const [state, action] = useActionState(assignAvailabilityByVcAction, {});
+  const [state, action] = useActionState(assignAvailabilityDirectlyByVcAction, {});
 
   return (
     <form
@@ -96,18 +98,28 @@ export function VcAssignAvailabilityForm({
   );
 }
 
-export function AcknowledgeAvailabilityForm({
+export function VcUnassignAvailabilityForm({
   availabilityId
 }: {
   availabilityId: string;
 }) {
-  const [state, action] = useActionState(acknowledgeAvailabilityAction, {});
+  const [state, action] = useActionState(removeAvailabilityAssignmentByVcAction, {});
 
   return (
-    <form action={action} className="grid gap-3">
+    <form
+      action={action}
+      className="mt-4 grid gap-2"
+      onSubmit={(event) => {
+        if (!window.confirm("Vil du fjerne denne vagttildeling igen?")) {
+          event.preventDefault();
+        }
+      }}
+    >
       <input name="availabilityId" type="hidden" value={availabilityId} />
       <ActionMessage message={state.message} ok={state.ok} />
-      <SubmitButton pendingText="Bekræfter...">Bekræft</SubmitButton>
+      <button className="app-button-danger w-full sm:w-fit" type="submit">
+        Fjern tildeling
+      </button>
     </form>
   );
 }

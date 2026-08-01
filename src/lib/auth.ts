@@ -20,10 +20,7 @@ export const prismaAuthRepository: AuthRepository = {
   async findUserByLogin(identifier) {
     return prisma.user.findFirst({
       where: {
-        OR: [
-          { loginIdentifier: identifier },
-          { employeeNumber: identifier }
-        ]
+        OR: [{ loginIdentifier: identifier }, { employeeNumber: identifier }]
       }
     });
   },
@@ -33,10 +30,7 @@ export const prismaAuthRepository: AuthRepository = {
       where: {
         wasSuccessful: false,
         createdAt: { gte: since },
-        OR: [
-          { identifier },
-          ...(ipAddress ? [{ ipAddress }] : [])
-        ]
+        OR: [{ identifier }, ...(ipAddress ? [{ ipAddress }] : [])]
       }
     });
   },
@@ -109,7 +103,10 @@ export async function requireRole(role: UserRole) {
     redirect("/skift-adgangskode");
   }
 
-  if (user.role !== role) {
+  const hasRequiredRole =
+    user.role === role || (role === UserRole.ADMIN && user.hasAdminAccess);
+
+  if (!hasRequiredRole) {
     redirect("/forbudt");
   }
 

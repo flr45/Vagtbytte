@@ -3,9 +3,10 @@ import { UserRole } from "@prisma/client";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { STATION_CODE_VALUES } from "@/lib/stations";
 
 const stationSchema = z.object({
-  stations: z.array(z.enum(["A", "S", "K", "L", "R"])).max(5)
+  stations: z.array(z.enum(STATION_CODE_VALUES)).max(STATION_CODE_VALUES.length)
 });
 
 export async function PUT(
@@ -31,11 +32,10 @@ export async function PUT(
 
   const stations = [...new Set(parsed.data.stations)];
   await prisma.$transaction(async (tx) => {
-    await tx.$executeRawUnsafe(
-      'UPDATE "User" SET "alarmStations" = $1::text[], "updatedAt" = NOW() WHERE "id" = $2',
-      stations,
-      userId
-    );
+    await tx.user.update({
+      where: { id: userId },
+      data: { alarmStations: stations }
+    });
     await tx.auditLog.create({
       data: {
         actorUserId: admin.id,

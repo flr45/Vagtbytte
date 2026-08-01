@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/auth";
 import { calculateAssignedShiftWindow } from "@/lib/availability";
 import { prisma } from "@/lib/prisma";
 import { TopBar } from "@/components/TopBar";
+import { VcAvailabilityManagement } from "@/components/VcAvailabilityManagement";
 import { VcDashboard, type VcDashboardTransfer } from "@/components/VcDashboard";
 
 export default async function VagtcentralPage() {
@@ -24,7 +25,7 @@ export default async function VagtcentralPage() {
         assignedShiftStart: currentShift.start,
         assignedShiftEnd: currentShift.end
       },
-      orderBy: [{ status: "desc" }, { assignedAt: "asc" }, { user: { name: "asc" } }],
+      orderBy: [{ assignedAt: "asc" }, { user: { name: "asc" } }],
       include: { user: true }
     }),
     prisma.availability.findMany({
@@ -82,38 +83,42 @@ export default async function VagtcentralPage() {
   return (
     <>
       <TopBar title="Vagtcentral" />
-      <VcDashboard
-        activeTransfers={activeTransfers.map(serializeTransfer)}
-        awaitingTransfers={awaitingApproval.map(serializeTransfer)}
-        availableFirefighters={availableFirefighters.map(serializeAvailability)}
-        currentAssignments={currentAssignments.map(serializeAvailability)}
-        previousAvailabilities={previousAvailabilities.map(serializeAvailability)}
-        recentlyHandled={recentlyHandled.map(serializeTransfer)}
-        returnTransfers={returnApprovals.map(serializeTransfer)}
-        serverNow={now.toISOString()}
+      <VcAvailabilityManagement
+        availableFirefighters={availableFirefighters.map(serializeManagedAvailability)}
+        currentAssignments={currentAssignments.map(serializeManagedAvailability)}
+        previousAvailabilities={previousAvailabilities.map(serializeManagedAvailability)}
       />
+      <div className="vc-dashboard-with-managed-availability">
+        <VcDashboard
+          activeTransfers={activeTransfers.map(serializeTransfer)}
+          awaitingTransfers={awaitingApproval.map(serializeTransfer)}
+          availableFirefighters={[]}
+          currentAssignments={[]}
+          previousAvailabilities={[]}
+          recentlyHandled={recentlyHandled.map(serializeTransfer)}
+          returnTransfers={returnApprovals.map(serializeTransfer)}
+          serverNow={now.toISOString()}
+        />
+      </div>
     </>
   );
 }
 
-function serializeAvailability(
+function serializeManagedAvailability(
   availability: Awaited<ReturnType<typeof prisma.availability.findMany>>[number] & {
-    user: { name: string };
+    user: { name: string; employeeNumber: string | null };
     assignedByUser?: { name: string } | null;
   }
 ) {
   return {
     id: availability.id,
     userName: availability.user.name,
+    userEmployeeNumber: availability.user.employeeNumber,
     availableFrom: availability.availableFrom.toISOString(),
     availableUntil: availability.availableUntil.toISOString(),
     status: availability.status,
     assignedAt: availability.assignedAt?.toISOString() ?? null,
-    assignedShiftStart: availability.assignedShiftStart?.toISOString() ?? null,
-    assignedShiftEnd: availability.assignedShiftEnd?.toISOString() ?? null,
-    acknowledgedAt: availability.acknowledgedAt?.toISOString() ?? null,
-    cancelledAt: availability.cancelledAt?.toISOString() ?? null,
-    expiredAt: availability.expiredAt?.toISOString() ?? null
+    acknowledgedAt: availability.acknowledgedAt?.toISOString() ?? null
   };
 }
 

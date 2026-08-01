@@ -104,7 +104,7 @@ export function availabilityStatusLabel(status: AvailabilityStatus) {
   const labels: Record<AvailabilityStatus, string> = {
     AVAILABLE: "Til rådighed",
     ASSIGNED: "Tildelt",
-    ACKNOWLEDGED: "Tildeling bekræftet",
+    ACKNOWLEDGED: "Tildelt",
     CANCELLED: "Annulleret",
     EXPIRED: "Udløbet"
   };

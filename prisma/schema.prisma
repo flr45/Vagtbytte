@@ -80,6 +80,11 @@ enum AvailabilityStatus {
   EXPIRED
 }
 
+enum AlarmStatus {
+  ACTIVE
+  CLOSED
+}
+
 model User {
   id                     String             @id @default(cuid())
   name                   String
@@ -89,7 +94,9 @@ model User {
   passwordHash           String
   isActive               Boolean            @default(true)
   mustChangePassword     Boolean            @default(false)
+  stationCode            String?
   alarmStations          String[]           @default([])
+  hasAdminAccess         Boolean            @default(false)
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
   lastLoginAt            DateTime?
@@ -107,6 +114,8 @@ model User {
 
   @@index([role])
   @@index([isActive])
+  @@index([stationCode])
+  @@index([hasAdminAccess])
 }
 
 model Availability {
@@ -291,6 +300,53 @@ model PushDelivery {
   @@index([status])
 }
 
+model Alarm {
+  id           String         @id
+  status       AlarmStatus    @default(ACTIVE)
+  source       String         @default("SMS")
+  senderNumber String
+  stationCode  String?
+  openedAt     DateTime
+  closedAt     DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  messages     AlarmMessage[]
+
+  @@index([status, openedAt])
+  @@index([stationCode, openedAt])
+}
+
+model AlarmMessage {
+  id               String   @id
+  alarmId          String
+  sequenceNumber   Int
+  senderNumber     String
+  rawMessage       String
+  receivedAt       DateTime
+  sourceMessageId  String?
+  deduplicationKey String   @unique
+  createdAt        DateTime @default(now())
+  alarm            Alarm    @relation(fields: [alarmId], references: [id], onDelete: Cascade)
+
+  @@unique([alarmId, sequenceNumber])
+  @@index([alarmId, receivedAt])
+  @@index([senderNumber, receivedAt])
+}
+
+model AlarmStatistic {
+  id            String   @id @default(cuid())
+  alarmId       String   @unique
+  stationCode   String?
+  openedAt      DateTime
+  lastMessageAt DateTime
+  messageCount  Int      @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([openedAt])
+  @@index([stationCode, openedAt])
+}
+
 model Session {
   id         String   @id @default(cuid())
   userId     String
@@ -312,7 +368,7 @@ model AuditLog {
   targetUserId    String?
   shiftTransferId String?
   returnRequestId String?
-  availabilityId String?
+  availabilityId  String?
   description     String
   createdAt       DateTime  @default(now())
   actor           User?     @relation("ActorAuditLogs", fields: [actorUserId], references: [id], onDelete: SetNull)
