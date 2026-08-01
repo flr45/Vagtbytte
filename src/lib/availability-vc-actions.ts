@@ -111,13 +111,16 @@ export async function removeAvailabilityAssignmentByVcAction(
     include: { user: true }
   });
 
-  if (!availability || ![AvailabilityStatus.ASSIGNED, AvailabilityStatus.ACKNOWLEDGED].includes(availability.status)) {
+  if (
+    !availability ||
+    (availability.status !== AvailabilityStatus.ASSIGNED &&
+      availability.status !== AvailabilityStatus.ACKNOWLEDGED)
+  ) {
     return { ok: false, message: "Tildelingen findes ikke længere." };
   }
 
-  const nextStatus = availability.availableUntil > now
-    ? AvailabilityStatus.AVAILABLE
-    : AvailabilityStatus.EXPIRED;
+  const nextStatus =
+    availability.availableUntil > now ? AvailabilityStatus.AVAILABLE : AvailabilityStatus.EXPIRED;
 
   const removed = await prisma.$transaction(async (tx) => {
     const claimed = await tx.availability.updateMany({
