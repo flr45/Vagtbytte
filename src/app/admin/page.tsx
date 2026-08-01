@@ -15,37 +15,49 @@ import { formatDateTime } from "@/components/TransferSummary";
 export default async function AdminPage() {
   await requireRole(UserRole.ADMIN);
 
-  const [users, vc, auditLogs, alarmStatistics, recentAlarms] = await Promise.all([
-    prisma.user.findMany({
-      where: {
-        role: UserRole.BRANDFIGHTER,
-        loginIdentifier: { not: "__deleted_user__" }
-      },
-      orderBy: [{ stationCode: "asc" }, { name: "asc" }],
-      select: {
-        id: true,
-        name: true,
-        employeeNumber: true,
-        loginIdentifier: true,
-        isActive: true,
-        stationCode: true,
-        alarmStations: true,
-        hasAdminAccess: true
-      }
-    }),
-    prisma.user.findFirst({
-      where: { role: UserRole.VC },
-      select: { loginIdentifier: true, isActive: true }
-    }),
-    prisma.auditLog.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 8,
-      select: { id: true, action: true, description: true, createdAt: true }
-    }),
-    loadAlarmStatisticsRows(),
-    listRecentAlarms(5)
-  ]);
+  const [users, vc, auditLogs, alarmStatistics, recentAlarms, latestSystemMonitorEvent] =
+    await Promise.all([
+      prisma.user.findMany({
+        where: {
+          role: UserRole.BRANDFIGHTER,
+          loginIdentifier: { not: "__deleted_user__" }
+        },
+        orderBy: [{ stationCode: "asc" }, { name: "asc" }],
+        select: {
+          id: true,
+          name: true,
+          employeeNumber: true,
+          loginIdentifier: true,
+          isActive: true,
+          stationCode: true,
+          alarmStations: true,
+          hasAdminAccess: true
+        }
+      }),
+      prisma.user.findFirst({
+        where: { role: UserRole.VC },
+        select: { loginIdentifier: true, isActive: true }
+      }),
+      prisma.auditLog.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 8,
+        select: { id: true, action: true, description: true, createdAt: true }
+      }),
+      loadAlarmStatisticsRows(),
+      listRecentAlarms(5),
+      prisma.auditLog.findFirst({
+        where: {
+          action: {
+            in: ["SMS_GATEWAY_ONLINE", "SMS_GATEWAY_DEGRADED", "SMS_GATEWAY_OFFLINE"]
+          }
+        },
+        orderBy: { createdAt: "desc" },
+        select: { action: true, description: true, createdAt: true }
+      })
+    ]);
   const summary = summarizeAlarmStatistics(alarmStatistics.rows);
+  const smsSystemHasProblem =
+    latestSystemMonitorEvent && latestSystemMonitorEvent.action !== "SMS_GATEWAY_ONLINE";
 
   return (
     <>
@@ -65,6 +77,21 @@ export default async function AdminPage() {
             </Link>
           </div>
         </section>
+
+        {smsSystemHasProblem ? (
+          <section className="rounded-lg border border-red-300 bg-red-50 p-4 shadow-sm" role="alert">
+            <p className="text-lg font-black text-red-950">SMS-systemet kræver opmærksomhed</p>
+            <p className="mt-1 break-words text-sm font-semibold text-red-900">
+              {latestSystemMonitorEvent.description}
+            </p>
+            <p className="mt-2 text-xs font-semibold text-red-700">
+              Registreret {formatDateTime(latestSystemMonitorEvent.createdAt)}
+            </p>
+            <Link className="app-button-danger mt-4" href="/admin/systemstatus">
+              Åbn systemstatus
+            </Link>
+          </section>
+        ) : null}
 
         <section className="rounded-lg border border-brand-line bg-white p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
