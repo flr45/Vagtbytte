@@ -1,9 +1,8 @@
 import { notFound } from "next/navigation";
-import { AvailabilityStatus, UserRole } from "@prisma/client";
+import { UserRole } from "@prisma/client";
 import { requireRole } from "@/lib/auth";
 import { availabilityStatusLabel } from "@/lib/availability";
 import { prisma } from "@/lib/prisma";
-import { AcknowledgeAvailabilityForm } from "@/components/AvailabilityForms";
 import { TopBar } from "@/components/TopBar";
 import { formatDateTime } from "@/components/TransferSummary";
 
@@ -29,23 +28,25 @@ export default async function AvailabilityAssignmentPage({
         <section className="app-card grid gap-5">
           <div>
             <p className="text-sm font-bold uppercase text-emerald-700">Vagtcentralen</p>
-            <h1 className="mt-2 text-3xl font-black">Du er blevet tildelt en vagt.</h1>
+            <h1 className="mt-2 text-3xl font-black">
+              {availability.assignedAt ? "Du er blevet tildelt en vagt." : "Vagttildelingen er ændret."}
+            </h1>
             <p className="mt-3 text-sm font-semibold text-zinc-600">
               {formatDateTime(availability.availableFrom)} → {formatDateTime(availability.availableUntil)}
             </p>
           </div>
-          {availability.status === AvailabilityStatus.ASSIGNED ? (
-            <AcknowledgeAvailabilityForm availabilityId={availability.id} />
-          ) : (
-            <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4">
-              <p className="font-bold">{availabilityStatusLabel(availability.status)}</p>
-              {availability.acknowledgedAt ? (
-                <p className="mt-1 text-sm font-semibold text-zinc-600">
-                  Bekræftet {formatDateTime(availability.acknowledgedAt)}
-                </p>
-              ) : null}
-            </div>
-          )}
+          <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4">
+            <p className="font-bold">{availabilityStatusLabel(availability.status)}</p>
+            {availability.assignedAt ? (
+              <p className="mt-1 text-sm font-semibold text-zinc-600">
+                Tildelt {formatDateTime(availability.assignedAt)}. Du skal ikke bekræfte tildelingen.
+              </p>
+            ) : (
+              <p className="mt-1 text-sm font-semibold text-zinc-600">
+                Tildelingen er fjernet af vagtcentralen.
+              </p>
+            )}
+          </div>
         </section>
       </main>
     </>
