@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "crypto";
 import { NotificationType, Prisma } from "@prisma/client";
 import { createNotification } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
-import { isStationCode } from "@/lib/stations";
+import { isStationCode, stationLabel } from "@/lib/stations";
 
 export type AlarmFeedMessageInput = {
   senderNumber: string;
@@ -29,6 +29,15 @@ export type AlarmFeedAlarm = {
   messages: AlarmFeedMessage[];
 };
 
+export type AlarmArchiveFilters = {
+  query?: string;
+  station?: string;
+  from?: Date | null;
+  to?: Date | null;
+  sort?: "newest" | "oldest";
+  islOnly?: boolean;
+};
+
 export type StoredAlarmPage = {
   alarms: AlarmFeedAlarm[];
   page: number;
@@ -41,6 +50,16 @@ const FOLLOW_UP_WINDOW_MS = 30 * 60 * 1000;
 const ALARM_NOTIFICATION_TYPE = "ALARM_MESSAGE" as NotificationType;
 const MAX_PUBLIC_ALARMS = 5;
 const MAX_ADMIN_PAGE_SIZE = 100;
+const MAX_EXPORT_ALARMS = 25000;
+
+const alarmMessageSelect = {
+  id: true,
+  alarmId: true,
+  sequenceNumber: true,
+  senderNumber: true,
+  rawMessage: true,
+  receivedAt: true
+} satisfies Prisma.AlarmMessageSelect;
 
 export function createDeduplicationKey(input: AlarmFeedMessageInput) {
   return createHash("sha256")
@@ -235,14 +254,7 @@ export async function listRecentAlarms(limit = MAX_PUBLIC_ALARMS): Promise<Alarm
     include: {
       messages: {
         orderBy: [{ receivedAt: "asc" }, { sequenceNumber: "asc" }],
-        select: {
-          id: true,
-          alarmId: true,
-          sequenceNumber: true,
-          senderNumber: true,
-          rawMessage: true,
-          receivedAt: true
-        }
+        select: alarmMessageSelect
       }
     }
   });
@@ -252,30 +264,26 @@ export async function listRecentAlarms(limit = MAX_PUBLIC_ALARMS): Promise<Alarm
 
 export async function listStoredAlarmsPage(
   requestedPage = 1,
-  requestedPageSize = 25
+  requestedPageSize = 25,
+  filters: AlarmArchiveFilters = {}
 ): Promise<StoredAlarmPage> {
   const pageSize = Math.min(
     Math.max(Math.trunc(requestedPageSize) || 25, 1),
     MAX_ADMIN_PAGE_SIZE
   );
-  const total = await prisma.alarm.count();
+  const where = alarmArchiveWhere(filters);
+  const total = await prisma.alarm.count({ where });
   const totalPages = Math.max(Math.ceil(total / pageSize), 1);
   const page = Math.min(Math.max(Math.trunc(requestedPage) || 1, 1), totalPages);
   const alarms = await prisma.alarm.findMany({
-    orderBy: [{ openedAt: "desc" }, { createdAt: "desc" }],
+    where,
+    orderBy: alarmArchiveOrder(filters.sort),
     skip: (page - 1) * pageSize,
     take: pageSize,
     include: {
       messages: {
         orderBy: [{ receivedAt: "asc" }, { sequenceNumber: "asc" }],
-        select: {
-          id: true,
-          alarmId: true,
-          sequenceNumber: true,
-          senderNumber: true,
-          rawMessage: true,
-          receivedAt: true
-        }
+        select: alarmMessageSelect
       }
     }
   });
@@ -287,6 +295,95 @@ export async function listStoredAlarmsPage(
     total,
     totalPages
   };
+}
+
+export async function listStoredAlarmsForExport(filters: AlarmArchiveFilters = {}) {
+  const alarms = await prisma.alarm.findMany({
+    where: alarmArchiveWhere(filters),
+    orderBy: alarmArchiveOrder(filters.sort),
+    take: MAX_EXPORT_ALARMS,
+    include: {
+      messages: {
+        orderBy: [{ receivedAt: "asc" }, { sequenceNumber: "asc" }],
+        select: alarmMessageSelect
+      }
+    }
+  });
+
+  return mapAlarms(alarms);
+}
+
+export function alarmArchiveCsv(alarms: AlarmFeedAlarm[]) {
+  const header = [
+    "Alarm-id",
+    "Station",
+    "Status",
+    "Alarm åbnet",
+    "Sending",
+    "Sending modtaget",
+    "Alarmtekst"
+  ];
+  const rows = alarms.flatMap((alarm) =>
+    alarm.messages.length > 0
+      ? alarm.messages.map((message) => [
+          alarm.id,
+          stationLabel(alarm.stationCode),
+          alarm.status === "ACTIVE" ? "Aktiv" : "Afsluttet",
+          alarm.openedAt.toISOString(),
+          String(message.sequenceNumber),
+          message.receivedAt.toISOString(),
+          message.rawMessage
+        ])
+      : [[
+          alarm.id,
+          stationLabel(alarm.stationCode),
+          alarm.status === "ACTIVE" ? "Aktiv" : "Afsluttet",
+          alarm.openedAt.toISOString(),
+          "",
+          "",
+          ""
+        ]]
+  );
+
+  return [header, ...rows].map((row) => row.map(csvCell).join(";")).join("\r\n");
+}
+
+export function parseArchiveDate(value: string | null, endOfDay = false) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const suffix = endOfDay ? "T23:59:59.999+02:00" : "T00:00:00.000+02:00";
+  const parsed = new Date(`${value}${suffix}`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function alarmArchiveWhere(filters: AlarmArchiveFilters): Prisma.AlarmWhereInput {
+  const query = filters.query?.trim();
+  const station = filters.islOnly ? "ISL" : filters.station?.trim().toUpperCase();
+  const openedAt: Prisma.DateTimeFilter = {};
+
+  if (filters.from) openedAt.gte = filters.from;
+  if (filters.to) openedAt.lte = filters.to;
+
+  return {
+    ...(station === "UNKNOWN"
+      ? { stationCode: null }
+      : station && isStationCode(station)
+        ? { stationCode: station }
+        : {}),
+    ...(Object.keys(openedAt).length > 0 ? { openedAt } : {}),
+    ...(query
+      ? {
+          OR: [
+            { id: { contains: query, mode: "insensitive" } },
+            { messages: { some: { rawMessage: { contains: query, mode: "insensitive" } } } }
+          ]
+        }
+      : {})
+  };
+}
+
+function alarmArchiveOrder(sort: AlarmArchiveFilters["sort"]): Prisma.AlarmOrderByWithRelationInput[] {
+  const direction = sort === "oldest" ? "asc" : "desc";
+  return [{ openedAt: direction }, { createdAt: direction }];
 }
 
 function mapAlarms(
@@ -316,4 +413,8 @@ function truncateForPush(value: string, maxLength: number) {
 
 function normalizePhoneNumber(value: string) {
   return value.trim().replace(/[\s()-]/g, "");
+}
+
+function csvCell(value: string) {
+  return `"${value.replaceAll('"', '""')}"`;
 }
