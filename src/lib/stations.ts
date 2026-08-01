@@ -1,5 +1,6 @@
 export const STATIONS = [
   { code: "A", label: "Slagelse" },
+  { code: "B", label: "Station B" },
   { code: "S", label: "Sorø" },
   { code: "K", label: "Korsør" },
   { code: "L", label: "Skælskør" },
@@ -9,6 +10,7 @@ export const STATIONS = [
 
 export const STATION_CODE_VALUES = STATIONS.map((station) => station.code) as [
   "A",
+  "B",
   "S",
   "K",
   "L",

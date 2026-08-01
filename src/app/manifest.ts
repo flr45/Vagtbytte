@@ -2,9 +2,9 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Vagtbytte",
-    short_name: "Vagtbytte",
-    description: "Midlertidig overdragelse af brandmandsvagt",
+    name: "SBR Portal",
+    short_name: "SBR Portal",
+    description: "Beredskabsportal til alarmfeed, vagtoverdragelse og vagttildeling",
     id: "/",
     start_url: "/",
     scope: "/",

@@ -12,9 +12,11 @@ describe("detectStationCode", () => {
     expect(detectStationCode("isl - assistance")).toBe("ISL");
   });
 
-  it("kræver stadig parenteser omkring de korte stationskoder", () => {
+  it("genkender de korte stationskoder med parenteser", () => {
     expect(detectStationCode("(A) Bygningsbrand")).toBe("A");
+    expect(detectStationCode("(B) Assistance")).toBe("B");
     expect(detectStationCode("A Bygningsbrand")).toBeNull();
+    expect(detectStationCode("B Assistance")).toBeNull();
   });
 
   it("genkender ikke ISL som del af et andet ord", () => {

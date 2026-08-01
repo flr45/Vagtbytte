@@ -16,9 +16,11 @@ export default async function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center px-4 py-10">
       <section className="app-card w-full max-w-md">
-        <p className="text-sm font-bold uppercase tracking-wide text-brand-red">Vagtbytte</p>
+        <p className="text-sm font-bold uppercase tracking-wide text-brand-red">SBR Portal</p>
         <h1 className="mt-2 text-3xl font-bold">Log ind</h1>
-        <p className="mt-3 text-base text-zinc-700">Fortsæt til din vagt.</p>
+        <p className="mt-3 text-base text-zinc-700">
+          Alarmfeed, vagtoverdragelse og vagttildeling samlet ét sted.
+        </p>
         <div className="mt-6">
           <LoginForm />
         </div>

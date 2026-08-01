@@ -20,7 +20,10 @@ export async function TopBar({ title }: { title: string }) {
   return (
     <header className="border-b border-brand-line bg-white pt-[env(safe-area-inset-top)]">
       <div className="mx-auto grid w-full max-w-5xl gap-3 px-[max(1rem,env(safe-area-inset-left))] py-3 pr-[max(1rem,env(safe-area-inset-right))] sm:min-h-16 sm:grid-cols-[1fr_auto] sm:items-center">
-        <p className="min-w-0 break-words text-lg font-bold">{title}</p>
+        <div className="min-w-0">
+          <p className="text-xs font-black uppercase tracking-[0.14em] text-brand-red">SBR Portal</p>
+          <p className="mt-0.5 break-words text-lg font-bold">{title}</p>
+        </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {user ? (
             <a className="app-button-secondary min-h-11 px-3 text-sm" href={roleHome[user.role]}>
