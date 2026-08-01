@@ -51,6 +51,14 @@ LEFT JOIN "AlarmMessage" m ON m."alarmId" = a."id"
 GROUP BY a."id", a."stationCode", a."openedAt"
 ON CONFLICT ("alarmId") DO NOTHING;
 
+DELETE FROM "Alarm"
+WHERE "id" IN (
+  SELECT "id"
+  FROM "Alarm"
+  ORDER BY "openedAt" DESC, "createdAt" DESC
+  OFFSET 5
+);
+
 UPDATE "Availability"
 SET
   "status" = 'ACKNOWLEDGED'::"AvailabilityStatus",
