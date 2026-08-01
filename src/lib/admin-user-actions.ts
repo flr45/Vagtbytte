@@ -6,9 +6,13 @@ import { UserRole } from "@prisma/client";
 import { z } from "zod";
 import { requireRole } from "./auth";
 import { normalizeLoginIdentifier } from "./login-identifiers";
-import { hashPassword } from "./passwords";
+import { hashPassword, passwordSchema } from "./passwords";
 import { prisma } from "./prisma";
-import { STATION_CODE_VALUES, normalizeStationCodes } from "./stations";
+import {
+  STATION_CODE_VALUES,
+  isStationCode,
+  normalizeStationCodes
+} from "./stations";
 
 export type AdminUserActionState = {
   ok?: boolean;
@@ -25,7 +29,7 @@ const baseUserSchema = z.object({
 });
 
 const createUserSchema = baseUserSchema.extend({
-  temporaryPassword: z.string().min(8, "Adgangskoden skal være mindst 8 tegn")
+  temporaryPassword: passwordSchema
 });
 
 const updateUserSchema = baseUserSchema.extend({
@@ -34,7 +38,7 @@ const updateUserSchema = baseUserSchema.extend({
 
 const resetPasswordSchema = z.object({
   userId: z.string().min(1),
-  temporaryPassword: z.string().min(8, "Adgangskoden skal være mindst 8 tegn")
+  temporaryPassword: passwordSchema
 });
 
 const deleteUserSchema = z.object({ userId: z.string().min(1) });
@@ -50,9 +54,10 @@ function firstError(error: z.ZodError) {
 function userInput(formData: FormData) {
   const stationCode = String(formData.get("stationCode") ?? "");
   const selectedAlarmStations = normalizeStationCodes(formData.getAll("alarmStations"));
-  const alarmStations = selectedAlarmStations.includes(stationCode as never)
-    ? selectedAlarmStations
-    : normalizeStationCodes([...formData.getAll("alarmStations"), stationCode]);
+  const alarmStations =
+    isStationCode(stationCode) && !selectedAlarmStations.includes(stationCode)
+      ? [...selectedAlarmStations, stationCode]
+      : selectedAlarmStations;
 
   return {
     name: formData.get("name"),
