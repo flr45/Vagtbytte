@@ -3,6 +3,13 @@ import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { gzip, gunzip } from "node:zlib";
 import { promisify } from "node:util";
+import {
+  decryptStoredBackup,
+  encryptCompressedBackup,
+  isEncryptedBackup,
+  isLegacyGzipBackup,
+  loadBackupEncryptionKey
+} from "./backup-crypto.mjs";
 
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
@@ -47,11 +54,11 @@ function compactTimestamp(date) {
 
 function automaticFileName(date) {
   const parts = localParts(date);
-  return `automatic-${parts.year}-${parts.month}-${parts.day}.vagtbackup.gz`;
+  return `automatic-${parts.year}-${parts.month}-${parts.day}.vagtbackup.enc`;
 }
 
 function manualFileName(date) {
-  return `manual-${compactTimestamp(date)}-${randomUUID().slice(0, 8)}.vagtbackup.gz`;
+  return `manual-${compactTimestamp(date)}-${randomUUID().slice(0, 8)}.vagtbackup.enc`;
 }
 
 export async function collectBackupData(prisma, generatedAt = new Date()) {
@@ -125,11 +132,13 @@ export async function createBackup(prisma, input = {}) {
   }
 
   try {
+    const encryptionKey = await loadBackupEncryptionKey();
     const data = await collectBackupData(prisma, now);
     const json = Buffer.from(JSON.stringify(data), "utf8");
     const compressed = await gzipAsync(json, { level: 9 });
-    await writeFile(filePath, compressed, { mode: 0o600 });
-    const checksum = createHash("sha256").update(compressed).digest("hex");
+    const encrypted = encryptCompressedBackup(compressed, encryptionKey);
+    await writeFile(filePath, encrypted, { mode: 0o600 });
+    const checksum = createHash("sha256").update(encrypted).digest("hex");
     const fileStats = await stat(filePath);
     const backup = await prisma.backupSnapshot.upsert({
       where: { fileName },
@@ -162,7 +171,7 @@ export async function createBackup(prisma, input = {}) {
         actorUserId: input.createdByUserId ?? null,
         actorRole: input.actorRole ?? null,
         action: kind === "AUTOMATIC" ? "BACKUP_AUTOMATIC_CREATED" : "BACKUP_MANUAL_CREATED",
-        description: `${kind === "AUTOMATIC" ? "Automatisk" : "Manuel"} backup blev oprettet: ${fileName}`
+        description: `${kind === "AUTOMATIC" ? "Automatisk" : "Manuel"} krypteret backup blev oprettet: ${fileName}`
       }
     }).catch(() => null);
 
@@ -216,17 +225,42 @@ export async function runAutomaticBackupIfDue(prisma, now = new Date()) {
 }
 
 export async function readBackupFile(filePath) {
-  const compressed = await readFile(filePath);
-  const json = await gunzipAsync(compressed);
-  const parsed = JSON.parse(json.toString("utf8"));
+  const stored = await readFile(filePath);
+  let compressed;
+  let encrypted = false;
+
+  if (isEncryptedBackup(stored)) {
+    const encryptionKey = await loadBackupEncryptionKey();
+    compressed = decryptStoredBackup(stored, encryptionKey);
+    encrypted = true;
+  } else if (isLegacyGzipBackup(stored)) {
+    compressed = stored;
+  } else {
+    throw new Error("Filen er ikke en understøttet Vagtbytte-backup.");
+  }
+
+  let json;
+  try {
+    json = await gunzipAsync(compressed);
+  } catch {
+    throw new Error("Backupfilens komprimerede indhold er beskadiget.");
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(json.toString("utf8"));
+  } catch {
+    throw new Error("Backupfilens data er ikke gyldig JSON.");
+  }
+
   validateBackup(parsed);
-  return { parsed, compressed };
+  return { parsed, stored, encrypted };
 }
 
 export async function restoreBackup(prisma, filePath, input = {}) {
-  const { parsed, compressed } = await readBackupFile(filePath);
+  const { parsed, stored, encrypted } = await readBackupFile(filePath);
   if (input.expectedSha256) {
-    const actual = createHash("sha256").update(compressed).digest("hex");
+    const actual = createHash("sha256").update(stored).digest("hex");
     if (actual !== input.expectedSha256) {
       throw new Error("Backupfilens kontrolsum stemmer ikke.");
     }
@@ -276,12 +310,13 @@ export async function restoreBackup(prisma, filePath, input = {}) {
       actorUserId: actorExists?.id ?? null,
       actorRole: actorExists ? input.actorRole ?? null : null,
       action: "BACKUP_RESTORED",
-      description: `Backup fra ${parsed.generatedAt} blev gendannet${input.actorName ? ` af ${input.actorName}` : ""}`
+      description: `${encrypted ? "Krypteret" : "Ældre ukrypteret"} backup fra ${parsed.generatedAt} blev gendannet${input.actorName ? ` af ${input.actorName}` : ""}`
     }
   });
 
   return {
     generatedAt: parsed.generatedAt,
+    encrypted,
     restoredTables: Object.fromEntries(
       Object.entries(tables).map(([name, rows]) => [name, Array.isArray(rows) ? rows.length : 0])
     )
@@ -289,7 +324,9 @@ export async function restoreBackup(prisma, filePath, input = {}) {
 }
 
 export function backupPath(fileName) {
-  if (!fileName || path.basename(fileName) !== fileName || !fileName.endsWith(".vagtbackup.gz")) {
+  const validExtension =
+    fileName?.endsWith(".vagtbackup.enc") || fileName?.endsWith(".vagtbackup.gz");
+  if (!fileName || path.basename(fileName) !== fileName || !validExtension) {
     throw new Error("Ugyldigt backupfilnavn.");
   }
   return path.join(backupDirectory(), fileName);
