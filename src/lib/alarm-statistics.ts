@@ -87,8 +87,16 @@ export async function loadAlarmStatisticsRows() {
 
 export function summarizeAlarmStatistics(rows: AlarmStatisticRow[]): AlarmStatisticsSummary {
   const stationCounts = new Map<string, number>();
-  const weekdayCounts = new Map(WEEKDAYS.map((weekday) => [weekday.key, 0]));
-  const hourCounts = new Map(Array.from({ length: 24 }, (_, hour) => [String(hour), 0]));
+  const weekdayCounts = new Map<string, number>();
+  const hourCounts = new Map<string, number>();
+
+  for (const weekday of WEEKDAYS) {
+    weekdayCounts.set(weekday.key, 0);
+  }
+  for (let hour = 0; hour < 24; hour += 1) {
+    hourCounts.set(String(hour), 0);
+  }
+
   let totalMessages = 0;
   let islAlarms = 0;
   let ordinaryAlarms = 0;
