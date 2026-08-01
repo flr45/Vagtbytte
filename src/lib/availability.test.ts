@@ -107,7 +107,7 @@ describe("til rådighed", () => {
 
   it("viser ingen tekniske statusnavne", () => {
     expect(availabilityStatusLabel("AVAILABLE")).toBe("Til rådighed");
-    expect(availabilityStatusLabel("ACKNOWLEDGED")).toBe("Tildeling bekræftet");
+    expect(availabilityStatusLabel("ACKNOWLEDGED")).toBe("Tildelt");
   });
 
   it("viser kun aktuelle tildelinger i det nuværende tidsrum", () => {

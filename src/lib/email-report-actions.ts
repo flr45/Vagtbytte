@@ -120,7 +120,7 @@ export async function sendEmailReportNowAction(
   } catch (error) {
     return {
       ok: false,
-      message: error instanceof Error ? `Rapporten kunne ikke sendes: ${error.message}` : "Rapporten kunne ikke sendes."
+      message: `Rapporten kunne ikke sendes: ${extractCommandFailure(error)}`
     };
   }
 }
@@ -141,4 +141,35 @@ function parseLastJsonLine(value: string) {
   } catch {
     return null;
   }
+}
+
+function extractCommandFailure(error: unknown) {
+  if (!(error instanceof Error)) {
+    return "ukendt fejl";
+  }
+
+  const commandError = error as Error & {
+    stdout?: string | Buffer;
+    stderr?: string | Buffer;
+  };
+  const stdout = commandOutputText(commandError.stdout);
+  const result = parseLastJsonLine(stdout);
+  if (result?.error) {
+    return result.error;
+  }
+
+  const stderr = commandOutputText(commandError.stderr)
+    .trim()
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .at(-1);
+
+  return stderr || commandError.message;
+}
+
+function commandOutputText(value: string | Buffer | undefined) {
+  if (Buffer.isBuffer(value)) {
+    return value.toString("utf8");
+  }
+  return value ?? "";
 }

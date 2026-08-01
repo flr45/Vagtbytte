@@ -5,7 +5,7 @@ import { createManualBackupAction } from "@/lib/backup-actions";
 import { ActionMessage } from "./ActionMessage";
 import { SubmitButton } from "./SubmitButton";
 
-export function ManualBackupForm() {
+export function ManualBackupForm({ disabled = false }: { disabled?: boolean }) {
   const [state, action] = useActionState(createManualBackupAction, {});
 
   return (
@@ -13,11 +13,16 @@ export function ManualBackupForm() {
       <div>
         <h2 className="text-lg font-black">Opret manuel backup</h2>
         <p className="mt-1 text-sm font-semibold text-zinc-600">
-          Backupen indeholder brugere, stationer, alarmer, statistik, vagter, vagtbytter og indstillinger.
+          Backupen indeholder brugere, stationer, alarmer, statistik, vagter, vagtbytter og indstillinger og krypteres før den gemmes.
         </p>
       </div>
+      {disabled ? (
+        <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-900">
+          Opret en gyldig backupkrypteringsnøgle, før der kan oprettes nye backups.
+        </p>
+      ) : null}
       <ActionMessage message={state.message} ok={state.ok} />
-      <SubmitButton pendingText="Opretter backup…">Opret backup nu</SubmitButton>
+      <SubmitButton disabled={disabled} pendingText="Krypterer backup…">Opret krypteret backup nu</SubmitButton>
     </form>
   );
 }
@@ -63,13 +68,13 @@ export function RestoreBackupForm() {
       <div>
         <h2 className="text-lg font-black text-red-950">Gendan fra backup</h2>
         <p className="mt-1 text-sm font-semibold text-red-900">
-          Alle nuværende Vagtbytte-data erstattes af indholdet i backupfilen. Aktive login-sessioner slettes.
+          Alle nuværende Vagtbytte-data erstattes af indholdet i backupfilen. Krypterede backups kræver den samme nøgle, som de blev oprettet med. Ældre gzip-backups understøttes fortsat.
         </p>
       </div>
       <label className="grid gap-2 text-sm font-bold text-red-950">
         Vagtbytte-backupfil
         <input
-          accept=".gz,.vagtbackup.gz,application/gzip"
+          accept=".enc,.vagtbackup.enc,.gz,.vagtbackup.gz,application/octet-stream,application/gzip"
           className="focus-ring rounded-lg border border-red-200 bg-white p-3"
           name="backup"
           required
@@ -82,7 +87,7 @@ export function RestoreBackupForm() {
       </label>
       <ActionMessage message={message} ok={ok} />
       <button className="app-button-danger" disabled={busy} type="submit">
-        {busy ? "Gendanner…" : "Gendan backup"}
+        {busy ? "Dekrypterer og gendanner…" : "Gendan backup"}
       </button>
     </form>
   );

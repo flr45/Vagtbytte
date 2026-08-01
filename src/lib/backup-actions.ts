@@ -37,11 +37,11 @@ export async function createManualBackupAction(
     }
 
     revalidatePath("/admin/backups");
-    return { ok: true, message: "Den manuelle backup er oprettet." };
+    return { ok: true, message: "Den krypterede manuelle backup er oprettet." };
   } catch (error) {
     return {
       ok: false,
-      message: error instanceof Error ? `Backup fejlede: ${error.message}` : "Backup fejlede."
+      message: `Backup fejlede: ${extractProcessError(error)}`
     };
   }
 }
@@ -55,4 +55,16 @@ function parseLastJsonLine(value: string) {
   } catch {
     return null;
   }
+}
+
+function extractProcessError(error: unknown) {
+  if (typeof error === "object" && error) {
+    const processError = error as { stdout?: string; stderr?: string; message?: string };
+    const structured = parseLastJsonLine(processError.stdout ?? "");
+    if (structured?.error) return structured.error;
+    const stderrLine = processError.stderr?.trim().split(/\r?\n/).filter(Boolean).at(-1);
+    if (stderrLine) return stderrLine;
+    if (processError.message) return processError.message;
+  }
+  return error instanceof Error ? error.message : "Ukendt fejl";
 }
