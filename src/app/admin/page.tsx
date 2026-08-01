@@ -66,16 +66,17 @@ export default async function AdminPage() {
         <section>
           <h1 className="text-3xl font-bold">Administration</h1>
           <p className="mt-2 text-base text-zinc-700">
-            Administrer brugere, stationer, alarmer og vagtcentralens fælles login.
+            Administrer brugere, stationer, alarmer, rapporter, backups og vagtcentralens fælles login.
           </p>
-          <div className="mt-4 flex flex-wrap gap-3">
-            <Link className="app-button-secondary" href="/admin/systemstatus">
-              Se systemstatus
-            </Link>
-            <Link className="app-button-secondary" href="/admin/alarmstatistik">
-              Se fuld alarmstatistik
-            </Link>
-          </div>
+        </section>
+
+        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <AdminLink href="/admin/systemstatus" title="Systemstatus" text="Modem, SMS-gateway, push og seneste fejl." />
+          <AdminLink href="/admin/alarmstatistik" title="Alarmstatistik" text="Detaljer, grafer, CSV og nulstilling." />
+          <AdminLink href="/admin/alarmer" title="Alarmarkiv" text="Søg, filtrer og eksportér alle gemte alarmer." />
+          <AdminLink href="/admin/brugere" title="Brugeroverblik" text="Stationer, login, adminadgang og push-enheder." />
+          <AdminLink href="/admin/backups" title="Backup og gendannelse" text="Automatiske og manuelle backups samt restore." />
+          <AdminLink href="/admin/mailrapporter" title="Mailrapporter" text="Planlæg samlet overblik over vagter og vagtbytter." />
         </section>
 
         {smsSystemHasProblem ? (
@@ -132,11 +133,16 @@ export default async function AdminPage() {
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
           <section className="grid content-start gap-4">
-            <div>
-              <h2 className="text-xl font-bold">Brugere</h2>
-              <p className="mt-1 text-sm text-zinc-600">
-                Åbn en station og tryk derefter på brugerens navn for at redigere.
-              </p>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-xl font-bold">Brugere</h2>
+                <p className="mt-1 text-sm text-zinc-600">
+                  Åbn en station og tryk derefter på brugerens navn for at redigere.
+                </p>
+              </div>
+              <Link className="app-button-secondary" href="/admin/brugere">
+                Åbn brugeroverblik
+              </Link>
             </div>
             <FirefighterEditForms users={users} />
           </section>
@@ -156,7 +162,7 @@ export default async function AdminPage() {
               </p>
             </div>
             <Link className="app-button-secondary" href="/admin/alarmer">
-              Se alle gemte alarmer
+              Søg i hele alarmarkivet
             </Link>
           </div>
           <div className="mt-4">
@@ -194,6 +200,15 @@ export default async function AdminPage() {
         </section>
       </main>
     </>
+  );
+}
+
+function AdminLink({ href, title, text }: { href: string; title: string; text: string }) {
+  return (
+    <Link className="app-card-interactive grid gap-2" href={href}>
+      <h2 className="text-lg font-black">{title}</h2>
+      <p className="text-sm font-semibold text-zinc-600">{text}</p>
+    </Link>
   );
 }
 
