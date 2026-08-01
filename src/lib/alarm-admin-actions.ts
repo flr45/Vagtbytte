@@ -46,6 +46,7 @@ export async function deleteAlarmAction(
   });
 
   revalidatePath("/admin");
+  revalidatePath("/admin/alarmer");
   revalidatePath("/brandmand/alarmer");
   return { ok: true, message: "Alarmen er slettet." };
 }

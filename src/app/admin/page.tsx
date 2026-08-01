@@ -44,7 +44,7 @@ export default async function AdminPage() {
         select: { id: true, action: true, description: true, createdAt: true }
       }),
       loadAlarmStatisticsRows(),
-      listRecentAlarms(5),
+      listRecentAlarms(),
       prisma.auditLog.findFirst({
         where: {
           action: {
@@ -148,11 +148,16 @@ export default async function AdminPage() {
         </div>
 
         <section className="rounded-lg border border-brand-line bg-white p-4">
-          <div>
-            <h2 className="text-xl font-bold">Gemte alarmer</h2>
-            <p className="mt-1 text-sm text-zinc-600">
-              Systemet gemmer højst de fem seneste alarmer. Alarmstatistikken bevares, når en alarm slettes.
-            </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-xl font-bold">Gemte alarmer</h2>
+              <p className="mt-1 text-sm text-zinc-600">
+                Alle alarmer gemmes. De fem seneste vises her, og kun administratorer har adgang til hele arkivet.
+              </p>
+            </div>
+            <Link className="app-button-secondary" href="/admin/alarmer">
+              Se alle gemte alarmer
+            </Link>
           </div>
           <div className="mt-4">
             <AdminAlarmManagement

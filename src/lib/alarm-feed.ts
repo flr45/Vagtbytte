@@ -29,9 +29,18 @@ export type AlarmFeedAlarm = {
   messages: AlarmFeedMessage[];
 };
 
+export type StoredAlarmPage = {
+  alarms: AlarmFeedAlarm[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
 const FOLLOW_UP_WINDOW_MS = 30 * 60 * 1000;
 const ALARM_NOTIFICATION_TYPE = "ALARM_MESSAGE" as NotificationType;
-const MAX_STORED_ALARMS = 5;
+const MAX_PUBLIC_ALARMS = 5;
+const MAX_ADMIN_PAGE_SIZE = 100;
 
 export function createDeduplicationKey(input: AlarmFeedMessageInput) {
   return createHash("sha256")
@@ -151,17 +160,6 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
       }
     });
 
-    const obsoleteAlarms = await tx.alarm.findMany({
-      orderBy: [{ openedAt: "desc" }, { createdAt: "desc" }],
-      skip: MAX_STORED_ALARMS,
-      select: { id: true }
-    });
-    if (obsoleteAlarms.length > 0) {
-      await tx.alarm.deleteMany({
-        where: { id: { in: obsoleteAlarms.map((alarm) => alarm.id) } }
-      });
-    }
-
     return {
       created: true,
       id: messageId,
@@ -229,10 +227,11 @@ async function notifyStationFirefighters(input: {
   }
 }
 
-export async function listRecentAlarms(limit = MAX_STORED_ALARMS): Promise<AlarmFeedAlarm[]> {
+export async function listRecentAlarms(limit = MAX_PUBLIC_ALARMS): Promise<AlarmFeedAlarm[]> {
+  const safeLimit = Math.min(Math.max(Math.trunc(limit) || 1, 1), MAX_PUBLIC_ALARMS);
   const alarms = await prisma.alarm.findMany({
     orderBy: [{ openedAt: "desc" }, { createdAt: "desc" }],
-    take: Math.min(Math.max(limit, 1), MAX_STORED_ALARMS),
+    take: safeLimit,
     include: {
       messages: {
         orderBy: [{ receivedAt: "asc" }, { sequenceNumber: "asc" }],
@@ -248,6 +247,58 @@ export async function listRecentAlarms(limit = MAX_STORED_ALARMS): Promise<Alarm
     }
   });
 
+  return mapAlarms(alarms);
+}
+
+export async function listStoredAlarmsPage(
+  requestedPage = 1,
+  requestedPageSize = 25
+): Promise<StoredAlarmPage> {
+  const pageSize = Math.min(
+    Math.max(Math.trunc(requestedPageSize) || 25, 1),
+    MAX_ADMIN_PAGE_SIZE
+  );
+  const total = await prisma.alarm.count();
+  const totalPages = Math.max(Math.ceil(total / pageSize), 1);
+  const page = Math.min(Math.max(Math.trunc(requestedPage) || 1, 1), totalPages);
+  const alarms = await prisma.alarm.findMany({
+    orderBy: [{ openedAt: "desc" }, { createdAt: "desc" }],
+    skip: (page - 1) * pageSize,
+    take: pageSize,
+    include: {
+      messages: {
+        orderBy: [{ receivedAt: "asc" }, { sequenceNumber: "asc" }],
+        select: {
+          id: true,
+          alarmId: true,
+          sequenceNumber: true,
+          senderNumber: true,
+          rawMessage: true,
+          receivedAt: true
+        }
+      }
+    }
+  });
+
+  return {
+    alarms: mapAlarms(alarms),
+    page,
+    pageSize,
+    total,
+    totalPages
+  };
+}
+
+function mapAlarms(
+  alarms: Array<{
+    id: string;
+    status: "ACTIVE" | "CLOSED";
+    senderNumber: string;
+    stationCode: string | null;
+    openedAt: Date;
+    messages: AlarmFeedMessage[];
+  }>
+): AlarmFeedAlarm[] {
   return alarms.map((alarm) => ({
     id: alarm.id,
     status: alarm.status,
