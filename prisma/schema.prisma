@@ -85,6 +85,22 @@ enum AlarmStatus {
   CLOSED
 }
 
+enum BackupKind {
+  AUTOMATIC
+  MANUAL
+}
+
+enum BackupStatus {
+  READY
+  FAILED
+}
+
+enum EmailReportDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
 model User {
   id                     String             @id @default(cuid())
   name                   String
@@ -345,6 +361,58 @@ model AlarmStatistic {
 
   @@index([openedAt])
   @@index([stationCode, openedAt])
+}
+
+model BackupSnapshot {
+  id              String       @id @default(cuid())
+  kind            BackupKind
+  status          BackupStatus @default(READY)
+  fileName        String       @unique
+  sizeBytes       Int          @default(0)
+  sha256          String?
+  errorMessage    String?
+  createdByUserId String?
+  createdAt       DateTime     @default(now())
+
+  @@index([kind, createdAt])
+  @@index([status, createdAt])
+}
+
+model EmailReportSchedule {
+  id            String                @id
+  name          String                @default("Månedsoversigt")
+  enabled       Boolean               @default(false)
+  recipients    String[]              @default([])
+  daysOfMonth   Int[]                 @default([])
+  sendHour      Int                   @default(8)
+  sendMinute    Int                   @default(0)
+  timezone      String                @default("Europe/Copenhagen")
+  lastSentAt    DateTime?
+  lastAttemptAt DateTime?
+  lastError     String?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  deliveries    EmailReportDelivery[]
+}
+
+model EmailReportDelivery {
+  id             String                    @id @default(cuid())
+  scheduleId     String
+  uniqueKey      String                    @unique
+  status         EmailReportDeliveryStatus @default(PENDING)
+  periodStart    DateTime
+  periodEnd      DateTime
+  recipientCount Int                       @default(0)
+  attemptCount   Int                       @default(0)
+  lastAttemptAt  DateTime?
+  sentAt         DateTime?
+  errorMessage   String?
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  schedule       EmailReportSchedule       @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@index([scheduleId, createdAt])
+  @@index([status, createdAt])
 }
 
 model Session {
