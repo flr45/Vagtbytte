@@ -4,12 +4,12 @@ import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Vagtoverdragelse",
-  description: "Midlertidig overdragelse af brandmandsvagt",
+  title: "SBR Portal",
+  description: "Beredskabsportal til alarmfeed, vagtoverdragelse og vagttildeling",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "Vagtbytte",
+    title: "SBR Portal",
     statusBarStyle: "default"
   },
   icons: {
