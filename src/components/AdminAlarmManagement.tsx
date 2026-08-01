@@ -9,12 +9,12 @@ import { formatDateTime } from "./TransferSummary";
 type AdminAlarm = {
   id: string;
   stationCode: string | null;
-  openedAt: Date;
+  openedAt: string;
   messages: Array<{
     id: string;
     sequenceNumber: number;
     rawMessage: string;
-    receivedAt: Date;
+    receivedAt: string;
   }>;
 };
 
@@ -40,7 +40,7 @@ function AdminAlarmRow({ alarm }: { alarm: AdminAlarm }) {
     <details className="rounded-lg border border-zinc-200 bg-zinc-50">
       <summary className="focus-ring cursor-pointer rounded-lg px-4 py-3">
         <span className="font-bold">{stationLabel(alarm.stationCode)}</span>
-        <span className="ml-2 text-sm text-zinc-600">{formatDateTime(alarm.openedAt)}</span>
+        <span className="ml-2 text-sm text-zinc-600">{formatDateTime(new Date(alarm.openedAt))}</span>
       </summary>
       <div className="grid gap-4 border-t border-zinc-200 bg-white p-4">
         <p className="whitespace-pre-wrap break-words text-sm font-semibold text-zinc-800">
