@@ -1,14 +1,7 @@
 "use client";
 
 import { useState } from "react";
-
-const STATIONS = [
-  { code: "A", label: "Slagelse" },
-  { code: "S", label: "Sorø" },
-  { code: "K", label: "Korsør" },
-  { code: "L", label: "Skælskør" },
-  { code: "R", label: "Ruds Vedby" }
-] as const;
+import { STATIONS } from "@/lib/stations";
 
 export function AlarmStationSelector({
   userId,
@@ -54,7 +47,10 @@ export function AlarmStationSelector({
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         {STATIONS.map((station) => (
-          <label className="flex min-h-11 items-center gap-3 rounded-md border border-zinc-200 bg-white px-3" key={station.code}>
+          <label
+            className="flex min-h-11 items-center gap-3 rounded-md border border-zinc-200 bg-white px-3"
+            key={station.code}
+          >
             <input
               checked={stations.includes(station.code)}
               onChange={() => toggle(station.code)}
