@@ -14,9 +14,13 @@ self.addEventListener("push", (event) => {
     data = {};
   }
 
+  const isAlarmNotification =
+    data.link === "/brandmand/alarmer" || String(data.tag || "").startsWith("alarm:");
   const title = data.title || "Vagtbytte";
   const options = {
-    body: data.body || "Der er en ny besked i Vagtbytte.",
+    body: isAlarmNotification
+      ? "Åbn Vagtbytte for at se alarmmeldingen."
+      : data.body || "Der er en ny besked i Vagtbytte.",
     icon: "/icon.svg",
     badge: "/icon-192.png",
     tag: data.tag || data.notificationId || undefined,
