@@ -75,7 +75,7 @@ export function createDeduplicationKey(input: AlarmFeedMessageInput) {
 }
 
 export function detectStationCode(rawMessage: string) {
-  const parenthesizedMatch = rawMessage.match(/\((ISL|[ASKLR])\)/i);
+  const parenthesizedMatch = rawMessage.match(/\((ISL|[ABSKLR])\)/i);
   const parenthesizedCode = parenthesizedMatch?.[1]?.toUpperCase() ?? null;
 
   if (isStationCode(parenthesizedCode)) {
