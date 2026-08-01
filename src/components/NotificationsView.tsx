@@ -21,13 +21,15 @@ export function NotificationsView({
   notifications,
   devices,
   publicKey,
-  latestDelivery
+  latestDelivery,
+  showTechnicalDetails = false
 }: {
   title: string;
   notifications: Notification[];
   devices: SafePushDevice[];
   publicKey?: string;
   latestDelivery?: { status: string; at: string | null } | null;
+  showTechnicalDetails?: boolean;
 }) {
   const unread = notifications.filter((item) => !item.readAt);
   const read = notifications.filter((item) => item.readAt).slice(0, 25);
@@ -40,9 +42,7 @@ export function NotificationsView({
           <p className="mt-2 text-sm text-zinc-600">{unread.length} ulæste.</p>
         </div>
         <form action={markAllNotificationsReadAction}>
-          <button className="app-button-secondary">
-            Læs alle
-          </button>
+          <button className="app-button-secondary">Læs alle</button>
         </form>
       </section>
       <section className="grid gap-2">
@@ -65,37 +65,42 @@ export function NotificationsView({
             <p className="text-sm text-zinc-600">Vis flere kommer i en senere historikvisning.</p>
           ) : null}
           <form action={dismissReadNotificationsAction}>
-            <button className="app-button-secondary w-full sm:w-auto">
-              Ryd læste
-            </button>
+            <button className="app-button-secondary w-full sm:w-auto">Ryd læste</button>
           </form>
         </div>
       </details>
       <section className="app-card grid gap-3">
         <h2 className="text-xl font-bold">Notifikationsindstillinger</h2>
-        <PushManager latestDelivery={latestDelivery} publicKey={publicKey} serverDeviceCount={devices.length} />
-        <p className="text-sm text-zinc-600">
-          På iPhone kan push kræve, at siden først er installeret på hjemmeskærmen.
-        </p>
-        <h3 className="text-lg font-bold">Registrerede enheder</h3>
-        {devices.length === 0 ? (
-          <EmptyState text="Ingen push-enheder endnu." />
-        ) : (
-          devices.map((device) => (
-            <article className="grid gap-2 rounded-2xl border border-zinc-100 bg-zinc-50 p-4" key={device.id}>
-              <p className="font-bold">{device.deviceName ?? "Browser"}</p>
-              <p className="text-sm text-zinc-600">
-                Seneste aktivitet: {device.lastUsedAt ? formatDateTime(device.lastUsedAt) : "Ikke registreret"}
-              </p>
-              <form action={removePushSubscriptionAction}>
-                <input name="subscriptionId" type="hidden" value={device.id} />
-                <button className="app-button-secondary w-full sm:w-auto">
-                  Fjern enhed
-                </button>
-              </form>
-            </article>
-          ))
-        )}
+        <PushManager
+          latestDelivery={latestDelivery}
+          publicKey={publicKey}
+          serverDeviceCount={devices.length}
+          showDiagnostics={showTechnicalDetails}
+        />
+        {showTechnicalDetails ? (
+          <>
+            <p className="text-sm text-zinc-600">
+              På iPhone kan push kræve, at siden først er installeret på hjemmeskærmen.
+            </p>
+            <h3 className="text-lg font-bold">Registrerede enheder</h3>
+            {devices.length === 0 ? (
+              <EmptyState text="Ingen push-enheder endnu." />
+            ) : (
+              devices.map((device) => (
+                <article className="grid gap-2 rounded-2xl border border-zinc-100 bg-zinc-50 p-4" key={device.id}>
+                  <p className="font-bold">{device.deviceName ?? "Browser"}</p>
+                  <p className="text-sm text-zinc-600">
+                    Seneste aktivitet: {device.lastUsedAt ? formatDateTime(device.lastUsedAt) : "Ikke registreret"}
+                  </p>
+                  <form action={removePushSubscriptionAction}>
+                    <input name="subscriptionId" type="hidden" value={device.id} />
+                    <button className="app-button-secondary w-full sm:w-auto">Fjern enhed</button>
+                  </form>
+                </article>
+              ))
+            )}
+          </>
+        ) : null}
       </section>
     </main>
   );
@@ -122,17 +127,13 @@ function NotificationRow({ notification, unread = false }: { notification: Notif
           {hasValidCaseLink(notification.link) ? (
             <form action={openNotificationAction}>
               <input name="notificationId" type="hidden" value={notification.id} />
-              <button className="app-button-primary min-h-11 px-4 text-sm">
-                Åbn sag
-              </button>
+              <button className="app-button-primary min-h-11 px-4 text-sm">Åbn sag</button>
             </form>
           ) : null}
           {unread ? (
             <form action={markNotificationReadAction}>
               <input name="notificationId" type="hidden" value={notification.id} />
-              <button className="app-button-secondary min-h-11 px-4 text-sm">
-                Læst
-              </button>
+              <button className="app-button-secondary min-h-11 px-4 text-sm">Læst</button>
             </form>
           ) : null}
         </div>
