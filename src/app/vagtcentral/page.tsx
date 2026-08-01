@@ -24,7 +24,7 @@ export default async function VagtcentralPage() {
         assignedShiftStart: currentShift.start,
         assignedShiftEnd: currentShift.end
       },
-      orderBy: [{ status: "desc" }, { assignedAt: "asc" }, { user: { name: "asc" } }],
+      orderBy: [{ assignedAt: "asc" }, { user: { name: "asc" } }],
       include: { user: true }
     }),
     prisma.availability.findMany({
@@ -98,13 +98,14 @@ export default async function VagtcentralPage() {
 
 function serializeAvailability(
   availability: Awaited<ReturnType<typeof prisma.availability.findMany>>[number] & {
-    user: { name: string };
+    user: { name: string; employeeNumber: string | null };
     assignedByUser?: { name: string } | null;
   }
 ) {
   return {
     id: availability.id,
     userName: availability.user.name,
+    userEmployeeNumber: availability.user.employeeNumber,
     availableFrom: availability.availableFrom.toISOString(),
     availableUntil: availability.availableUntil.toISOString(),
     status: availability.status,
