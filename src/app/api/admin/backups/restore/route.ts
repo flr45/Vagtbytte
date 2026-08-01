@@ -31,7 +31,7 @@ export async function POST(request: Request) {
 
   const directory = process.env.BACKUP_DIRECTORY || "/data/backups";
   await mkdir(directory, { recursive: true });
-  const temporaryPath = path.join(directory, `restore-upload-${randomUUID()}.vagtbackup.gz`);
+  const temporaryPath = path.join(directory, `restore-upload-${randomUUID()}.vagtbackup.upload`);
 
   try {
     await writeFile(temporaryPath, Buffer.from(await file.arrayBuffer()), { mode: 0o600 });
@@ -48,13 +48,15 @@ export async function POST(request: Request) {
     const result = parseLastJsonLine(stdout);
     return NextResponse.json({
       ok: true,
-      message: "Backupen er gendannet. Du skal logge ind igen.",
+      message: result?.encrypted
+        ? "Den krypterede backup er gendannet. Du skal logge ind igen."
+        : "Den ældre ukrypterede backup er gendannet. Du skal logge ind igen.",
       result
     });
   } catch (error) {
     return NextResponse.json(
       {
-        error: error instanceof Error ? `Gendannelsen fejlede: ${error.message}` : "Gendannelsen fejlede"
+        error: `Gendannelsen fejlede: ${extractProcessError(error)}`
       },
       { status: 500 }
     );
@@ -68,8 +70,20 @@ function parseLastJsonLine(value: string) {
   const last = lines.at(-1);
   if (!last) return null;
   try {
-    return JSON.parse(last);
+    return JSON.parse(last) as { encrypted?: boolean };
   } catch {
     return null;
   }
+}
+
+function extractProcessError(error: unknown) {
+  if (typeof error === "object" && error) {
+    const processError = error as { stdout?: string; stderr?: string; message?: string };
+    const structured = parseLastJsonLine(processError.stdout ?? "") as { error?: string } | null;
+    if (structured?.error) return structured.error;
+    const stderrLine = processError.stderr?.trim().split(/\r?\n/).filter(Boolean).at(-1);
+    if (stderrLine) return stderrLine;
+    if (processError.message) return processError.message;
+  }
+  return error instanceof Error ? error.message : "Ukendt fejl";
 }
