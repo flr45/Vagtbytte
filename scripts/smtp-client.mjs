@@ -20,7 +20,7 @@ export function smtpConfigurationSummary(env = process.env) {
 export async function sendMail(message, env = process.env) {
   const config = readConfig(env);
   const connection = new SmtpConnection(config);
-  const messageId = `<${randomUUID()}@${domainFromAddress(config.fromAddress)}>`;
+  const messageId = `<${randomUUID()}@${domainFromAddress(config.envelopeFrom)}>`;
 
   try {
     await connection.connect();
