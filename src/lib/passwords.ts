@@ -1,12 +1,11 @@
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { PASSWORD_REQUIREMENTS } from "./password-policy";
 
-export const passwordSchema = z
-  .string()
-  .min(10, "Adgangskoden skal være mindst 10 tegn")
-  .regex(/[A-ZÆØÅ]/, "Adgangskoden skal indeholde et stort bogstav")
-  .regex(/[a-zæøå]/, "Adgangskoden skal indeholde et lille bogstav")
-  .regex(/[0-9]/, "Adgangskoden skal indeholde et tal");
+export const passwordSchema = PASSWORD_REQUIREMENTS.reduce(
+  (schema, requirement) => schema.refine(requirement.test, requirement.label),
+  z.string()
+);
 
 export async function hashPassword(password: string) {
   return bcrypt.hash(password, 12);
