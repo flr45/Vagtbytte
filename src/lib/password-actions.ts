@@ -30,13 +30,6 @@ const passwordPairFields = {
   confirmPassword: z.string().min(1, "Gentag den nye adgangskode")
 };
 
-const newPasswordSchema = z
-  .object(passwordPairFields)
-  .refine((data) => data.newPassword === data.confirmPassword, {
-    message: "Adgangskoderne er ikke ens",
-    path: ["confirmPassword"]
-  });
-
 const requiredPasswordChangeSchema = z
   .object({
     currentPassword: z.string().min(1, "Indtast den nuværende adgangskode"),
@@ -280,5 +273,3 @@ export async function resetForgottenPasswordAction(
 
   redirect("/login?reset=1");
 }
-
-export { newPasswordSchema };
