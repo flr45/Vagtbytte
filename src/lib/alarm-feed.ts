@@ -90,6 +90,13 @@ export function startsNewAlarm(rawMessage: string) {
   return detectStationCode(rawMessage) !== null;
 }
 
+export function shouldReceiveAlarmNotification(
+  sequenceNumber: number,
+  receiveAlarmFollowUps: boolean
+) {
+  return sequenceNumber <= 1 || receiveAlarmFollowUps;
+}
+
 export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
   const senderNumber = normalizePhoneNumber(input.senderNumber);
   const rawMessage = input.rawMessage.trim();
@@ -220,7 +227,10 @@ async function notifyStationFirefighters(input: {
       isActive: true,
       alarmStations: { has: input.stationCode }
     },
-    select: { id: true }
+    select: {
+      id: true,
+      receiveAlarmFollowUps: true
+    }
   });
 
   const title =
@@ -230,6 +240,15 @@ async function notifyStationFirefighters(input: {
   const body = truncateForPush(input.rawMessage, 220);
 
   for (const firefighter of firefighters) {
+    if (
+      !shouldReceiveAlarmNotification(
+        input.sequenceNumber,
+        firefighter.receiveAlarmFollowUps
+      )
+    ) {
+      continue;
+    }
+
     try {
       await createNotification(prisma, {
         recipientUserId: firefighter.id,
