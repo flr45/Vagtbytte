@@ -128,8 +128,8 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
   const result = await prisma.$transaction(async (tx) => {
     // Flere SMS'er kan lande næsten samtidig. Låsen sikrer, at førstesendingen
     // bliver oprettet, før næste request forsøger at finde den som aktiv alarm.
-    await tx.$executeRaw(
-      Prisma.sql`SELECT pg_advisory_xact_lock(hashtext('sbr-alarm-feed-ingest'))`
+    await tx.$queryRaw<Array<{ locked: null }>>(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtext('sbr-alarm-feed-ingest')) AS "locked"`
     );
 
     const duplicate = await tx.alarmMessage.findUnique({
