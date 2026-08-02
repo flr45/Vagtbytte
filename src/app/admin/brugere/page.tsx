@@ -37,17 +37,20 @@ export default async function UserOverviewPage({
         ? { isActive: false }
         : status === "admin"
           ? { hasAdminAccess: true }
-          : status === "no-push"
-            ? { pushSubscriptions: { none: { revokedAt: null } } }
-            : status === "never-login"
-              ? { lastLoginAt: null }
-              : {}),
+          : status === "no-email"
+            ? { email: null }
+            : status === "no-push"
+              ? { pushSubscriptions: { none: { revokedAt: null } } }
+              : status === "never-login"
+                ? { lastLoginAt: null }
+                : {}),
     ...(query
       ? {
           OR: [
             { name: { contains: query, mode: "insensitive" } },
             { employeeNumber: { contains: query, mode: "insensitive" } },
-            { loginIdentifier: { contains: query, mode: "insensitive" } }
+            { loginIdentifier: { contains: query, mode: "insensitive" } },
+            { email: { contains: query, mode: "insensitive" } }
           ]
         }
       : {})
@@ -61,9 +64,11 @@ export default async function UserOverviewPage({
         id: true,
         name: true,
         employeeNumber: true,
+        email: true,
         stationCode: true,
         isActive: true,
         hasAdminAccess: true,
+        receiveAlarmFollowUps: true,
         lastLoginAt: true,
         createdAt: true,
         _count: {
@@ -77,6 +82,7 @@ export default async function UserOverviewPage({
       where: baseWhere,
       select: {
         stationCode: true,
+        email: true,
         isActive: true,
         hasAdminAccess: true,
         lastLoginAt: true,
@@ -91,6 +97,7 @@ export default async function UserOverviewPage({
 
   const activeCount = allUsers.filter((user) => user.isActive).length;
   const adminCount = allUsers.filter((user) => user.hasAdminAccess).length;
+  const missingEmailCount = allUsers.filter((user) => !user.email).length;
   const missingPushCount = allUsers.filter((user) => user._count.pushSubscriptions === 0).length;
   const neverLoggedInCount = allUsers.filter((user) => !user.lastLoginAt).length;
 
@@ -105,12 +112,13 @@ export default async function UserOverviewPage({
         <section className="rounded-lg border border-brand-line bg-white p-5 shadow-sm">
           <h1 className="text-3xl font-black">Brugeroverblik</h1>
           <p className="mt-2 text-sm font-semibold text-zinc-600">
-            Se stationstilknytning, administratoradgang, push-enheder og seneste login.
+            Se stationstilknytning, mail, opfølgende alarmsendinger, administratoradgang, push-enheder og seneste login.
           </p>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
             <Stat label="Brugere i alt" value={allUsers.length} />
             <Stat label="Aktive" value={activeCount} />
             <Stat label="Administratoradgang" value={adminCount} />
+            <Stat label="Mangler mail" value={missingEmailCount} warning={missingEmailCount > 0} />
             <Stat label="Mangler push" value={missingPushCount} warning={missingPushCount > 0} />
             <Stat label="Aldrig logget ind" value={neverLoggedInCount} warning={neverLoggedInCount > 0} />
           </div>
@@ -144,7 +152,7 @@ export default async function UserOverviewPage({
         <section className="rounded-lg border border-brand-line bg-white p-4">
           <form className="grid gap-4 md:grid-cols-4" method="get">
             <label className="grid gap-2 text-sm font-bold text-zinc-700 md:col-span-2">
-              Søg efter navn eller medarbejdernummer
+              Søg efter navn, medarbejdernummer eller mail
               <input
                 className="focus-ring min-h-12 rounded-xl border border-zinc-200 px-4 text-base"
                 defaultValue={query}
@@ -177,6 +185,7 @@ export default async function UserOverviewPage({
                 <option value="active">Aktive</option>
                 <option value="inactive">Deaktiverede</option>
                 <option value="admin">Administratoradgang</option>
+                <option value="no-email">Mangler mail</option>
                 <option value="no-push">Mangler push</option>
                 <option value="never-login">Aldrig logget ind</option>
               </select>
@@ -196,13 +205,15 @@ export default async function UserOverviewPage({
             <p className="p-5 text-sm font-semibold text-zinc-600">Ingen brugere matcher filtrene.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[850px] border-collapse text-left text-sm">
+              <table className="w-full min-w-[1100px] border-collapse text-left text-sm">
                 <thead className="bg-zinc-50 text-xs uppercase text-zinc-600">
                   <tr>
                     <th className="px-4 py-3">Navn</th>
                     <th className="px-4 py-3">Medarbejdernummer</th>
+                    <th className="px-4 py-3">Mail</th>
                     <th className="px-4 py-3">Station</th>
                     <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Sending 2+</th>
                     <th className="px-4 py-3">Admin</th>
                     <th className="px-4 py-3">Push-enheder</th>
                     <th className="px-4 py-3">Seneste login</th>
@@ -213,12 +224,16 @@ export default async function UserOverviewPage({
                     <tr className="border-t border-zinc-100" key={user.id}>
                       <td className="px-4 py-3 font-bold">{user.name}</td>
                       <td className="px-4 py-3 font-semibold">{user.employeeNumber ?? "—"}</td>
+                      <td className="max-w-xs break-all px-4 py-3">
+                        {user.email ? user.email : <span className="font-bold text-amber-700">Mangler</span>}
+                      </td>
                       <td className="px-4 py-3">{stationLabel(user.stationCode)}</td>
                       <td className="px-4 py-3">
                         <span className={user.isActive ? "font-bold text-emerald-700" : "font-bold text-red-700"}>
                           {user.isActive ? "Aktiv" : "Deaktiveret"}
                         </span>
                       </td>
+                      <td className="px-4 py-3">{user.receiveAlarmFollowUps ? "Ja" : "Nej"}</td>
                       <td className="px-4 py-3">{user.hasAdminAccess ? "Ja" : "Nej"}</td>
                       <td className="px-4 py-3">
                         <span className={user._count.pushSubscriptions > 0 ? "font-bold text-emerald-700" : "font-bold text-red-700"}>
