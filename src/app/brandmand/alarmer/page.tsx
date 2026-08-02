@@ -1,6 +1,7 @@
 import { UserRole } from "@prisma/client";
 import { requireRole } from "@/lib/auth";
 import { listRecentAlarmsForStations } from "@/lib/alarm-feed";
+import { groupAlarmFeedForDisplay } from "@/lib/alarm-feed-view";
 import { prisma } from "@/lib/prisma";
 import { AlarmFeedAutoRefresh } from "@/components/AlarmFeedAutoRefresh";
 import { TopBar } from "@/components/TopBar";
@@ -15,6 +16,7 @@ export default async function AlarmFeedPage() {
     select: { alarmStations: true }
   });
   const alarms = await listRecentAlarmsForStations(preferences?.alarmStations ?? []);
+  const alarmGroups = groupAlarmFeedForDisplay(alarms);
 
   return (
     <>
@@ -40,7 +42,7 @@ export default async function AlarmFeedPage() {
           </p>
         </header>
 
-        {alarms.length === 0 ? (
+        {alarmGroups.length === 0 ? (
           <section className="app-card">
             <h2 className="text-xl font-black">Ingen meldinger endnu</h2>
             <p className="mt-2 font-semibold text-zinc-600">
@@ -48,12 +50,23 @@ export default async function AlarmFeedPage() {
             </p>
           </section>
         ) : (
-          alarms.map((alarm) => (
+          alarmGroups.map((alarm) => (
             <article
-              className="app-card grid scroll-mt-24 gap-4 target:ring-4 target:ring-brand-red/30"
+              className="app-card relative grid scroll-mt-24 gap-4 target:ring-4 target:ring-brand-red/30"
               id={`alarm-${alarm.id}`}
               key={alarm.id}
             >
+              {alarm.sourceAlarmIds
+                .filter((sourceAlarmId) => sourceAlarmId !== alarm.id)
+                .map((sourceAlarmId) => (
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute -top-24"
+                    id={`alarm-${sourceAlarmId}`}
+                    key={sourceAlarmId}
+                  />
+                ))}
+
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-black uppercase text-brand-red">
