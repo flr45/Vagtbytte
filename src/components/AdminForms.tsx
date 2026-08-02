@@ -21,6 +21,7 @@ type UserListItem = {
   isActive: boolean;
   stationCode: string | null;
   alarmStations: string[];
+  receiveAlarmFollowUps: boolean;
   hasAdminAccess: boolean;
 };
 
@@ -40,6 +41,10 @@ export function CreateFirefighterForm() {
       />
       <StationSelect name="stationCode" />
       <AlarmStationCheckboxes />
+      <Checkbox
+        label="Modtag opfølgende sendinger (sending 2+)"
+        name="receiveAlarmFollowUps"
+      />
       <Checkbox defaultChecked label="Aktiv" name="isActive" />
       <Checkbox label="Administratoradgang" name="hasAdminAccess" />
       <ActionMessage message={state.message} ok={state.ok} />
@@ -117,6 +122,11 @@ function FirefighterEditForm({ user }: { user: UserListItem }) {
           />
           <StationSelect defaultValue={user.stationCode ?? "A"} name="stationCode" />
           <AlarmStationCheckboxes selected={user.alarmStations} />
+          <Checkbox
+            defaultChecked={user.receiveAlarmFollowUps}
+            label="Modtag opfølgende sendinger (sending 2+)"
+            name="receiveAlarmFollowUps"
+          />
           <Checkbox defaultChecked={user.isActive} label="Aktiv" name="isActive" />
           <Checkbox
             defaultChecked={user.hasAdminAccess}
