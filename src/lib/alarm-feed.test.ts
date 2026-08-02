@@ -4,6 +4,7 @@ import {
   alarmNotificationTitle,
   detectStationCode,
   followUpWindowStart,
+  normalizeStationHint,
   shouldReceiveAlarmNotification,
   startsNewAlarm
 } from "./alarm-feed";
@@ -32,6 +33,18 @@ describe("detectStationCode", () => {
 
   it("genkender ikke ISL som del af et andet ord", () => {
     expect(detectStationCode("En mislykket melding")).toBeNull();
+  });
+});
+
+describe("normalizeStationHint", () => {
+  it("accepterer en gyldig station fra SMS-gatewayen", () => {
+    expect(normalizeStationHint(" a ")).toBe("A");
+    expect(normalizeStationHint("isl")).toBe("ISL");
+  });
+
+  it("afviser manglende og ukendte stationskoder", () => {
+    expect(normalizeStationHint(null)).toBeNull();
+    expect(normalizeStationHint("X")).toBeNull();
   });
 });
 
