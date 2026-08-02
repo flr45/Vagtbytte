@@ -14,8 +14,9 @@ self.addEventListener("push", (event) => {
     data = {};
   }
 
+  const notificationLink = String(data.link || "");
   const isAlarmNotification =
-    data.link === "/brandmand/alarmer" || String(data.tag || "").startsWith("alarm:");
+    notificationLink.startsWith("/brandmand/alarmer") || String(data.tag || "").startsWith("alarm:");
   const title = data.title || "SBR Portal";
   const options = {
     body: isAlarmNotification
