@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  alarmNotificationLink,
+  alarmNotificationTitle,
   detectStationCode,
   shouldReceiveAlarmNotification,
   startsNewAlarm
@@ -63,5 +65,18 @@ describe("shouldReceiveAlarmNotification", () => {
     expect(shouldReceiveAlarmNotification(2, true)).toBe(true);
     expect(shouldReceiveAlarmNotification(3, false)).toBe(false);
     expect(shouldReceiveAlarmNotification(3, true)).toBe(true);
+  });
+});
+
+describe("alarmnotifikationer", () => {
+  it("viser stationsnavnet i stedet for stationskoden", () => {
+    expect(alarmNotificationTitle(1, "A")).toBe("🚨 Ny alarm – Slagelse");
+    expect(alarmNotificationTitle(2, "L")).toBe("🚨 Sending 2 – Skælskør");
+  });
+
+  it("linker direkte til den konkrete alarm", () => {
+    expect(alarmNotificationLink("alarm 123")).toBe(
+      "/brandmand/alarmer#alarm-alarm%20123"
+    );
   });
 });
