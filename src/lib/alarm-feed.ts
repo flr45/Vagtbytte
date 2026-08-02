@@ -47,7 +47,7 @@ export type StoredAlarmPage = {
 };
 
 const FOLLOW_UP_WINDOW_MS = 30 * 60 * 1000;
-const CROSS_SENDER_FOLLOW_UP_WINDOW_MS = 2 * 60 * 1000;
+const CROSS_SENDER_FOLLOW_UP_WINDOW_MS = 10 * 60 * 1000;
 const ALARM_NOTIFICATION_TYPE = "ALARM_MESSAGE" as NotificationType;
 const MAX_PUBLIC_ALARMS = 5;
 const MAX_ADMIN_PAGE_SIZE = 100;
@@ -98,6 +98,17 @@ export function shouldReceiveAlarmNotification(
   return sequenceNumber <= 1 || receiveAlarmFollowUps;
 }
 
+export function alarmNotificationTitle(sequenceNumber: number, stationCode: string) {
+  const station = stationLabel(stationCode);
+  return sequenceNumber === 1
+    ? `🚨 Ny alarm – ${station}`
+    : `🚨 Sending ${sequenceNumber} – ${station}`;
+}
+
+export function alarmNotificationLink(alarmId: string) {
+  return `/brandmand/alarmer#alarm-${encodeURIComponent(alarmId)}`;
+}
+
 export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
   const senderNumber = normalizePhoneNumber(input.senderNumber);
   const rawMessage = input.rawMessage.trim();
@@ -126,8 +137,9 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
     );
 
     // En stationsmarkeret SMS starter altid en ny alarm. En umarkeret SMS forsøges
-    // først koblet på samme afsender. Hvis modemmet leverer en anden/ukendt afsender,
-    // kobles den på den seneste alarm inden for to minutter.
+    // først koblet på samme afsender. Alarmcentralens efterfølgende sendinger kan
+    // komme fra et andet nummer, og kobles derfor på den senest opdaterede
+    // stationsmarkerede alarm inden for ti minutter.
     let activeAlarm: Array<{ id: string; stationCode: string | null }> = [];
 
     if (!isAlarmStart) {
@@ -138,7 +150,7 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
                      AND "senderNumber" = ${senderNumber}
                      AND "openedAt" >= ${windowStart}
                      AND "openedAt" <= ${input.receivedAt}
-                   ORDER BY "openedAt" DESC
+                   ORDER BY "updatedAt" DESC, "openedAt" DESC
                    LIMIT 1
                    FOR UPDATE`
       );
@@ -151,7 +163,7 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
                        AND "stationCode" IS NOT NULL
                        AND "openedAt" >= ${crossSenderWindowStart}
                        AND "openedAt" <= ${input.receivedAt}
-                     ORDER BY "openedAt" DESC
+                     ORDER BY "updatedAt" DESC, "openedAt" DESC
                      LIMIT 1
                      FOR UPDATE`
         );
@@ -255,10 +267,7 @@ async function notifyStationFirefighters(input: {
     }
   });
 
-  const title =
-    input.sequenceNumber === 1
-      ? `🚨 Ny alarm (${input.stationCode})`
-      : `🚨 Sending ${input.sequenceNumber} (${input.stationCode})`;
+  const title = alarmNotificationTitle(input.sequenceNumber, input.stationCode);
   const body = truncateForPush(input.rawMessage, 220);
 
   for (const firefighter of firefighters) {
@@ -277,7 +286,7 @@ async function notifyStationFirefighters(input: {
         type: ALARM_NOTIFICATION_TYPE,
         title,
         body,
-        link: "/brandmand/alarmer",
+        link: alarmNotificationLink(input.alarmId),
         uniqueKey: `alarm:${input.alarmId}:message:${input.messageId}:user:${firefighter.id}`,
         publishNow: true
       });
