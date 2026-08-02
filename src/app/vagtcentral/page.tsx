@@ -83,23 +83,22 @@ export default async function VagtcentralPage() {
   return (
     <>
       <TopBar title="Vagtcentral" />
-      <VcAvailabilityManagement
-        availableFirefighters={availableFirefighters.map(serializeManagedAvailability)}
-        currentAssignments={currentAssignments.map(serializeManagedAvailability)}
-        previousAvailabilities={previousAvailabilities.map(serializeManagedAvailability)}
-      />
-      <div className="vc-dashboard-with-managed-availability">
-        <VcDashboard
-          activeTransfers={activeTransfers.map(serializeTransfer)}
-          awaitingTransfers={awaitingApproval.map(serializeTransfer)}
-          availableFirefighters={[]}
-          currentAssignments={[]}
-          previousAvailabilities={[]}
-          recentlyHandled={recentlyHandled.map(serializeTransfer)}
-          returnTransfers={returnApprovals.map(serializeTransfer)}
-          serverNow={now.toISOString()}
+      <VcDashboard
+        activeTransfers={activeTransfers.map(serializeTransfer)}
+        awaitingTransfers={awaitingApproval.map(serializeTransfer)}
+        availableFirefighters={[]}
+        currentAssignments={[]}
+        previousAvailabilities={[]}
+        recentlyHandled={recentlyHandled.map(serializeTransfer)}
+        returnTransfers={returnApprovals.map(serializeTransfer)}
+        serverNow={now.toISOString()}
+      >
+        <VcAvailabilityManagement
+          availableFirefighters={availableFirefighters.map(serializeManagedAvailability)}
+          currentAssignments={currentAssignments.map(serializeManagedAvailability)}
+          previousAvailabilities={previousAvailabilities.map(serializeManagedAvailability)}
         />
-      </div>
+      </VcDashboard>
     </>
   );
 }

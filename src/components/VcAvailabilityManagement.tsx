@@ -7,7 +7,6 @@ import {
   VcUnassignAvailabilityForm
 } from "./AvailabilityForms";
 import { formatDateTime } from "./TransferSummary";
-import { InboxIcon } from "./Icons";
 
 export type ManagedAvailability = {
   id: string;
@@ -30,118 +29,67 @@ export function VcAvailabilityManagement({
   previousAvailabilities: ManagedAvailability[];
 }) {
   return (
-    <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 pt-6">
-      <CurrentAssignments assignments={currentAssignments} />
-      <AvailableFirefighters
-        availabilities={availableFirefighters}
-        previousAvailabilities={previousAvailabilities}
-      />
-    </div>
-  );
-}
+    <section className="grid gap-3 lg:grid-cols-2">
+      <CompactPanel
+        count={currentAssignments.length}
+        emptyText="Ingen er tildelt vagt lige nu."
+        subtitle="Gældende tildelinger"
+        title="Aktuelt tildelt"
+      >
+        {currentAssignments.map((assignment) => (
+          <article
+            className="grid gap-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3 sm:grid-cols-[1fr_auto] sm:items-center"
+            key={assignment.id}
+          >
+            <div className="min-w-0">
+              <p className="truncate font-black text-emerald-950">{assignment.userName}</p>
+              <p className="text-sm font-semibold text-emerald-800">
+                {assignment.userEmployeeNumber ?? "Uden nummer"} · tildelt {formatShortTime(assignment.assignedAt)}
+              </p>
+            </div>
+            <VcUnassignAvailabilityForm availabilityId={assignment.id} />
+          </article>
+        ))}
+      </CompactPanel>
 
-function CurrentAssignments({ assignments }: { assignments: ManagedAvailability[] }) {
-  return (
-    <section className="grid gap-4">
-      <div>
-        <h1 className="text-3xl font-bold">Aktuelt tildelt ({assignments.length})</h1>
-        <p className="text-sm font-semibold text-zinc-600">
-          Tildelingen er gældende med det samme og kræver ikke svar fra brandmanden.
-        </p>
-      </div>
-      {assignments.length === 0 ? (
-        <EmptyState text="Ingen er tildelt vagt lige nu." />
-      ) : (
-        <div className="grid gap-3 md:grid-cols-2">
-          {assignments.map((assignment) => (
-            <article
-              className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]"
-              key={assignment.id}
-            >
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h2 className="text-xl font-black text-emerald-950">{assignment.userName}</h2>
-                  <p className="mt-1 text-sm font-bold text-emerald-800">
-                    Medarbejdernummer: {assignment.userEmployeeNumber ?? "Ikke angivet"}
-                  </p>
-                  <dl className="mt-3 grid gap-2 text-sm font-semibold text-emerald-950">
-                    <div>
-                      <dt className="text-xs font-black uppercase text-emerald-700">Tildelt</dt>
-                      <dd className="text-lg font-black">{formatShortTime(assignment.assignedAt)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs font-black uppercase text-emerald-700">Status</dt>
-                      <dd className="text-base font-black">Tildelt</dd>
-                    </div>
-                  </dl>
-                </div>
-                <span className="w-fit rounded-full bg-emerald-100 px-3 py-1 text-sm font-black text-emerald-900">
-                  ● Tildelt
-                </span>
-              </div>
-              <VcUnassignAvailabilityForm availabilityId={assignment.id} />
-            </article>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
+      <CompactPanel
+        count={availableFirefighters.length}
+        emptyText="Ingen brandfolk er til rådighed."
+        subtitle="Kan tildeles med det samme"
+        title="Til rådighed"
+      >
+        {availableFirefighters.map((availability) => (
+          <article
+            className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:grid-cols-[1fr_auto] sm:items-center"
+            key={availability.id}
+          >
+            <div className="min-w-0">
+              <p className="truncate font-black">{availability.userName}</p>
+              <p className="text-sm font-semibold text-zinc-600">
+                {availability.userEmployeeNumber ?? "Uden nummer"} · {formatShortTime(availability.availableFrom)}–{formatShortTime(availability.availableUntil)}
+              </p>
+            </div>
+            <VcAssignAvailabilityForm availabilityId={availability.id} />
+          </article>
+        ))}
+      </CompactPanel>
 
-function AvailableFirefighters({
-  availabilities,
-  previousAvailabilities
-}: {
-  availabilities: ManagedAvailability[];
-  previousAvailabilities: ManagedAvailability[];
-}) {
-  return (
-    <section className="grid gap-4">
-      <div>
-        <h1 className="text-3xl font-bold">Til rådighed</h1>
-        <p className="text-sm font-semibold text-zinc-600">Til rådighed ({availabilities.length})</p>
-      </div>
-      {availabilities.length === 0 ? (
-        <EmptyState text="Der er ingen brandmænd til rådighed." />
-      ) : (
-        <div className="grid gap-3">
-          {availabilities.map((availability) => (
-            <article
-              className="grid gap-4 rounded-2xl border border-emerald-100 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)] sm:grid-cols-[1fr_auto] sm:items-center"
-              key={availability.id}
-            >
-              <div>
-                <h2 className="text-xl font-black">{availability.userName}</h2>
-                <p className="mt-1 text-sm font-bold text-zinc-600">
-                  Medarbejdernummer: {availability.userEmployeeNumber ?? "Ikke angivet"}
-                </p>
-                <p className="mt-1 text-lg font-bold text-zinc-700">
-                  {formatShortTime(availability.availableFrom)} → {formatShortTime(availability.availableUntil)}
-                </p>
-              </div>
-              <VcAssignAvailabilityForm availabilityId={availability.id} />
-            </article>
-          ))}
-        </div>
-      )}
-      <details className="grid gap-3">
-        <summary className="cursor-pointer text-base font-bold text-zinc-700">Tidligere tilgængeligheder</summary>
-        <div className="mt-3 grid gap-2">
+      <details className="rounded-2xl border border-zinc-200 bg-white lg:col-span-2">
+        <summary className="focus-ring flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-2xl px-4 text-sm font-black text-zinc-700">
+          <span>Tidligere tilgængeligheder</span>
+          <span className="rounded-full bg-zinc-100 px-2.5 py-1">{previousAvailabilities.length}</span>
+        </summary>
+        <div className="grid gap-2 border-t border-zinc-200 p-3 sm:grid-cols-2 lg:grid-cols-3">
           {previousAvailabilities.length === 0 ? (
-            <p className="rounded-2xl border border-zinc-100 bg-white p-4 text-sm font-semibold text-zinc-600">
-              Ingen tidligere tilgængeligheder.
-            </p>
+            <p className="text-sm font-semibold text-zinc-600">Ingen tidligere tilgængeligheder.</p>
           ) : (
             previousAvailabilities.map((availability) => (
-              <div className="rounded-2xl border border-zinc-100 bg-white p-4" key={availability.id}>
+              <div className="rounded-xl bg-zinc-50 p-3" key={availability.id}>
                 <p className="font-bold">{availability.userName}</p>
                 <p className="text-sm font-semibold text-zinc-600">
-                  Medarbejdernummer: {availability.userEmployeeNumber ?? "Ikke angivet"}
-                </p>
-                <p className="mt-1 text-sm font-semibold text-zinc-600">
                   {availabilityStatusLabel(availability.status)}
                   {availability.assignedAt
-                    ? ` · tildelt ${formatDateTime(new Date(availability.assignedAt))}`
+                    ? ` · ${formatDateTime(new Date(availability.assignedAt))}`
                     : ""}
                 </p>
               </div>
@@ -153,12 +101,32 @@ function AvailableFirefighters({
   );
 }
 
-function EmptyState({ text }: { text: string }) {
+function CompactPanel({
+  title,
+  subtitle,
+  count,
+  emptyText,
+  children
+}: {
+  title: string;
+  subtitle: string;
+  count: number;
+  emptyText: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="app-card grid place-items-center gap-3 py-8 text-center text-sm text-zinc-600">
-      <InboxIcon className="size-9 text-zinc-400" />
-      <p>{text}</p>
-    </div>
+    <details className="rounded-2xl border border-zinc-200 bg-white" open={count > 0}>
+      <summary className="focus-ring flex min-h-16 cursor-pointer items-center justify-between gap-3 rounded-2xl px-4">
+        <div>
+          <h2 className="text-lg font-black">{title}</h2>
+          <p className="text-xs font-semibold text-zinc-600">{subtitle}</p>
+        </div>
+        <span className="rounded-full bg-zinc-100 px-3 py-1 text-sm font-black">{count}</span>
+      </summary>
+      <div className="grid gap-2 border-t border-zinc-200 p-3">
+        {count === 0 ? <p className="text-sm font-semibold text-zinc-600">{emptyText}</p> : children}
+      </div>
+    </details>
   );
 }
 
