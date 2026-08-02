@@ -1,7 +1,10 @@
 import { UserRole } from "@prisma/client";
 import { requireRole } from "@/lib/auth";
 import { listRecentAlarmsForStations } from "@/lib/alarm-feed";
-import { groupAlarmFeedForDisplay } from "@/lib/alarm-feed-view";
+import {
+  applyAlarmFollowUpVisibility,
+  groupAlarmFeedForDisplay
+} from "@/lib/alarm-feed-view";
 import { prisma } from "@/lib/prisma";
 import { AlarmFeedAutoRefresh } from "@/components/AlarmFeedAutoRefresh";
 import { TopBar } from "@/components/TopBar";
@@ -13,10 +16,16 @@ export default async function AlarmFeedPage() {
   const user = await requireRole(UserRole.BRANDFIGHTER);
   const preferences = await prisma.user.findUnique({
     where: { id: user.id },
-    select: { alarmStations: true }
+    select: {
+      alarmStations: true,
+      receiveAlarmFollowUps: true
+    }
   });
   const alarms = await listRecentAlarmsForStations(preferences?.alarmStations ?? []);
-  const alarmGroups = groupAlarmFeedForDisplay(alarms);
+  const alarmGroups = applyAlarmFollowUpVisibility(
+    groupAlarmFeedForDisplay(alarms),
+    preferences?.receiveAlarmFollowUps ?? false
+  );
 
   return (
     <>
