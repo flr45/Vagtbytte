@@ -1,13 +1,13 @@
 import { UserRole } from "@prisma/client";
 import { requireRole } from "@/lib/auth";
-import { listRecentAlarms } from "@/lib/alarm-feed";
+import { listRecentAlarmsForStations } from "@/lib/alarm-feed";
 import { TopBar } from "@/components/TopBar";
 
 export const dynamic = "force-dynamic";
 
 export default async function AlarmFeedPage() {
-  await requireRole(UserRole.BRANDFIGHTER);
-  const alarms = await listRecentAlarms();
+  const user = await requireRole(UserRole.BRANDFIGHTER);
+  const alarms = await listRecentAlarmsForStations(user.alarmStations);
 
   return (
     <>
@@ -32,7 +32,9 @@ export default async function AlarmFeedPage() {
         {alarms.length === 0 ? (
           <section className="app-card">
             <h2 className="text-xl font-black">Ingen meldinger endnu</h2>
-            <p className="mt-2 font-semibold text-zinc-600">Nye SMS-meldinger vises her automatisk.</p>
+            <p className="mt-2 font-semibold text-zinc-600">
+              Nye SMS-meldinger fra dine valgte stationer vises her automatisk.
+            </p>
           </section>
         ) : (
           alarms.map((alarm) => (

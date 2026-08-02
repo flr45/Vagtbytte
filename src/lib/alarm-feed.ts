@@ -47,6 +47,7 @@ export type StoredAlarmPage = {
 };
 
 const FOLLOW_UP_WINDOW_MS = 30 * 60 * 1000;
+const CROSS_SENDER_FOLLOW_UP_WINDOW_MS = 2 * 60 * 1000;
 const ALARM_NOTIFICATION_TYPE = "ALARM_MESSAGE" as NotificationType;
 const MAX_PUBLIC_ALARMS = 5;
 const MAX_ADMIN_PAGE_SIZE = 100;
@@ -120,21 +121,42 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
     }
 
     const windowStart = new Date(input.receivedAt.getTime() - FOLLOW_UP_WINDOW_MS);
+    const crossSenderWindowStart = new Date(
+      input.receivedAt.getTime() - CROSS_SENDER_FOLLOW_UP_WINDOW_MS
+    );
 
-    // Stationsmarkøren findes kun i første SMS. En markeret besked starter derfor
-    // altid en ny alarm, mens en umarkeret besked kobles på den seneste alarm.
-    const activeAlarm = isAlarmStart
-      ? []
-      : await tx.$queryRaw<Array<{ id: string; stationCode: string | null }>>(
+    // En stationsmarkeret SMS starter altid en ny alarm. En umarkeret SMS forsøges
+    // først koblet på samme afsender. Hvis modemmet leverer en anden/ukendt afsender,
+    // kobles den på den seneste alarm inden for to minutter.
+    let activeAlarm: Array<{ id: string; stationCode: string | null }> = [];
+
+    if (!isAlarmStart) {
+      activeAlarm = await tx.$queryRaw<Array<{ id: string; stationCode: string | null }>>(
+        Prisma.sql`SELECT "id", "stationCode"
+                   FROM "Alarm"
+                   WHERE "status" = 'ACTIVE'::"AlarmStatus"
+                     AND "senderNumber" = ${senderNumber}
+                     AND "openedAt" >= ${windowStart}
+                     AND "openedAt" <= ${input.receivedAt}
+                   ORDER BY "openedAt" DESC
+                   LIMIT 1
+                   FOR UPDATE`
+      );
+
+      if (!activeAlarm[0]) {
+        activeAlarm = await tx.$queryRaw<Array<{ id: string; stationCode: string | null }>>(
           Prisma.sql`SELECT "id", "stationCode"
                      FROM "Alarm"
                      WHERE "status" = 'ACTIVE'::"AlarmStatus"
-                       AND "senderNumber" = ${senderNumber}
-                       AND "openedAt" >= ${windowStart}
+                       AND "stationCode" IS NOT NULL
+                       AND "openedAt" >= ${crossSenderWindowStart}
+                       AND "openedAt" <= ${input.receivedAt}
                      ORDER BY "openedAt" DESC
                      LIMIT 1
                      FOR UPDATE`
         );
+      }
+    }
 
     const existingAlarm = activeAlarm[0];
     const alarmId = existingAlarm?.id ?? randomUUID();
@@ -272,8 +294,30 @@ async function notifyStationFirefighters(input: {
 }
 
 export async function listRecentAlarms(limit = MAX_PUBLIC_ALARMS): Promise<AlarmFeedAlarm[]> {
+  return listRecentAlarmsWhere({}, limit);
+}
+
+export async function listRecentAlarmsForStations(
+  stationCodes: string[],
+  limit = MAX_PUBLIC_ALARMS
+): Promise<AlarmFeedAlarm[]> {
+  const allowedStationCodes = [...new Set(stationCodes.map((code) => code.trim().toUpperCase()))]
+    .filter(isStationCode);
+
+  if (allowedStationCodes.length === 0) {
+    return [];
+  }
+
+  return listRecentAlarmsWhere({ stationCode: { in: allowedStationCodes } }, limit);
+}
+
+async function listRecentAlarmsWhere(
+  where: Prisma.AlarmWhereInput,
+  limit: number
+): Promise<AlarmFeedAlarm[]> {
   const safeLimit = Math.min(Math.max(Math.trunc(limit) || 1, 1), MAX_PUBLIC_ALARMS);
   const alarms = await prisma.alarm.findMany({
+    where,
     orderBy: [{ openedAt: "desc" }, { createdAt: "desc" }],
     take: safeLimit,
     include: {
