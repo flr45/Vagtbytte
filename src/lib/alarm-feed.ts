@@ -2,13 +2,14 @@ import { createHash, randomUUID } from "crypto";
 import { NotificationType, Prisma } from "@prisma/client";
 import { createNotification } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
-import { isStationCode, stationLabel } from "@/lib/stations";
+import { isStationCode, stationLabel, type StationCode } from "@/lib/stations";
 
 export type AlarmFeedMessageInput = {
   senderNumber: string;
   rawMessage: string;
   receivedAt: Date;
   sourceMessageId?: string | null;
+  stationCode?: string | null;
 };
 
 export type AlarmFeedMessage = {
@@ -87,6 +88,11 @@ export function detectStationCode(rawMessage: string) {
   return hasStandaloneIsl ? "ISL" : null;
 }
 
+export function normalizeStationHint(value: string | null | undefined): StationCode | null {
+  const normalized = value?.trim().toUpperCase() ?? null;
+  return isStationCode(normalized) ? normalized : null;
+}
+
 export function startsNewAlarm(rawMessage: string) {
   return detectStationCode(rawMessage) !== null;
 }
@@ -123,14 +129,10 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
 
   const deduplicationKey = createDeduplicationKey({ ...input, senderNumber, rawMessage });
   const detectedStationCode = detectStationCode(rawMessage);
+  const stationHint = normalizeStationHint(input.stationCode);
   const isAlarmStart = startsNewAlarm(rawMessage);
 
   const result = await prisma.$transaction(async (tx) => {
-    // Flere SMS'er kan lande næsten samtidig. Låsen sikrer, at førstesendingen
-    // bliver oprettet, før næste request forsøger at finde den som aktiv alarm.
-    // PostgreSQL-funktionen returnerer typen void, som Prisma ikke kan afkode
-    // direkte. Derfor udføres låsen i FROM-leddet, mens queryen kun returnerer
-    // et almindeligt heltal.
     await tx.$queryRaw<Array<{ locked: number }>>(
       Prisma.sql`SELECT 1::int AS "locked"
                  FROM pg_advisory_xact_lock(hashtext('sbr-alarm-feed-ingest'))`
@@ -152,25 +154,48 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
       CROSS_SENDER_FOLLOW_UP_WINDOW_MS
     );
 
-    // Modemmet kan aflevere SMSC-tidspunkter, der er få sekunder forskudt eller
-    // i en anden rækkefølge end importen. Derfor matches opfølgninger på den
-    // seneste faktiske databaseaktivitet i stedet for at kræve, at openedAt er
-    // mindre end eller lig med SMS'ens eksterne timestamp.
     let activeAlarm: Array<{ id: string; stationCode: string | null }> = [];
 
     if (!isAlarmStart) {
-      activeAlarm = await tx.$queryRaw<Array<{ id: string; stationCode: string | null }>>(
-        Prisma.sql`SELECT "id", "stationCode"
-                   FROM "Alarm"
-                   WHERE "status" = 'ACTIVE'::"AlarmStatus"
-                     AND "senderNumber" = ${senderNumber}
-                     AND "updatedAt" >= ${windowStart}
-                   ORDER BY "updatedAt" DESC, "createdAt" DESC
-                   LIMIT 1
-                   FOR UPDATE`
-      );
+      if (stationHint) {
+        activeAlarm = await tx.$queryRaw<Array<{ id: string; stationCode: string | null }>>(
+          Prisma.sql`SELECT "id", "stationCode"
+                     FROM "Alarm"
+                     WHERE "status" = 'ACTIVE'::"AlarmStatus"
+                       AND "senderNumber" = ${senderNumber}
+                       AND "stationCode" = ${stationHint}
+                       AND "updatedAt" >= ${windowStart}
+                     ORDER BY "updatedAt" DESC, "createdAt" DESC
+                     LIMIT 1
+                     FOR UPDATE`
+        );
+      } else {
+        activeAlarm = await tx.$queryRaw<Array<{ id: string; stationCode: string | null }>>(
+          Prisma.sql`SELECT "id", "stationCode"
+                     FROM "Alarm"
+                     WHERE "status" = 'ACTIVE'::"AlarmStatus"
+                       AND "senderNumber" = ${senderNumber}
+                       AND "updatedAt" >= ${windowStart}
+                     ORDER BY "updatedAt" DESC, "createdAt" DESC
+                     LIMIT 1
+                     FOR UPDATE`
+        );
+      }
 
-      if (!activeAlarm[0]) {
+      if (!activeAlarm[0] && stationHint) {
+        activeAlarm = await tx.$queryRaw<Array<{ id: string; stationCode: string | null }>>(
+          Prisma.sql`SELECT "id", "stationCode"
+                     FROM "Alarm"
+                     WHERE "status" = 'ACTIVE'::"AlarmStatus"
+                       AND "stationCode" = ${stationHint}
+                       AND "updatedAt" >= ${windowStart}
+                     ORDER BY "updatedAt" DESC, "createdAt" DESC
+                     LIMIT 1
+                     FOR UPDATE`
+        );
+      }
+
+      if (!activeAlarm[0] && !stationHint) {
         activeAlarm = await tx.$queryRaw<Array<{ id: string; stationCode: string | null }>>(
           Prisma.sql`SELECT "id", "stationCode"
                      FROM "Alarm"
@@ -186,7 +211,7 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
 
     const existingAlarm = activeAlarm[0];
     const alarmId = existingAlarm?.id ?? randomUUID();
-    const stationCode = detectedStationCode ?? existingAlarm?.stationCode ?? null;
+    const stationCode = existingAlarm?.stationCode ?? detectedStationCode ?? stationHint ?? null;
 
     if (!existingAlarm) {
       await tx.alarm.create({
@@ -227,13 +252,13 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
     await tx.alarmStatistic.upsert({
       where: { alarmId },
       update: {
-        stationCode: stationCode ?? detectedStationCode,
+        stationCode,
         lastMessageAt: input.receivedAt,
         messageCount: { increment: 1 }
       },
       create: {
         alarmId,
-        stationCode: stationCode ?? detectedStationCode,
+        stationCode,
         openedAt: input.receivedAt,
         lastMessageAt: input.receivedAt,
         messageCount: 1
@@ -245,7 +270,7 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
       id: messageId,
       alarmId,
       sequenceNumber,
-      stationCode: stationCode ?? detectedStationCode
+      stationCode
     };
   });
 
