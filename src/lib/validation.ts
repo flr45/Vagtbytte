@@ -58,8 +58,8 @@ export const changePasswordSchema = z.object({
 
 const transferBaseSchema = z
   .object({
-    giverEmployeeNumber: z.string().trim().min(1, "Medarbejdernummer A skal udfyldes"),
-    receiverEmployeeNumber: z.string().trim().min(1, "Medarbejdernummer B skal udfyldes"),
+    giverEmployeeNumber: z.string().trim().min(1, "Vælg en afgiver"),
+    receiverEmployeeNumber: z.string().trim().min(1, "Vælg en overtager"),
     requestedStartAt: copenhagenDateTimeLocalSchema,
     expectedEndMode: expectedEndModeSchema,
     expectedEndAt: z
@@ -81,13 +81,7 @@ const transferBaseSchema = z
     path: ["expectedEndAt"]
   });
 
-export const transferCreateSchema = transferBaseSchema
-  .and(z.object({ confirmed: z.boolean() }))
-  .refine((data) => data.confirmed, {
-    message: "Du skal bekræfte, at oplysningerne er korrekte.",
-    path: ["confirmed"]
-  });
-
+export const transferCreateSchema = transferBaseSchema;
 export const transferLookupSchema = transferBaseSchema;
 
 export const transferResponseSchema = z.object({
