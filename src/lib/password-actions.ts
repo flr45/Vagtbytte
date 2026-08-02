@@ -25,27 +25,41 @@ export type PasswordActionState = {
   message?: string;
 };
 
+const passwordPairFields = {
+  newPassword: passwordSchema,
+  confirmPassword: z.string().min(1, "Gentag den nye adgangskode")
+};
+
 const newPasswordSchema = z
+  .object(passwordPairFields)
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Adgangskoderne er ikke ens",
+    path: ["confirmPassword"]
+  });
+
+const requiredPasswordChangeSchema = z
   .object({
-    newPassword: passwordSchema,
-    confirmPassword: z.string().min(1, "Gentag den nye adgangskode")
+    currentPassword: z.string().min(1, "Indtast den nuværende adgangskode"),
+    ...passwordPairFields
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
     message: "Adgangskoderne er ikke ens",
     path: ["confirmPassword"]
   });
 
-const requiredPasswordChangeSchema = newPasswordSchema.extend({
-  currentPassword: z.string().min(1, "Indtast den nuværende adgangskode")
-});
-
 const requestSchema = z.object({
   identifier: z.string().trim().min(1, "Udfyld medarbejdernummer, brugernavn eller mailadresse").max(200)
 });
 
-const resetSchema = newPasswordSchema.extend({
-  token: z.string().trim().min(32, "Nulstillingslinket er ugyldigt")
-});
+const resetSchema = z
+  .object({
+    token: z.string().trim().min(32, "Nulstillingslinket er ugyldigt"),
+    ...passwordPairFields
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Adgangskoderne er ikke ens",
+    path: ["confirmPassword"]
+  });
 
 function firstError(error: z.ZodError) {
   return error.issues[0]?.message ?? "Formularen er ikke udfyldt korrekt.";
@@ -74,11 +88,12 @@ export async function changeRequiredPasswordAction(
     return { ok: false, message: "Den nye adgangskode skal være forskellig fra den nuværende." };
   }
 
+  const passwordHash = await hashPassword(parsed.data.newPassword);
   await prisma.$transaction([
     prisma.user.update({
       where: { id: user.id },
       data: {
-        passwordHash: await hashPassword(parsed.data.newPassword),
+        passwordHash,
         mustChangePassword: false
       }
     }),
@@ -112,11 +127,7 @@ export async function requestPasswordResetAction(
     where: {
       isActive: true,
       loginIdentifier: { not: "__deleted_user__" },
-      OR: [
-        { loginIdentifier },
-        { employeeNumber: loginIdentifier },
-        { email }
-      ]
+      OR: [{ loginIdentifier }, { employeeNumber: loginIdentifier }, { email }]
     },
     select: { id: true, name: true, email: true, role: true }
   });
@@ -269,3 +280,5 @@ export async function resetForgottenPasswordAction(
 
   redirect("/login?reset=1");
 }
+
+export { newPasswordSchema };
