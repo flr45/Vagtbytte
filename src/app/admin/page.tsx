@@ -31,6 +31,7 @@ export default async function AdminPage() {
           isActive: true,
           stationCode: true,
           alarmStations: true,
+          receiveAlarmFollowUps: true,
           hasAdminAccess: true
         }
       }),

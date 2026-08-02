@@ -112,6 +112,7 @@ model User {
   mustChangePassword     Boolean            @default(false)
   stationCode            String?
   alarmStations          String[]           @default([])
+  receiveAlarmFollowUps  Boolean            @default(false)
   hasAdminAccess         Boolean            @default(false)
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt

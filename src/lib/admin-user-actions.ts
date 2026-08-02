@@ -25,6 +25,7 @@ const baseUserSchema = z.object({
   stationCode: z.enum(STATION_CODE_VALUES, { required_error: "Vælg en station" }),
   isActive: z.boolean(),
   hasAdminAccess: z.boolean(),
+  receiveAlarmFollowUps: z.boolean(),
   alarmStations: z.array(z.enum(STATION_CODE_VALUES)).max(STATION_CODE_VALUES.length)
 });
 
@@ -65,6 +66,7 @@ function userInput(formData: FormData) {
     stationCode,
     isActive: boolFromForm(formData, "isActive"),
     hasAdminAccess: boolFromForm(formData, "hasAdminAccess"),
+    receiveAlarmFollowUps: boolFromForm(formData, "receiveAlarmFollowUps"),
     alarmStations
   };
 }
@@ -104,6 +106,7 @@ export async function createManagedUserAction(
       mustChangePassword: true,
       stationCode: parsed.data.stationCode,
       alarmStations: parsed.data.alarmStations,
+      receiveAlarmFollowUps: parsed.data.receiveAlarmFollowUps,
       hasAdminAccess: parsed.data.hasAdminAccess
     }
   });
@@ -163,6 +166,7 @@ export async function updateManagedUserAction(
       isActive: parsed.data.isActive,
       stationCode: parsed.data.stationCode,
       alarmStations: parsed.data.alarmStations,
+      receiveAlarmFollowUps: parsed.data.receiveAlarmFollowUps,
       hasAdminAccess: parsed.data.hasAdminAccess
     }
   });
@@ -261,6 +265,7 @@ export async function deleteManagedUserAction(
         mustChangePassword: false,
         stationCode: null,
         alarmStations: [],
+        receiveAlarmFollowUps: false,
         hasAdminAccess: false
       }
     });
