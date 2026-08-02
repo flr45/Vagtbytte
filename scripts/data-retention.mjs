@@ -37,6 +37,7 @@ export async function runDataRetention(prisma, now = new Date(), env = process.e
       disabled: true,
       alarmsDeleted: 0,
       alarmNotificationsDeleted: 0,
+      passwordResetTokensDeleted: 0,
       backupsDeleted: 0,
       backupErrors: []
     };
@@ -75,6 +76,10 @@ export async function runDataRetention(prisma, now = new Date(), env = process.e
       })
     : { alarmsDeleted: 0, alarmNotificationsDeleted: 0 };
 
+  const resetTokens = await prisma.passwordResetToken.deleteMany({
+    where: { expiresAt: { lt: now } }
+  });
+
   const backupResult = backupCutoff
     ? await deleteExpiredBackups(prisma, backupCutoff)
     : { backupsDeleted: 0, backupErrors: [] };
@@ -84,12 +89,14 @@ export async function runDataRetention(prisma, now = new Date(), env = process.e
     alarmRetentionDays: alarmDays,
     backupRetentionDays: backupDays,
     ...alarmResult,
+    passwordResetTokensDeleted: resetTokens.count,
     ...backupResult
   };
 
   if (
     result.alarmsDeleted > 0 ||
     result.alarmNotificationsDeleted > 0 ||
+    result.passwordResetTokensDeleted > 0 ||
     result.backupsDeleted > 0
   ) {
     await prisma.auditLog
@@ -98,7 +105,8 @@ export async function runDataRetention(prisma, now = new Date(), env = process.e
           action: "DATA_RETENTION_COMPLETED",
           description:
             `Dataretention gennemført: ${result.alarmsDeleted} alarmer, ` +
-            `${result.alarmNotificationsDeleted} alarmnotifikationer og ` +
+            `${result.alarmNotificationsDeleted} alarmnotifikationer, ` +
+            `${result.passwordResetTokensDeleted} udløbne nulstillingstokens og ` +
             `${result.backupsDeleted} backups slettet.`
         }
       })
