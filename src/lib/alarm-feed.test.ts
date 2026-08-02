@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { detectStationCode, startsNewAlarm } from "./alarm-feed";
+import {
+  detectStationCode,
+  shouldReceiveAlarmNotification,
+  startsNewAlarm
+} from "./alarm-feed";
 
 describe("detectStationCode", () => {
   it("genkender ISL med parenteser", () => {
@@ -45,5 +49,19 @@ describe("startsNewAlarm", () => {
   it("behandler en besked uden stationsmarkør som en opfølgende sending", () => {
     expect(startsNewAlarm("Test")).toBe(false);
     expect(startsNewAlarm("Mødested ændret til bagsiden")).toBe(false);
+  });
+});
+
+describe("shouldReceiveAlarmNotification", () => {
+  it("sender altid første sending til brugere på stationen", () => {
+    expect(shouldReceiveAlarmNotification(1, false)).toBe(true);
+    expect(shouldReceiveAlarmNotification(1, true)).toBe(true);
+  });
+
+  it("sender kun sending 2 og senere til brugere, der er tilmeldt", () => {
+    expect(shouldReceiveAlarmNotification(2, false)).toBe(false);
+    expect(shouldReceiveAlarmNotification(2, true)).toBe(true);
+    expect(shouldReceiveAlarmNotification(3, false)).toBe(false);
+    expect(shouldReceiveAlarmNotification(3, true)).toBe(true);
   });
 });
