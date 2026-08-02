@@ -2,9 +2,11 @@ import { UserRole } from "@prisma/client";
 import { requireRole } from "@/lib/auth";
 import { listRecentAlarmsForStations } from "@/lib/alarm-feed";
 import { prisma } from "@/lib/prisma";
+import { AlarmFeedAutoRefresh } from "@/components/AlarmFeedAutoRefresh";
 import { TopBar } from "@/components/TopBar";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function AlarmFeedPage() {
   const user = await requireRole(UserRole.BRANDFIGHTER);
@@ -16,6 +18,7 @@ export default async function AlarmFeedPage() {
 
   return (
     <>
+      <AlarmFeedAutoRefresh intervalMs={3000} />
       <TopBar title="Alarmfeed" />
       <main className="mx-auto grid w-full max-w-3xl gap-5 px-4 py-6">
         <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950">
@@ -31,6 +34,9 @@ export default async function AlarmFeedPage() {
           <h1 className="mt-1 text-3xl font-black">Alarmfeed</h1>
           <p className="mt-2 font-semibold text-zinc-600">
             Originale meldinger fra vagtcentralen, vist uden omskrivning eller fortolkning.
+          </p>
+          <p className="mt-2 text-sm font-bold text-emerald-700">
+            Opdateres automatisk hvert 3. sekund.
           </p>
         </header>
 
