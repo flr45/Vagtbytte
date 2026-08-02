@@ -3,6 +3,7 @@ import {
   alarmNotificationLink,
   alarmNotificationTitle,
   detectStationCode,
+  followUpWindowStart,
   shouldReceiveAlarmNotification,
   startsNewAlarm
 } from "./alarm-feed";
@@ -51,6 +52,15 @@ describe("startsNewAlarm", () => {
   it("behandler en besked uden stationsmarkør som en opfølgende sending", () => {
     expect(startsNewAlarm("Test")).toBe(false);
     expect(startsNewAlarm("Mødested ændret til bagsiden")).toBe(false);
+  });
+});
+
+describe("opfølgende sendinger", () => {
+  it("beregner matchvinduet ud fra importtidspunktet", () => {
+    const now = new Date("2026-08-02T18:30:00.000Z");
+    expect(followUpWindowStart(now, 10 * 60 * 1000).toISOString()).toBe(
+      "2026-08-02T18:20:00.000Z"
+    );
   });
 });
 

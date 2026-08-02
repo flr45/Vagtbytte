@@ -109,6 +109,10 @@ export function alarmNotificationLink(alarmId: string) {
   return `/brandmand/alarmer#alarm-${encodeURIComponent(alarmId)}`;
 }
 
+export function followUpWindowStart(now: Date, windowMs: number) {
+  return new Date(now.getTime() - windowMs);
+}
+
 export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
   const senderNumber = normalizePhoneNumber(input.senderNumber);
   const rawMessage = input.rawMessage.trim();
@@ -122,6 +126,12 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
   const isAlarmStart = startsNewAlarm(rawMessage);
 
   const result = await prisma.$transaction(async (tx) => {
+    // Flere SMS'er kan lande næsten samtidig. Låsen sikrer, at førstesendingen
+    // bliver oprettet, før næste request forsøger at finde den som aktiv alarm.
+    await tx.$queryRaw<Array<{ locked: null }>>(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtext('sbr-alarm-feed-ingest')) AS "locked"`
+    );
+
     const duplicate = await tx.alarmMessage.findUnique({
       where: { deduplicationKey },
       select: { id: true, alarmId: true, sequenceNumber: true }
@@ -131,15 +141,17 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
       return { created: false, ...duplicate, stationCode: null as string | null };
     }
 
-    const windowStart = new Date(input.receivedAt.getTime() - FOLLOW_UP_WINDOW_MS);
-    const crossSenderWindowStart = new Date(
-      input.receivedAt.getTime() - CROSS_SENDER_FOLLOW_UP_WINDOW_MS
+    const ingestionTime = new Date();
+    const windowStart = followUpWindowStart(ingestionTime, FOLLOW_UP_WINDOW_MS);
+    const crossSenderWindowStart = followUpWindowStart(
+      ingestionTime,
+      CROSS_SENDER_FOLLOW_UP_WINDOW_MS
     );
 
-    // En stationsmarkeret SMS starter altid en ny alarm. En umarkeret SMS forsøges
-    // først koblet på samme afsender. Alarmcentralens efterfølgende sendinger kan
-    // komme fra et andet nummer, og kobles derfor på den senest opdaterede
-    // stationsmarkerede alarm inden for ti minutter.
+    // Modemmet kan aflevere SMSC-tidspunkter, der er få sekunder forskudt eller
+    // i en anden rækkefølge end importen. Derfor matches opfølgninger på den
+    // seneste faktiske databaseaktivitet i stedet for at kræve, at openedAt er
+    // mindre end eller lig med SMS'ens eksterne timestamp.
     let activeAlarm: Array<{ id: string; stationCode: string | null }> = [];
 
     if (!isAlarmStart) {
@@ -148,9 +160,8 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
                    FROM "Alarm"
                    WHERE "status" = 'ACTIVE'::"AlarmStatus"
                      AND "senderNumber" = ${senderNumber}
-                     AND "openedAt" >= ${windowStart}
-                     AND "openedAt" <= ${input.receivedAt}
-                   ORDER BY "updatedAt" DESC, "openedAt" DESC
+                     AND "updatedAt" >= ${windowStart}
+                   ORDER BY "updatedAt" DESC, "createdAt" DESC
                    LIMIT 1
                    FOR UPDATE`
       );
@@ -161,9 +172,8 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
                      FROM "Alarm"
                      WHERE "status" = 'ACTIVE'::"AlarmStatus"
                        AND "stationCode" IS NOT NULL
-                       AND "openedAt" >= ${crossSenderWindowStart}
-                       AND "openedAt" <= ${input.receivedAt}
-                     ORDER BY "updatedAt" DESC, "openedAt" DESC
+                       AND "updatedAt" >= ${crossSenderWindowStart}
+                     ORDER BY "updatedAt" DESC, "createdAt" DESC
                      LIMIT 1
                      FOR UPDATE`
         );
@@ -207,7 +217,7 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
 
     await tx.alarm.update({
       where: { id: alarmId },
-      data: { updatedAt: new Date() }
+      data: { updatedAt: ingestionTime }
     });
 
     await tx.alarmStatistic.upsert({
