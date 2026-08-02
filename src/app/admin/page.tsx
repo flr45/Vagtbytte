@@ -28,6 +28,7 @@ export default async function AdminPage() {
           name: true,
           employeeNumber: true,
           loginIdentifier: true,
+          email: true,
           isActive: true,
           stationCode: true,
           alarmStations: true,
@@ -75,7 +76,7 @@ export default async function AdminPage() {
           <AdminLink href="/admin/systemstatus" title="Systemstatus" text="Modem, SMS-gateway, push og seneste fejl." />
           <AdminLink href="/admin/alarmstatistik" title="Alarmstatistik" text="Detaljer, grafer, CSV og nulstilling." />
           <AdminLink href="/admin/alarmer" title="Alarmarkiv" text="Søg, filtrer og eksportér alle gemte alarmer." />
-          <AdminLink href="/admin/brugere" title="Brugeroverblik" text="Stationer, login, adminadgang og push-enheder." />
+          <AdminLink href="/admin/brugere" title="Brugeroverblik" text="Stationer, login, mail, adminadgang og push-enheder." />
           <AdminLink href="/admin/backups" title="Backup og gendannelse" text="Automatiske og manuelle backups samt restore." />
           <AdminLink href="/admin/mailrapporter" title="Mailrapporter" text="Planlæg samlet overblik over vagter og vagtbytter." />
         </section>
