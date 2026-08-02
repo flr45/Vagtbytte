@@ -19,9 +19,19 @@ export type AdminUserActionState = {
   message?: string;
 };
 
+const optionalEmailSchema = z
+  .string()
+  .trim()
+  .refine(
+    (value) => value.length === 0 || z.string().email().safeParse(value).success,
+    "Mailadressen er ugyldig"
+  )
+  .transform((value) => (value.length > 0 ? value.toLowerCase() : null));
+
 const baseUserSchema = z.object({
   name: z.string().trim().min(1, "Navn skal udfyldes"),
   employeeNumber: z.string().trim().min(1, "Medarbejdernummer skal udfyldes"),
+  email: optionalEmailSchema,
   stationCode: z.enum(STATION_CODE_VALUES, { required_error: "Vælg en station" }),
   isActive: z.boolean(),
   hasAdminAccess: z.boolean(),
@@ -63,11 +73,23 @@ function userInput(formData: FormData) {
   return {
     name: formData.get("name"),
     employeeNumber: formData.get("employeeNumber"),
+    email: String(formData.get("email") ?? ""),
     stationCode,
     isActive: boolFromForm(formData, "isActive"),
     hasAdminAccess: boolFromForm(formData, "hasAdminAccess"),
     receiveAlarmFollowUps: boolFromForm(formData, "receiveAlarmFollowUps"),
     alarmStations
+  };
+}
+
+function duplicateWhere(userId: string | null, loginIdentifier: string, email: string | null) {
+  return {
+    ...(userId ? { id: { not: userId } } : {}),
+    OR: [
+      { employeeNumber: loginIdentifier },
+      { loginIdentifier },
+      ...(email ? [{ email }] : [])
+    ]
   };
 }
 
@@ -87,12 +109,12 @@ export async function createManagedUserAction(
 
   const loginIdentifier = normalizeLoginIdentifier(parsed.data.employeeNumber);
   const existing = await prisma.user.findFirst({
-    where: { OR: [{ employeeNumber: loginIdentifier }, { loginIdentifier }] },
+    where: duplicateWhere(null, loginIdentifier, parsed.data.email),
     select: { id: true }
   });
 
   if (existing) {
-    return { ok: false, message: "Medarbejdernummeret eller login er allerede i brug." };
+    return { ok: false, message: "Medarbejdernummer, login eller mailadresse er allerede i brug." };
   }
 
   const user = await prisma.user.create({
@@ -101,6 +123,7 @@ export async function createManagedUserAction(
       role: UserRole.BRANDFIGHTER,
       employeeNumber: loginIdentifier,
       loginIdentifier,
+      email: parsed.data.email,
       passwordHash: await hashPassword(parsed.data.temporaryPassword),
       isActive: parsed.data.isActive,
       mustChangePassword: true,
@@ -122,6 +145,7 @@ export async function createManagedUserAction(
   });
 
   revalidatePath("/admin");
+  revalidatePath("/admin/brugere");
   return { ok: true, message: "Brugeren er oprettet." };
 }
 
@@ -146,15 +170,12 @@ export async function updateManagedUserAction(
 
   const loginIdentifier = normalizeLoginIdentifier(parsed.data.employeeNumber);
   const duplicate = await prisma.user.findFirst({
-    where: {
-      id: { not: parsed.data.userId },
-      OR: [{ employeeNumber: loginIdentifier }, { loginIdentifier }]
-    },
+    where: duplicateWhere(parsed.data.userId, loginIdentifier, parsed.data.email),
     select: { id: true }
   });
 
   if (duplicate) {
-    return { ok: false, message: "Medarbejdernummeret eller login er allerede i brug." };
+    return { ok: false, message: "Medarbejdernummer, login eller mailadresse er allerede i brug." };
   }
 
   await prisma.user.update({
@@ -163,6 +184,7 @@ export async function updateManagedUserAction(
       name: parsed.data.name,
       employeeNumber: loginIdentifier,
       loginIdentifier,
+      email: parsed.data.email,
       isActive: parsed.data.isActive,
       stationCode: parsed.data.stationCode,
       alarmStations: parsed.data.alarmStations,
@@ -186,6 +208,7 @@ export async function updateManagedUserAction(
   });
 
   revalidatePath("/admin");
+  revalidatePath("/admin/brugere");
   return { ok: true, message: "Brugeren er gemt." };
 }
 
@@ -208,23 +231,27 @@ export async function resetManagedUserPasswordAction(
     return { ok: false, message: "Brugeren blev ikke fundet." };
   }
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      passwordHash: await hashPassword(parsed.data.temporaryPassword),
-      mustChangePassword: true
-    }
-  });
-  await prisma.session.deleteMany({ where: { userId: user.id } });
-  await prisma.auditLog.create({
-    data: {
-      actorUserId: admin.id,
-      actorRole: admin.role,
-      action: "PASSWORD_RESET",
-      targetUserId: user.id,
-      description: `Adgangskoden blev nulstillet for ${user.name}`
-    }
-  });
+  const passwordHash = await hashPassword(parsed.data.temporaryPassword);
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash, mustChangePassword: true }
+    }),
+    prisma.session.deleteMany({ where: { userId: user.id } }),
+    prisma.passwordResetToken.updateMany({
+      where: { userId: user.id, usedAt: null },
+      data: { usedAt: new Date() }
+    }),
+    prisma.auditLog.create({
+      data: {
+        actorUserId: admin.id,
+        actorRole: admin.role,
+        action: "PASSWORD_RESET",
+        targetUserId: user.id,
+        description: `Adgangskoden blev nulstillet for ${user.name}`
+      }
+    })
+  ]);
 
   revalidatePath("/admin");
   return { ok: true, message: "Adgangskoden er nulstillet." };
@@ -260,6 +287,7 @@ export async function deleteManagedUserAction(
         role: UserRole.BRANDFIGHTER,
         employeeNumber: null,
         loginIdentifier: "__deleted_user__",
+        email: null,
         passwordHash: placeholderPassword,
         isActive: false,
         mustChangePassword: false,
@@ -303,6 +331,7 @@ export async function deleteManagedUserAction(
   });
 
   revalidatePath("/admin");
+  revalidatePath("/admin/brugere");
   revalidatePath("/vagtcentral");
   return { ok: true, message: "Brugeren er slettet." };
 }
