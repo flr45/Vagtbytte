@@ -86,6 +86,10 @@ export function detectStationCode(rawMessage: string) {
   return hasStandaloneIsl ? "ISL" : null;
 }
 
+export function startsNewAlarm(rawMessage: string) {
+  return detectStationCode(rawMessage) !== null;
+}
+
 export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
   const senderNumber = normalizePhoneNumber(input.senderNumber);
   const rawMessage = input.rawMessage.trim();
@@ -96,6 +100,7 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
 
   const deduplicationKey = createDeduplicationKey({ ...input, senderNumber, rawMessage });
   const detectedStationCode = detectStationCode(rawMessage);
+  const isAlarmStart = startsNewAlarm(rawMessage);
 
   const result = await prisma.$transaction(async (tx) => {
     const duplicate = await tx.alarmMessage.findUnique({
@@ -108,21 +113,27 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
     }
 
     const windowStart = new Date(input.receivedAt.getTime() - FOLLOW_UP_WINDOW_MS);
-    const activeAlarm = await tx.$queryRaw<Array<{ id: string; stationCode: string | null }>>(
-      Prisma.sql`SELECT "id", "stationCode"
-                 FROM "Alarm"
-                 WHERE "status" = 'ACTIVE'::"AlarmStatus"
-                   AND "senderNumber" = ${senderNumber}
-                   AND "openedAt" >= ${windowStart}
-                 ORDER BY "openedAt" DESC
-                 LIMIT 1
-                 FOR UPDATE`
-    );
 
-    const alarmId = activeAlarm[0]?.id ?? randomUUID();
-    const stationCode = activeAlarm[0]?.stationCode ?? detectedStationCode;
+    // Stationsmarkøren findes kun i første SMS. En markeret besked starter derfor
+    // altid en ny alarm, mens en umarkeret besked kobles på den seneste alarm.
+    const activeAlarm = isAlarmStart
+      ? []
+      : await tx.$queryRaw<Array<{ id: string; stationCode: string | null }>>(
+          Prisma.sql`SELECT "id", "stationCode"
+                     FROM "Alarm"
+                     WHERE "status" = 'ACTIVE'::"AlarmStatus"
+                       AND "senderNumber" = ${senderNumber}
+                       AND "openedAt" >= ${windowStart}
+                     ORDER BY "openedAt" DESC
+                     LIMIT 1
+                     FOR UPDATE`
+        );
 
-    if (!activeAlarm[0]) {
+    const existingAlarm = activeAlarm[0];
+    const alarmId = existingAlarm?.id ?? randomUUID();
+    const stationCode = detectedStationCode ?? existingAlarm?.stationCode ?? null;
+
+    if (!existingAlarm) {
       await tx.alarm.create({
         data: {
           id: alarmId,
@@ -130,11 +141,6 @@ export async function ingestAlarmMessage(input: AlarmFeedMessageInput) {
           stationCode,
           openedAt: input.receivedAt
         }
-      });
-    } else if (!activeAlarm[0].stationCode && detectedStationCode) {
-      await tx.alarm.update({
-        where: { id: alarmId },
-        data: { stationCode: detectedStationCode }
       });
     }
 
