@@ -43,7 +43,11 @@ export default async function AlarmFeedPage() {
           </section>
         ) : (
           alarms.map((alarm) => (
-            <article className="app-card grid gap-4" key={alarm.id}>
+            <article
+              className="app-card grid scroll-mt-24 gap-4 target:ring-4 target:ring-brand-red/30"
+              id={`alarm-${alarm.id}`}
+              key={alarm.id}
+            >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-black uppercase text-brand-red">
