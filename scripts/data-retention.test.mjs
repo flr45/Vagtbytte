@@ -23,9 +23,10 @@ describe("dataretention", () => {
     expect(retentionCutoff(now, 0)).toBeNull();
   });
 
-  it("sletter rå alarmdata og bevarer statistikmodellen", async () => {
+  it("sletter rå alarmdata og udløbne nulstillingstokens, men bevarer statistikmodellen", async () => {
     const notificationDeleteMany = vi.fn().mockResolvedValue({ count: 4 });
     const alarmDeleteMany = vi.fn().mockResolvedValue({ count: 2 });
+    const resetTokenDeleteMany = vi.fn().mockResolvedValue({ count: 3 });
     const auditCreate = vi.fn().mockResolvedValue({ id: "audit-1" });
     const prisma = {
       $transaction: vi.fn(async (callback) =>
@@ -34,20 +35,23 @@ describe("dataretention", () => {
           alarm: { deleteMany: alarmDeleteMany }
         })
       ),
+      passwordResetToken: { deleteMany: resetTokenDeleteMany },
       backupSnapshot: {
         findMany: vi.fn().mockResolvedValue([]),
         deleteMany: vi.fn()
       },
       auditLog: { create: auditCreate }
     };
+    const now = new Date("2026-08-01T12:00:00.000Z");
 
-    const result = await runDataRetention(prisma, new Date("2026-08-01T12:00:00.000Z"), {
+    const result = await runDataRetention(prisma, now, {
       ALARM_DATA_RETENTION_DAYS: "90",
       BACKUP_MAX_AGE_DAYS: "90"
     });
 
     expect(result.alarmsDeleted).toBe(2);
     expect(result.alarmNotificationsDeleted).toBe(4);
+    expect(result.passwordResetTokensDeleted).toBe(3);
     expect(notificationDeleteMany).toHaveBeenCalledWith({
       where: {
         type: "ALARM_MESSAGE",
@@ -56,6 +60,9 @@ describe("dataretention", () => {
     });
     expect(alarmDeleteMany).toHaveBeenCalledWith({
       where: { openedAt: { lt: new Date("2026-05-03T12:00:00.000Z") } }
+    });
+    expect(resetTokenDeleteMany).toHaveBeenCalledWith({
+      where: { expiresAt: { lt: now } }
     });
     expect(auditCreate).toHaveBeenCalledTimes(1);
   });
