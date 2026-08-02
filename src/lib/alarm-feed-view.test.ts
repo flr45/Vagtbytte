@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { AlarmFeedAlarm, AlarmFeedMessage } from "./alarm-feed";
-import { groupAlarmFeedForDisplay, orderMessagesByImportance } from "./alarm-feed-view";
+import {
+  applyAlarmFollowUpVisibility,
+  groupAlarmFeedForDisplay,
+  orderMessagesByImportance
+} from "./alarm-feed-view";
 
 function message(
   id: string,
@@ -87,6 +91,49 @@ describe("groupAlarmFeedForDisplay", () => {
     );
 
     expect(groupAlarmFeedForDisplay([slagelse, skaelskoer])).toHaveLength(2);
+  });
+});
+
+describe("applyAlarmFollowUpVisibility", () => {
+  const groupedAlarm = groupAlarmFeedForDisplay([
+    alarm(
+      "alarm-start",
+      "A",
+      "2026-08-02T20:55:10.000Z",
+      [message("message-start", "alarm-start", "(A) Testalarm", "2026-08-02T20:55:10.000Z")]
+    ),
+    alarm(
+      "alarm-brand",
+      "A",
+      "2026-08-02T20:55:20.000Z",
+      [message("message-brand", "alarm-brand", "Brand", "2026-08-02T20:55:20.000Z")]
+    )
+  ]);
+
+  it("viser alle sendinger, når admin har slået visningen til", () => {
+    expect(applyAlarmFollowUpVisibility(groupedAlarm, true)[0].messages).toHaveLength(2);
+  });
+
+  it("viser kun primærmeldingen, når admin har slået visningen fra", () => {
+    const result = applyAlarmFollowUpVisibility(groupedAlarm, false);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].messages).toHaveLength(1);
+    expect(result[0].messages[0].rawMessage).toBe("(A) Testalarm");
+    expect(result[0].messages[0].sequenceNumber).toBe(1);
+  });
+
+  it("skjuler en løs opfølgning uden en primærmelding", () => {
+    const followUpOnly = groupAlarmFeedForDisplay([
+      alarm(
+        "alarm-brand",
+        "A",
+        "2026-08-02T20:55:20.000Z",
+        [message("message-brand", "alarm-brand", "Brand", "2026-08-02T20:55:20.000Z")]
+      )
+    ]);
+
+    expect(applyAlarmFollowUpVisibility(followUpOnly, false)).toEqual([]);
   });
 });
 
