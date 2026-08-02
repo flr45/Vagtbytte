@@ -54,6 +54,30 @@ export function groupAlarmFeedForDisplay(
     .sort(compareAlarmsNewestFirst);
 }
 
+export function applyAlarmFollowUpVisibility(
+  alarms: AlarmFeedDisplayAlarm[],
+  showAlarmFollowUps: boolean
+): AlarmFeedDisplayAlarm[] {
+  if (showAlarmFollowUps) {
+    return alarms;
+  }
+
+  return alarms.flatMap((alarm) => {
+    const primaryMessage = alarm.messages.find(
+      (message) => detectStationCode(message.rawMessage) !== null
+    );
+
+    if (!primaryMessage) {
+      return [];
+    }
+
+    return [{
+      ...alarm,
+      messages: [{ ...primaryMessage, sequenceNumber: 1 }]
+    }];
+  });
+}
+
 export function orderMessagesByImportance(messages: AlarmFeedMessage[]) {
   return [...messages].sort((left, right) => {
     const leftIsStart = detectStationCode(left.rawMessage) !== null;

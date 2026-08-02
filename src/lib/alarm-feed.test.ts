@@ -78,16 +78,13 @@ describe("opfølgende sendinger", () => {
 });
 
 describe("shouldReceiveAlarmNotification", () => {
-  it("sender altid første sending til brugere på stationen", () => {
-    expect(shouldReceiveAlarmNotification(1, false)).toBe(true);
-    expect(shouldReceiveAlarmNotification(1, true)).toBe(true);
+  it("sender notifikation for primærmeldingen", () => {
+    expect(shouldReceiveAlarmNotification(1)).toBe(true);
   });
 
-  it("sender kun sending 2 og senere til brugere, der er tilmeldt", () => {
-    expect(shouldReceiveAlarmNotification(2, false)).toBe(false);
-    expect(shouldReceiveAlarmNotification(2, true)).toBe(true);
-    expect(shouldReceiveAlarmNotification(3, false)).toBe(false);
-    expect(shouldReceiveAlarmNotification(3, true)).toBe(true);
+  it("sender aldrig notifikation for sending 2 og senere", () => {
+    expect(shouldReceiveAlarmNotification(2)).toBe(false);
+    expect(shouldReceiveAlarmNotification(3)).toBe(false);
   });
 });
 

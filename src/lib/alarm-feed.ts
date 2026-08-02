@@ -97,11 +97,8 @@ export function startsNewAlarm(rawMessage: string) {
   return detectStationCode(rawMessage) !== null;
 }
 
-export function shouldReceiveAlarmNotification(
-  sequenceNumber: number,
-  receiveAlarmFollowUps: boolean
-) {
-  return sequenceNumber <= 1 || receiveAlarmFollowUps;
+export function shouldReceiveAlarmNotification(sequenceNumber: number) {
+  return sequenceNumber <= 1;
 }
 
 export function alarmNotificationTitle(sequenceNumber: number, stationCode: string) {
@@ -294,31 +291,23 @@ async function notifyStationFirefighters(input: {
   rawMessage: string;
   stationCode: string;
 }) {
+  if (!shouldReceiveAlarmNotification(input.sequenceNumber)) {
+    return;
+  }
+
   const firefighters = await prisma.user.findMany({
     where: {
       role: "BRANDFIGHTER",
       isActive: true,
       alarmStations: { has: input.stationCode }
     },
-    select: {
-      id: true,
-      receiveAlarmFollowUps: true
-    }
+    select: { id: true }
   });
 
   const title = alarmNotificationTitle(input.sequenceNumber, input.stationCode);
   const body = truncateForPush(input.rawMessage, 220);
 
   for (const firefighter of firefighters) {
-    if (
-      !shouldReceiveAlarmNotification(
-        input.sequenceNumber,
-        firefighter.receiveAlarmFollowUps
-      )
-    ) {
-      continue;
-    }
-
     try {
       await createNotification(prisma, {
         recipientUserId: firefighter.id,

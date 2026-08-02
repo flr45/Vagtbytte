@@ -17,7 +17,15 @@ self.addEventListener("push", (event) => {
   const notificationLink = String(data.link || "");
   const isAlarmNotification =
     notificationLink.startsWith("/brandmand/alarmer") || String(data.tag || "").startsWith("alarm:");
-  const title = data.title || "SBR Portal";
+  const title = String(data.title || "SBR Portal");
+  const isAlarmFollowUp = isAlarmNotification && /^🚨 Sending \d+\b/.test(title);
+
+  // Sending 2 og senere gemmes i alarmfeedet, men skal aldrig udløse
+  // en ny telefonnotifikation. Kun den primære alarmmelding vises som push.
+  if (isAlarmFollowUp) {
+    return;
+  }
+
   const options = {
     body: isAlarmNotification
       ? "Åbn SBR Portal for at se alarmmeldingen."
