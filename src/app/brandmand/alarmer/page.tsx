@@ -1,13 +1,18 @@
 import { UserRole } from "@prisma/client";
 import { requireRole } from "@/lib/auth";
 import { listRecentAlarmsForStations } from "@/lib/alarm-feed";
+import { prisma } from "@/lib/prisma";
 import { TopBar } from "@/components/TopBar";
 
 export const dynamic = "force-dynamic";
 
 export default async function AlarmFeedPage() {
   const user = await requireRole(UserRole.BRANDFIGHTER);
-  const alarms = await listRecentAlarmsForStations(user.alarmStations);
+  const preferences = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { alarmStations: true }
+  });
+  const alarms = await listRecentAlarmsForStations(preferences?.alarmStations ?? []);
 
   return (
     <>
