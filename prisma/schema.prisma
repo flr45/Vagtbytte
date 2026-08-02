@@ -102,32 +102,34 @@ enum EmailReportDeliveryStatus {
 }
 
 model User {
-  id                     String             @id @default(cuid())
+  id                     String               @id @default(cuid())
   name                   String
   role                   UserRole
-  employeeNumber         String?            @unique
-  loginIdentifier        String             @unique
+  employeeNumber         String?              @unique
+  loginIdentifier        String               @unique
+  email                  String?              @unique
   passwordHash           String
-  isActive               Boolean            @default(true)
-  mustChangePassword     Boolean            @default(false)
+  isActive               Boolean              @default(true)
+  mustChangePassword     Boolean              @default(false)
   stationCode            String?
-  alarmStations          String[]           @default([])
-  receiveAlarmFollowUps  Boolean            @default(false)
-  hasAdminAccess         Boolean            @default(false)
-  createdAt              DateTime           @default(now())
-  updatedAt              DateTime           @updatedAt
+  alarmStations          String[]             @default([])
+  receiveAlarmFollowUps  Boolean              @default(false)
+  hasAdminAccess         Boolean              @default(false)
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
   lastLoginAt            DateTime?
   sessions               Session[]
-  auditLogs              AuditLog[]         @relation("ActorAuditLogs")
-  targetedAuditLogs      AuditLog[]         @relation("TargetAuditLogs")
-  givenTransfers         ShiftTransfer[]    @relation("GivenTransfers")
-  receivedTransfers      ShiftTransfer[]    @relation("ReceivedTransfers")
-  createdReturns         ReturnRequest[]    @relation("ReturnCreatedBy")
-  answeredReturns        ReturnRequest[]    @relation("ReturnAnsweredBy")
+  passwordResetTokens    PasswordResetToken[]
+  auditLogs              AuditLog[]           @relation("ActorAuditLogs")
+  targetedAuditLogs      AuditLog[]           @relation("TargetAuditLogs")
+  givenTransfers         ShiftTransfer[]      @relation("GivenTransfers")
+  receivedTransfers      ShiftTransfer[]      @relation("ReceivedTransfers")
+  createdReturns         ReturnRequest[]      @relation("ReturnCreatedBy")
+  answeredReturns        ReturnRequest[]      @relation("ReturnAnsweredBy")
   notifications          Notification[]
   pushSubscriptions      PushSubscription[]
-  availabilities         Availability[]     @relation("AvailabilityUser")
-  assignedAvailabilities Availability[]     @relation("AvailabilityAssignedBy")
+  availabilities         Availability[]       @relation("AvailabilityUser")
+  assignedAvailabilities Availability[]       @relation("AvailabilityAssignedBy")
 
   @@index([role])
   @@index([isActive])
@@ -414,6 +416,20 @@ model EmailReportDelivery {
 
   @@index([scheduleId, createdAt])
   @@index([status, createdAt])
+}
+
+model PasswordResetToken {
+  id          String   @id @default(cuid())
+  userId      String
+  tokenHash   String   @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  requestedIp String?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
 }
 
 model Session {

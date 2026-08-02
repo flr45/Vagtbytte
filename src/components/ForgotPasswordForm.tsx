@@ -1,29 +1,28 @@
 "use client";
 
 import { useActionState } from "react";
-import { changeRequiredPasswordAction } from "@/lib/password-actions";
+import { requestPasswordResetAction } from "@/lib/password-actions";
 import { ActionMessage } from "./ActionMessage";
-import { PasswordCreationFields } from "./PasswordCreationFields";
 import { SubmitButton } from "./SubmitButton";
 
-export function ChangePasswordForm() {
-  const [state, action] = useActionState(changeRequiredPasswordAction, {});
+export function ForgotPasswordForm() {
+  const [state, action] = useActionState(requestPasswordResetAction, {});
 
   return (
     <form action={action} className="grid gap-5">
       <label className="grid gap-2 text-sm font-semibold text-zinc-800">
-        Nuværende adgangskode
+        Medarbejdernummer, brugernavn eller mailadresse
         <input
-          autoComplete="current-password"
+          autoCapitalize="none"
+          autoComplete="username"
           className="focus-ring min-h-12 rounded-xl border border-zinc-200 bg-white px-4 text-base shadow-sm"
-          name="currentPassword"
+          name="identifier"
           required
-          type="password"
+          type="text"
         />
       </label>
-      <PasswordCreationFields passwordName="newPassword" />
       <ActionMessage message={state.message} ok={state.ok} />
-      <SubmitButton pendingText="Gemmer…">Skift adgangskode</SubmitButton>
+      <SubmitButton pendingText="Sender link…">Send nulstillingslink</SubmitButton>
     </form>
   );
 }

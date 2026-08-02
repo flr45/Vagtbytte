@@ -11,6 +11,7 @@ import {
 import { STATIONS } from "@/lib/stations";
 import { ActionMessage } from "./ActionMessage";
 import { Checkbox, Field } from "./Field";
+import { PasswordCreationFields } from "./PasswordCreationFields";
 import { SubmitButton } from "./SubmitButton";
 
 type UserListItem = {
@@ -18,6 +19,7 @@ type UserListItem = {
   name: string;
   employeeNumber: string | null;
   loginIdentifier: string;
+  email: string | null;
   isActive: boolean;
   stationCode: string | null;
   alarmStations: string[];
@@ -30,14 +32,19 @@ export function CreateFirefighterForm() {
 
   return (
     <form action={action} className="grid gap-4 rounded-lg border border-brand-line bg-white p-4">
-      <h2 className="text-xl font-bold">Opret bruger</h2>
+      <div>
+        <h2 className="text-xl font-bold">Opret bruger</h2>
+        <p className="mt-1 text-sm text-zinc-600">
+          Mailadressen bruges til sikker nulstilling af adgangskoden.
+        </p>
+      </div>
       <Field label="Navn" name="name" />
       <Field label="Medarbejdernummer" name="employeeNumber" />
-      <Field
-        autoComplete="new-password"
-        label="Midlertidig adgangskode"
-        name="temporaryPassword"
-        type="password"
+      <Field autoComplete="email" label="Mailadresse" name="email" type="email" />
+      <PasswordCreationFields
+        passwordLabel="Midlertidig adgangskode"
+        passwordName="temporaryPassword"
+        showConfirmation={false}
       />
       <StationSelect name="stationCode" />
       <AlarmStationCheckboxes />
@@ -109,7 +116,12 @@ function FirefighterEditForm({ user }: { user: UserListItem }) {
   return (
     <details className="rounded-lg border border-zinc-200 bg-zinc-50">
       <summary className="focus-ring min-h-12 cursor-pointer rounded-lg px-4 py-3 font-bold">
-        {user.name}
+        <span>{user.name}</span>
+        {!user.email ? (
+          <span className="ml-2 rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-900">
+            Mangler mail
+          </span>
+        ) : null}
       </summary>
       <div className="grid gap-5 border-t border-zinc-200 bg-white p-4">
         <form action={editAction} className="grid gap-4">
@@ -120,6 +132,19 @@ function FirefighterEditForm({ user }: { user: UserListItem }) {
             label="Medarbejdernummer"
             name="employeeNumber"
           />
+          <Field
+            autoComplete="email"
+            defaultValue={user.email ?? ""}
+            label="Mailadresse til nulstilling"
+            name="email"
+            required={false}
+            type="email"
+          />
+          {!user.email ? (
+            <p className="-mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+              Brugeren kan først nulstille sin egen adgangskode, når en mailadresse er gemt.
+            </p>
+          ) : null}
           <StationSelect defaultValue={user.stationCode ?? "A"} name="stationCode" />
           <AlarmStationCheckboxes selected={user.alarmStations} />
           <Checkbox
@@ -139,11 +164,16 @@ function FirefighterEditForm({ user }: { user: UserListItem }) {
 
         <form action={resetAction} className="grid gap-4 border-t border-brand-line pt-5">
           <input name="userId" type="hidden" value={user.id} />
-          <Field
-            autoComplete="new-password"
-            label="Ny midlertidig adgangskode"
-            name="temporaryPassword"
-            type="password"
+          <div>
+            <h3 className="font-black">Administratornulstilling</h3>
+            <p className="mt-1 text-sm text-zinc-600">
+              Brugeren bliver logget ud og skal vælge en ny adgangskode ved næste login.
+            </p>
+          </div>
+          <PasswordCreationFields
+            passwordLabel="Ny midlertidig adgangskode"
+            passwordName="temporaryPassword"
+            showConfirmation={false}
           />
           <ActionMessage message={resetState.message} ok={resetState.ok} />
           <SubmitButton>Nulstil adgangskode</SubmitButton>
@@ -239,12 +269,11 @@ export function VcForm({
         label="Brugernavn"
         name="loginIdentifier"
       />
-      <Field
-        autoComplete="new-password"
-        label="Ny adgangskode"
-        name="temporaryPassword"
+      <PasswordCreationFields
+        passwordLabel="Ny adgangskode (valgfri)"
+        passwordName="temporaryPassword"
         required={false}
-        type="password"
+        showConfirmation={false}
       />
       <Checkbox defaultChecked={vc?.isActive ?? true} label="Aktiv" name="isActive" />
       <ActionMessage message={state.message} ok={state.ok} />
