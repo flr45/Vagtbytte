@@ -49,9 +49,12 @@ export function CreateFirefighterForm() {
       <StationSelect name="stationCode" />
       <AlarmStationCheckboxes />
       <Checkbox
-        label="Modtag opfølgende sendinger (sending 2+)"
+        label="Vis opfølgende sendinger (sending 2+)"
         name="receiveAlarmFollowUps"
       />
+      <p className="-mt-2 text-sm font-semibold text-zinc-600">
+        Telefonnotifikation sendes kun ved den primære alarmmelding.
+      </p>
       <Checkbox defaultChecked label="Aktiv" name="isActive" />
       <Checkbox label="Administratoradgang" name="hasAdminAccess" />
       <ActionMessage message={state.message} ok={state.ok} />
@@ -149,9 +152,12 @@ function FirefighterEditForm({ user }: { user: UserListItem }) {
           <AlarmStationCheckboxes selected={user.alarmStations} />
           <Checkbox
             defaultChecked={user.receiveAlarmFollowUps}
-            label="Modtag opfølgende sendinger (sending 2+)"
+            label="Vis opfølgende sendinger (sending 2+)"
             name="receiveAlarmFollowUps"
           />
+          <p className="-mt-2 text-sm font-semibold text-zinc-600">
+            Telefonnotifikation sendes kun ved den primære alarmmelding.
+          </p>
           <Checkbox defaultChecked={user.isActive} label="Aktiv" name="isActive" />
           <Checkbox
             defaultChecked={user.hasAdminAccess}
