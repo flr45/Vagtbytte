@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ingestAlarmMessage } from "@/lib/alarm-feed";
+import { STATION_CODE_VALUES } from "@/lib/stations";
 
 const payloadSchema = z.object({
   senderNumber: z.string().min(1).max(40),
   rawMessage: z.string().min(1).max(5000),
   receivedAt: z.string().datetime().optional(),
-  sourceMessageId: z.string().max(200).nullish()
+  sourceMessageId: z.string().max(200).nullish(),
+  stationCode: z.enum(STATION_CODE_VALUES).nullish()
 });
 
 export async function POST(request: Request) {
@@ -29,7 +31,8 @@ export async function POST(request: Request) {
     senderNumber: parsed.data.senderNumber,
     rawMessage: parsed.data.rawMessage,
     receivedAt: parsed.data.receivedAt ? new Date(parsed.data.receivedAt) : new Date(),
-    sourceMessageId: parsed.data.sourceMessageId
+    sourceMessageId: parsed.data.sourceMessageId,
+    stationCode: parsed.data.stationCode
   });
 
   return NextResponse.json(result, { status: result.created ? 201 : 200 });
