@@ -10,6 +10,11 @@
   box-sizing: border-box;
 }
 
+html {
+  background: #eef2f4;
+  scroll-behavior: smooth;
+}
+
 html,
 body {
   overflow-x: hidden;
@@ -19,16 +24,43 @@ body {
   margin: 0;
   background: linear-gradient(180deg, #f8fafb 0%, #eef2f4 100%);
   color: #151515;
+  min-width: 320px;
 }
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
+input,
+select,
+textarea {
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: #a1a1aa;
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  background: #f4f4f5;
+  color: #71717a;
+}
+
+::selection {
+  background: #fecaca;
+  color: #450a0a;
+}
+
 .focus-ring {
-  @apply focus:outline-none focus:ring-2 focus:ring-brand-red focus:ring-offset-2;
+  @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2;
 }
 
 .app-card {
@@ -106,12 +138,15 @@ select {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
   *,
   *::before,
   *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
-    scroll-behavior: auto !important;
     transition-duration: 0.001ms !important;
   }
 
