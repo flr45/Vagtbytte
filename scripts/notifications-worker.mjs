@@ -96,12 +96,14 @@ async function tick() {
       if (
         retentionResult.alarmsDeleted ||
         retentionResult.alarmNotificationsDeleted ||
+        retentionResult.passwordResetTokensDeleted ||
         retentionResult.backupsDeleted ||
         retentionResult.backupErrors?.length
       ) {
         console.log(
           `DATA_RETENTION: alarmer=${retentionResult.alarmsDeleted}, ` +
             `alarmnotifikationer=${retentionResult.alarmNotificationsDeleted}, ` +
+            `nulstillingstokens=${retentionResult.passwordResetTokensDeleted ?? 0}, ` +
             `backups=${retentionResult.backupsDeleted}, ` +
             `backupfejl=${retentionResult.backupErrors?.length ?? 0}`
         );
