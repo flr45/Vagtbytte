@@ -246,7 +246,13 @@ export function notificationTypeLabel(type: NotificationType) {
 }
 
 export function hasValidCaseLink(link: string | null | undefined) {
-  return Boolean(
-    link && /^\/(brandmand\/anmodninger|brandmand\/til-raadighed|vagtcentral\/sager)\/[A-Za-z0-9_-]+$/.test(link)
+  if (!link) {
+    return false;
+  }
+
+  return (
+    /^\/(brandmand\/anmodninger|brandmand\/til-raadighed|vagtcentral\/sager)\/[A-Za-z0-9_-]+$/.test(link) ||
+    /^\/brandmand\/alarmer(?:#alarm-[A-Za-z0-9_-]+)?$/.test(link) ||
+    link === "/vagtcentral"
   );
 }
