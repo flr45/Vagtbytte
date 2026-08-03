@@ -191,10 +191,13 @@ describe("VC-dashboard - notifikationstekster", () => {
     expect(notificationTypeLabel(NotificationType.TEST)).toBe("Testnotifikation");
   });
 
-  it("Åbn sag vises ikke på en testnotifikation uden gyldigt link", () => {
-    expect(hasValidCaseLink("/vagtcentral")).toBe(false);
+  it("åbner kun kendte interne destinationslinks", () => {
+    expect(hasValidCaseLink("/vagtcentral")).toBe(true);
     expect(hasValidCaseLink("/vagtcentral/sager/abc123")).toBe(true);
     expect(hasValidCaseLink("/brandmand/til-raadighed/abc123")).toBe(true);
+    expect(hasValidCaseLink("/brandmand/alarmer#alarm-abc123")).toBe(true);
+    expect(hasValidCaseLink("https://example.com")).toBe(false);
+    expect(hasValidCaseLink("/admin")).toBe(false);
   });
 });
 
