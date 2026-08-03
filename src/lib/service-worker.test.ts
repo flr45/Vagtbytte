@@ -5,9 +5,15 @@ import { describe, expect, it } from "vitest";
 const source = readFileSync(join(process.cwd(), "public/sw.js"), "utf8");
 
 describe("service worker push", () => {
-  it("viser altid en notifikation ved push", () => {
+  it("viser notifikationer gennem service workeren", () => {
     expect(source).toContain("showNotification");
     expect(source).toContain("event.waitUntil");
+  });
+
+  it("viser kun alarm-push når SMS-teksten har en primær stationsmarkør", () => {
+    expect(source).toContain("hasPrimaryStationMarker");
+    expect(source).toContain("isAlarmNotification && !hasPrimaryStationMarker");
+    expect(source).toContain("(ISL|[ABSKLR])");
   });
 
   it("klik åbner korrekt sag og markerer notificationId som åbnet", () => {
