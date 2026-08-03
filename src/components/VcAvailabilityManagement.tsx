@@ -1,6 +1,7 @@
 "use client";
 
 import type { AvailabilityStatus } from "@prisma/client";
+import { useEffect, useRef, useState } from "react";
 import { availabilityStatusLabel } from "@/lib/availability";
 import {
   VcAssignAvailabilityForm,
@@ -38,13 +39,16 @@ export function VcAvailabilityManagement({
       >
         {currentAssignments.map((assignment) => (
           <article
-            className="grid gap-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3 sm:grid-cols-[1fr_auto] sm:items-center"
+            className="grid gap-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
             key={assignment.id}
           >
             <div className="min-w-0">
               <p className="truncate font-black text-emerald-950">{assignment.userName}</p>
               <p className="text-sm font-semibold text-emerald-800">
                 {assignment.userEmployeeNumber ?? "Uden nummer"} · tildelt {formatShortTime(assignment.assignedAt)}
+              </p>
+              <p className="mt-1 text-xs font-bold text-emerald-700">
+                {assignment.acknowledgedAt ? `Bekræftet ${formatShortTime(assignment.acknowledgedAt)}` : "Afventer bekræftelse"}
               </p>
             </div>
             <VcUnassignAvailabilityForm availabilityId={assignment.id} />
@@ -60,7 +64,7 @@ export function VcAvailabilityManagement({
       >
         {availableFirefighters.map((availability) => (
           <article
-            className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:grid-cols-[1fr_auto] sm:items-center"
+            className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
             key={availability.id}
           >
             <div className="min-w-0">
@@ -114,8 +118,22 @@ function CompactPanel({
   emptyText: string;
   children: React.ReactNode;
 }) {
+  const [open, setOpen] = useState(count > 0);
+  const previousCount = useRef(count);
+
+  useEffect(() => {
+    if (previousCount.current === 0 && count > 0) {
+      setOpen(true);
+    }
+    previousCount.current = count;
+  }, [count]);
+
   return (
-    <details className="rounded-2xl border border-zinc-200 bg-white" open={count > 0}>
+    <details
+      className="rounded-2xl border border-zinc-200 bg-white"
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+      open={open}
+    >
       <summary className="focus-ring flex min-h-16 cursor-pointer items-center justify-between gap-3 rounded-2xl px-4">
         <div>
           <h2 className="text-lg font-black">{title}</h2>
