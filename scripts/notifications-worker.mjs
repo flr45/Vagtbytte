@@ -4,6 +4,7 @@ import { monitorSmsGateway } from "./system-monitor.mjs";
 import { runAutomaticBackupIfDue } from "./backup-core.mjs";
 import { processDueEmailReports } from "./email-report-core.mjs";
 import { runDataRetention } from "./data-retention.mjs";
+import { ensureVcEventNotifications } from "./vc-event-notifications.mjs";
 
 const prisma = new PrismaClient();
 
@@ -108,6 +109,11 @@ async function tick() {
             `backupfejl=${retentionResult.backupErrors?.length ?? 0}`
         );
       }
+    }
+
+    const vcEvents = await ensureVcEventNotifications(prisma, new Date(now));
+    if (vcEvents.created > 0) {
+      console.log(`VC_EVENT_NOTIFICATIONS_CREATED: ${vcEvents.created}`);
     }
 
     const result = await publishDueNotifications(prisma);
