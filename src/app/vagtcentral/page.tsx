@@ -73,12 +73,17 @@ export default async function VagtcentralPage() {
       include: { returnRequests: { orderBy: { createdAt: "desc" } } }
     }),
     prisma.shiftTransfer.findMany({
-      where: { status: { in: ["VC_REJECTED", "RECEIVER_REJECTED", "COMPLETED"] } },
+      where: { status: { in: ["VC_REJECTED", "RECEIVER_REJECTED", "COMPLETED", "CANCELLED"] } },
       orderBy: { updatedAt: "desc" },
       take: 10,
       include: { returnRequests: { orderBy: { createdAt: "desc" } } }
     })
   ]);
+
+  const currentAssignmentIds = new Set(currentAssignments.map((assignment) => assignment.id));
+  const previousAvailabilityHistory = previousAvailabilities.filter(
+    (availability) => !currentAssignmentIds.has(availability.id)
+  );
 
   return (
     <>
@@ -96,7 +101,7 @@ export default async function VagtcentralPage() {
         <VcAvailabilityManagement
           availableFirefighters={availableFirefighters.map(serializeManagedAvailability)}
           currentAssignments={currentAssignments.map(serializeManagedAvailability)}
-          previousAvailabilities={previousAvailabilities.map(serializeManagedAvailability)}
+          previousAvailabilities={previousAvailabilityHistory.map(serializeManagedAvailability)}
         />
       </VcDashboard>
     </>
