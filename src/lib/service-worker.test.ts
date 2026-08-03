@@ -10,16 +10,16 @@ describe("service worker push", () => {
     expect(source).toContain("event.waitUntil");
   });
 
-  it("viser kun alarm-push når SMS-teksten har en primær stationsmarkør", () => {
-    expect(source).toContain("hasPrimaryStationMarker");
-    expect(source).toContain("isAlarmNotification && !hasPrimaryStationMarker");
+  it("filtrerer kun alarmopfølgninger og ikke VC-notifikationer", () => {
+    expect(source).toContain("hasPrimaryAlarmMarker");
+    expect(source).toContain("isAlarmNotification && !hasPrimaryAlarmMarker");
     expect(source).toContain("(ISL|[ABSKLR])");
   });
 
   it("klik åbner korrekt sag og markerer notificationId som åbnet", () => {
     expect(source).toContain("data.notificationId");
     expect(source).toContain("/api/notifications/open");
-    expect(source).toContain("clients.openWindow");
-    expect(source).toContain("client.navigate(targetUrl)");
+    expect(source).toContain("clients.openWindow(targetUrl)");
+    expect(source).toContain("portalWindow.navigate(targetUrl)");
   });
 });
