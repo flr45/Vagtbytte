@@ -51,7 +51,12 @@ export default async function FirefighterPage() {
     "RETURN_ACCEPTED_AWAITING_VC",
     "RETURN_APPROVED_AWAITING_EXECUTION"
   ]);
-  const activeRequestsToMe = requestsToMe.filter((transfer) => activeStatuses.has(transfer.status));
+  const requestsRequiringMyResponse = requestsToMe.filter(
+    (transfer) => transfer.status === "AWAITING_RECEIVER"
+  );
+  const activeTransfersReceivedByMe = requestsToMe.filter(
+    (transfer) => activeStatuses.has(transfer.status) && transfer.status !== "AWAITING_RECEIVER"
+  );
   const activeMyCreatedRequests = myCreatedRequests.filter((transfer) => activeStatuses.has(transfer.status));
   const previousTransfers = [...requestsToMe, ...myCreatedRequests].filter((transfer) => !activeStatuses.has(transfer.status));
   const previousAvailabilityHistory = availabilityHistory.filter(
@@ -116,11 +121,35 @@ export default async function FirefighterPage() {
           </section>
         ) : null}
 
-        {activeRequestsToMe.length > 0 ? (
+        {requestsRequiringMyResponse.length > 0 ? (
           <TransferList
-            emptyText="Der er ingen anmodninger rettet til dig."
+            emptyText="Der er ingen anmodninger, som kræver dit svar."
             title="Kræver dit svar"
-            transfers={activeRequestsToMe.map((transfer) => ({
+            transfers={requestsRequiringMyResponse.map((transfer) => ({
+              id: transfer.id,
+              transferNumber: transfer.transferNumber,
+              status: transfer.status,
+              requestedStartAt: transfer.requestedStartAt,
+              expectedEndMode: transfer.expectedEndMode,
+              expectedEndAt: transfer.expectedEndAt,
+              calculatedShiftEndAt: transfer.calculatedShiftEndAt,
+              comment: transfer.comment,
+              receiverResponseComment: transfer.receiverResponseComment,
+              vcDecision: transfer.vcDecision,
+              vcComment: transfer.vcComment,
+              cancelledAt: transfer.cancelledAt,
+              cancellationReason: transfer.cancellationReason,
+              counterpartName: transfer.giverNameSnapshot,
+              counterpartEmployeeNumber: transfer.giverEmployeeNumberSnapshot
+            }))}
+          />
+        ) : null}
+
+        {activeTransfersReceivedByMe.length > 0 ? (
+          <TransferList
+            emptyText="Du har ingen aktive vagter overdraget til dig."
+            title="Vagter overdraget til dig"
+            transfers={activeTransfersReceivedByMe.map((transfer) => ({
               id: transfer.id,
               transferNumber: transfer.transferNumber,
               status: transfer.status,
