@@ -18,11 +18,15 @@ self.addEventListener("push", (event) => {
   const isAlarmNotification =
     notificationLink.startsWith("/brandmand/alarmer") || String(data.tag || "").startsWith("alarm:");
   const title = String(data.title || "SBR Portal");
-  const isAlarmFollowUp = isAlarmNotification && /^🚨 Sending \d+\b/.test(title);
+  const rawBody = String(data.body || "");
+  const hasPrimaryStationMarker =
+    /\((ISL|[ABSKLR])\)/i.test(rawBody) || /(^|[^A-Z0-9])ISL(?=$|[^A-Z0-9])/i.test(rawBody);
 
-  // Sending 2 og senere gemmes i alarmfeedet, men skal aldrig udløse
-  // en ny telefonnotifikation. Kun den primære alarmmelding vises som push.
-  if (isAlarmFollowUp) {
+  // Backendens visuelle gruppering kan samle en løs opfølgende besked ind under
+  // den rigtige alarm, selv om den bagved stadig har sekvensnummer 1. Derfor
+  // afgøres push ikke ud fra titel/sekvens, men ud fra om selve SMS-teksten har
+  // den stationsmarkør, som kun primærmeldingen indeholder.
+  if (isAlarmNotification && !hasPrimaryStationMarker) {
     return;
   }
 
