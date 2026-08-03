@@ -18,18 +18,13 @@ type FormValues = {
   comment: string;
 };
 
-const initialValues: FormValues = {
-  requestedStartAt: "",
-  expectedEndMode: "",
-  expectedEndAt: "",
-  comment: ""
-};
-
 export function TransferCreateForm({
   defaultEmployeeNumber,
+  defaultStartAt,
   firefighters
 }: {
   defaultEmployeeNumber: string;
+  defaultStartAt: string;
   firefighters: FirefighterOption[];
 }) {
   const defaultGiver = firefighters.find(
@@ -37,7 +32,12 @@ export function TransferCreateForm({
   ) ?? null;
   const [giver, setGiver] = useState<FirefighterOption | null>(defaultGiver);
   const [receiver, setReceiver] = useState<FirefighterOption | null>(null);
-  const [values, setValues] = useState<FormValues>(initialValues);
+  const [values, setValues] = useState<FormValues>(() => ({
+    requestedStartAt: defaultStartAt,
+    expectedEndMode: "",
+    expectedEndAt: "",
+    comment: ""
+  }));
   const [createState, createAction] = useActionState(createTransferAction, {});
   const samePerson = Boolean(giver && receiver && giver.id === receiver.id);
 
@@ -51,24 +51,27 @@ export function TransferCreateForm({
         <p className="text-sm font-black uppercase tracking-wide text-brand-red">Vagtoverdragelse</p>
         <h1 className="mt-1 text-3xl font-black">Nyt vagtbytte</h1>
         <p className="mt-2 text-sm font-semibold text-zinc-600">
-          Søg på navn eller medarbejdernummer og vælg personen direkte.
+          Vælg afgiver og overtager, angiv tidspunktet og kontrollér oplysningerne før oprettelse.
         </p>
       </div>
 
-      <PersonSearch
-        firefighters={firefighters}
-        label="Afgiver"
-        name="giverEmployeeNumber"
-        onSelect={setGiver}
-        selected={giver}
-      />
-      <PersonSearch
-        firefighters={firefighters}
-        label="Overtager"
-        name="receiverEmployeeNumber"
-        onSelect={setReceiver}
-        selected={receiver}
-      />
+      <div className="grid gap-4 rounded-2xl bg-zinc-50 p-4">
+        <PersonSearch
+          firefighters={firefighters}
+          label="Afgiver"
+          name="giverEmployeeNumber"
+          onSelect={setGiver}
+          selected={giver}
+        />
+        <div aria-hidden="true" className="text-center text-xl font-black text-zinc-400">↓</div>
+        <PersonSearch
+          firefighters={firefighters}
+          label="Overtager"
+          name="receiverEmployeeNumber"
+          onSelect={setReceiver}
+          selected={receiver}
+        />
+      </div>
 
       {samePerson ? (
         <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-900">
@@ -91,7 +94,13 @@ export function TransferCreateForm({
       <fieldset className="grid gap-2">
         <legend className="text-sm font-semibold text-zinc-800">Forventet tilbagelevering</legend>
         <div className="grid gap-2 sm:grid-cols-2">
-          <label className="flex min-h-12 items-center gap-3 rounded-xl border border-zinc-200 bg-white px-4 font-semibold shadow-sm">
+          <label
+            className={`flex min-h-12 items-center gap-3 rounded-xl border px-4 font-semibold shadow-sm transition ${
+              values.expectedEndMode === "SPECIFIC_TIME"
+                ? "border-brand-red bg-red-50 text-red-950"
+                : "border-zinc-200 bg-white"
+            }`}
+          >
             <input
               checked={values.expectedEndMode === "SPECIFIC_TIME"}
               className="h-5 w-5 accent-brand-red"
@@ -103,7 +112,13 @@ export function TransferCreateForm({
             />
             Bestemt tidspunkt
           </label>
-          <label className="flex min-h-12 items-center gap-3 rounded-xl border border-zinc-200 bg-white px-4 font-semibold shadow-sm">
+          <label
+            className={`flex min-h-12 items-center gap-3 rounded-xl border px-4 font-semibold shadow-sm transition ${
+              values.expectedEndMode === "UNTIL_SHIFT_END"
+                ? "border-brand-red bg-red-50 text-red-950"
+                : "border-zinc-200 bg-white"
+            }`}
+          >
             <input
               checked={values.expectedEndMode === "UNTIL_SHIFT_END"}
               className="h-5 w-5 accent-brand-red"
@@ -175,6 +190,7 @@ function PersonSearch({
   const listId = useId();
   const [query, setQuery] = useState(() => selected ? displayPerson(selected) : "");
   const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
   const normalizedQuery = normalize(query);
   const results = useMemo(() => {
     if (!normalizedQuery || selected) return [];
@@ -189,6 +205,7 @@ function PersonSearch({
     onSelect(person);
     setQuery(displayPerson(person));
     setOpen(false);
+    setActiveIndex(0);
   }
 
   return (
@@ -198,20 +215,39 @@ function PersonSearch({
       </label>
       <input name={name} type="hidden" value={selected?.employeeNumber ?? ""} />
       <input
+        aria-activedescendant={results[activeIndex] ? `${listId}-option-${results[activeIndex].id}` : undefined}
         aria-autocomplete="list"
         aria-controls={listId}
         aria-expanded={open && !selected}
         autoComplete="off"
-        className="focus-ring min-h-12 rounded-xl border border-zinc-200 bg-white px-4 text-base shadow-sm"
+        className="focus-ring min-h-12 rounded-xl border border-zinc-200 bg-white px-4 pr-20 text-base shadow-sm"
         id={`${listId}-input`}
         onBlur={() => window.setTimeout(() => setOpen(false), 120)}
         onChange={(event) => {
           setQuery(event.target.value);
           onSelect(null);
           setOpen(true);
+          setActiveIndex(0);
         }}
         onFocus={() => {
-          if (!selected) setOpen(true);
+          if (!selected && normalizedQuery) setOpen(true);
+        }}
+        onKeyDown={(event) => {
+          if (selected) return;
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            setOpen(true);
+            setActiveIndex((current) => Math.min(current + 1, Math.max(results.length - 1, 0)));
+          } else if (event.key === "ArrowUp") {
+            event.preventDefault();
+            setOpen(true);
+            setActiveIndex((current) => Math.max(current - 1, 0));
+          } else if (event.key === "Enter" && open && results[activeIndex]) {
+            event.preventDefault();
+            choose(results[activeIndex]);
+          } else if (event.key === "Escape") {
+            setOpen(false);
+          }
         }}
         placeholder="Søg på navn eller nummer"
         required
@@ -225,7 +261,8 @@ function PersonSearch({
           onClick={() => {
             onSelect(null);
             setQuery("");
-            setOpen(true);
+            setOpen(false);
+            setActiveIndex(0);
           }}
           type="button"
         >
@@ -239,11 +276,16 @@ function PersonSearch({
           role="listbox"
         >
           {results.length > 0 ? (
-            results.map((firefighter) => (
+            results.map((firefighter, index) => (
               <button
-                className="focus-ring flex min-h-12 w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left hover:bg-zinc-50"
+                aria-selected={index === activeIndex}
+                className={`focus-ring flex min-h-12 w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left ${
+                  index === activeIndex ? "bg-zinc-100" : "hover:bg-zinc-50"
+                }`}
+                id={`${listId}-option-${firefighter.id}`}
                 key={firefighter.id}
                 onMouseDown={(event) => event.preventDefault()}
+                onMouseEnter={() => setActiveIndex(index)}
                 onClick={() => choose(firefighter)}
                 role="option"
                 type="button"
