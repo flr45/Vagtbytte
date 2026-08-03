@@ -24,13 +24,14 @@ export default async function NewTransferPage() {
 
   return (
     <>
-      <TopBar title="Vagtoverdragelse" />
-      <main className="mx-auto grid w-full max-w-2xl gap-4 px-4 py-6">
+      <TopBar title="Nyt vagtbytte" />
+      <main className="mx-auto grid w-full max-w-2xl gap-4 px-4 py-5">
         <Link className="app-button-secondary w-fit px-4 text-sm" href="/brandmand">
-          Tilbage
+          ← Tilbage
         </Link>
         <TransferCreateForm
           defaultEmployeeNumber={user.employeeNumber ?? ""}
+          defaultStartAt={toDateTimeLocalValue(new Date())}
           firefighters={firefighters.flatMap((firefighter) =>
             firefighter.employeeNumber
               ? [{
@@ -44,4 +45,21 @@ export default async function NewTransferPage() {
       </main>
     </>
   );
+}
+
+function toDateTimeLocalValue(date: Date) {
+  const rounded = new Date(Math.ceil(date.getTime() / (5 * 60 * 1000)) * 5 * 60 * 1000);
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Copenhagen",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
+    }).formatToParts(rounded).map((part) => [part.type, part.value])
+  );
+
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
 }
