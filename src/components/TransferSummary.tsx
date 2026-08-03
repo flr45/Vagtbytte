@@ -61,46 +61,73 @@ export function TransferList({
 }) {
   return (
     <section className="grid gap-3">
-      <h2 className="text-xl font-bold">{title}</h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-xl font-bold">{title}</h2>
+        {transfers.length > 0 ? (
+          <span className="rounded-full bg-zinc-200 px-2.5 py-1 text-xs font-black text-zinc-700">
+            {transfers.length}
+          </span>
+        ) : null}
+      </div>
       {transfers.length === 0 ? (
-        <p className="rounded-lg border border-brand-line bg-white p-4 text-sm text-zinc-600">
+        <p className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm font-semibold text-zinc-600">
           {emptyText}
         </p>
       ) : (
         <div className="grid gap-3">
           {transfers.map((transfer) => (
             <Link
-              className="focus-ring app-card-interactive fade-in grid gap-3"
+              className="focus-ring app-card-interactive fade-in grid gap-4"
               href={`/brandmand/anmodninger/${transfer.id}`}
               key={transfer.id}
             >
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <p className="font-bold">{transfer.transferNumber}</p>
+                <p className="text-lg font-black">{transfer.transferNumber}</p>
                 <StatusBadge status={transfer.status} />
               </div>
-              <p className="text-sm text-zinc-700">
-                Modpart: {transfer.counterpartName} - {transfer.counterpartEmployeeNumber}
-              </p>
-              <p className="text-sm text-zinc-700">Start: {formatDateTime(transfer.requestedStartAt)}</p>
-              <p className="text-sm text-zinc-700">
-                Forventet tilbagelevering: {expectedEndLabel(transfer, formatDateTime)}
-              </p>
-              {transfer.comment ? <p className="text-sm text-zinc-700">Kommentar: {transfer.comment}</p> : null}
-              {transfer.receiverResponseComment ? (
-                <p className="text-sm text-zinc-700">Begrundelse: {transfer.receiverResponseComment}</p>
+
+              <div>
+                <p className="text-xs font-black uppercase tracking-wide text-zinc-500">Modpart</p>
+                <p className="mt-1 break-words text-base font-black text-zinc-950">
+                  {transfer.counterpartName}
+                </p>
+                <p className="mt-0.5 text-sm font-semibold text-zinc-600">
+                  Medarbejdernummer {transfer.counterpartEmployeeNumber}
+                </p>
+              </div>
+
+              <dl className="grid gap-2 sm:grid-cols-2">
+                <SummaryMetric label="Start" value={formatDateTime(transfer.requestedStartAt)} />
+                <SummaryMetric
+                  label="Forventet tilbagelevering"
+                  value={expectedEndLabel(transfer, formatDateTime)}
+                />
+              </dl>
+
+              {transfer.receiverResponseComment || transfer.cancellationReason || transfer.vcComment ? (
+                <p className="rounded-xl bg-zinc-50 p-3 text-sm font-semibold leading-relaxed text-zinc-700">
+                  {transfer.cancellationReason
+                    ? `Annullering: ${transfer.cancellationReason}`
+                    : transfer.receiverResponseComment
+                      ? `Svar: ${transfer.receiverResponseComment}`
+                      : `VC: ${transfer.vcComment}`}
+                </p>
               ) : null}
-              {transfer.vcDecision ? <p className="text-sm text-zinc-700">VC: {transfer.vcDecision}</p> : null}
-              {transfer.vcComment ? <p className="text-sm text-zinc-700">VC-kommentar: {transfer.vcComment}</p> : null}
-              {transfer.cancelledAt ? (
-                <p className="text-sm text-zinc-700">Annulleret: {formatDateTime(transfer.cancelledAt)}</p>
-              ) : null}
-              {transfer.cancellationReason ? (
-                <p className="text-sm text-zinc-700">Annulleringsbegrundelse: {transfer.cancellationReason}</p>
-              ) : null}
+
+              <p className="text-sm font-black text-brand-red">Åbn sag →</p>
             </Link>
           ))}
         </div>
       )}
     </section>
+  );
+}
+
+function SummaryMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl bg-zinc-50 p-3">
+      <dt className="text-xs font-black uppercase tracking-wide text-zinc-500">{label}</dt>
+      <dd className="mt-1 text-sm font-bold text-zinc-900">{value}</dd>
+    </div>
   );
 }
