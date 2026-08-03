@@ -54,30 +54,27 @@ export default async function FirefighterPage() {
   const activeRequestsToMe = requestsToMe.filter((transfer) => activeStatuses.has(transfer.status));
   const activeMyCreatedRequests = myCreatedRequests.filter((transfer) => activeStatuses.has(transfer.status));
   const previousTransfers = [...requestsToMe, ...myCreatedRequests].filter((transfer) => !activeStatuses.has(transfer.status));
+  const previousAvailabilityHistory = availabilityHistory.filter(
+    (availability) => availability.id !== currentAssignment?.id
+  );
 
   return (
     <>
       <TopBar title="Vagtoverdragelse" />
-      <main className="mx-auto grid w-full max-w-3xl gap-6 px-4 py-6">
-        <section className="rounded-lg border border-brand-line bg-white p-5 shadow-sm">
-          <h1 className="text-3xl font-bold">Vagtoverdragelse</h1>
-          <dl className="mt-5 grid gap-3 rounded-md bg-brand-mist p-4">
-            <div>
-              <dt className="text-sm font-semibold text-zinc-600">Navn</dt>
-              <dd className="mt-1 text-lg font-bold">{user.name}</dd>
-            </div>
-            <div>
-              <dt className="text-sm font-semibold text-zinc-600">Medarbejdernummer</dt>
-              <dd className="mt-1 text-lg font-bold">{user.employeeNumber}</dd>
-            </div>
-          </dl>
-          <Link
-            className="focus-ring mt-5 inline-flex min-h-14 w-full items-center justify-center rounded-md bg-brand-red px-5 text-lg font-bold text-white sm:w-auto"
-            href="/brandmand/ny"
-          >
+      <main className="mx-auto grid w-full max-w-3xl gap-5 px-4 py-5">
+        <section className="app-card grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+          <div className="min-w-0">
+            <p className="text-sm font-black uppercase tracking-wide text-brand-red">Din vagtoversigt</p>
+            <h1 className="mt-1 truncate text-2xl font-black">{user.name}</h1>
+            <p className="mt-1 text-sm font-semibold text-zinc-600">
+              Medarbejdernummer {user.employeeNumber ?? "ikke registreret"}
+            </p>
+          </div>
+          <Link className="app-button-primary w-full sm:w-auto" href="/brandmand/ny">
             Opret vagtoverdragelse
           </Link>
         </section>
+
         {currentAssignment ? (
           <section
             className={`app-card grid gap-4 ${
@@ -118,6 +115,31 @@ export default async function FirefighterPage() {
             </Link>
           </section>
         ) : null}
+
+        {activeRequestsToMe.length > 0 ? (
+          <TransferList
+            emptyText="Der er ingen anmodninger rettet til dig."
+            title="Kræver dit svar"
+            transfers={activeRequestsToMe.map((transfer) => ({
+              id: transfer.id,
+              transferNumber: transfer.transferNumber,
+              status: transfer.status,
+              requestedStartAt: transfer.requestedStartAt,
+              expectedEndMode: transfer.expectedEndMode,
+              expectedEndAt: transfer.expectedEndAt,
+              calculatedShiftEndAt: transfer.calculatedShiftEndAt,
+              comment: transfer.comment,
+              receiverResponseComment: transfer.receiverResponseComment,
+              vcDecision: transfer.vcDecision,
+              vcComment: transfer.vcComment,
+              cancelledAt: transfer.cancelledAt,
+              cancellationReason: transfer.cancellationReason,
+              counterpartName: transfer.giverNameSnapshot,
+              counterpartEmployeeNumber: transfer.giverEmployeeNumberSnapshot
+            }))}
+          />
+        ) : null}
+
         {activeAvailability ? (
           <AvailabilityActiveForm
             availabilityId={activeAvailability.id}
@@ -127,30 +149,10 @@ export default async function FirefighterPage() {
         ) : (
           <AvailabilityCreateForm defaultFrom={toDateTimeLocalValue(new Date())} />
         )}
+
         <TransferList
-          emptyText="Der er ingen anmodninger rettet til dig."
-          title="Anmodninger til mig"
-          transfers={activeRequestsToMe.map((transfer) => ({
-            id: transfer.id,
-            transferNumber: transfer.transferNumber,
-            status: transfer.status,
-            requestedStartAt: transfer.requestedStartAt,
-            expectedEndMode: transfer.expectedEndMode,
-            expectedEndAt: transfer.expectedEndAt,
-            calculatedShiftEndAt: transfer.calculatedShiftEndAt,
-            comment: transfer.comment,
-            receiverResponseComment: transfer.receiverResponseComment,
-            vcDecision: transfer.vcDecision,
-            vcComment: transfer.vcComment,
-            cancelledAt: transfer.cancelledAt,
-            cancellationReason: transfer.cancellationReason,
-            counterpartName: transfer.giverNameSnapshot,
-            counterpartEmployeeNumber: transfer.giverEmployeeNumberSnapshot
-          }))}
-        />
-        <TransferList
-          emptyText="Du har ikke oprettet nogen anmodninger."
-          title="Mine oprettede anmodninger"
+          emptyText="Du har ikke nogen aktive oprettede anmodninger."
+          title="Mine aktive vagtoverdragelser"
           transfers={activeMyCreatedRequests.map((transfer) => ({
             id: transfer.id,
             transferNumber: transfer.transferNumber,
@@ -169,8 +171,9 @@ export default async function FirefighterPage() {
             counterpartEmployeeNumber: transfer.receiverEmployeeNumberSnapshot
           }))}
         />
-        <details className="grid gap-3">
-          <summary className="cursor-pointer text-xl font-bold">Tidligere sager</summary>
+
+        <details className="grid gap-3 rounded-2xl border border-zinc-200 bg-white p-4">
+          <summary className="focus-ring cursor-pointer rounded-xl text-xl font-bold">Tidligere sager</summary>
           <div className="mt-3 grid gap-4">
             <TransferList
               emptyText="Der er ingen tidligere sager."
@@ -198,12 +201,12 @@ export default async function FirefighterPage() {
               }))}
             />
             <section className="app-card grid gap-3">
-              <h2 className="text-xl font-bold">Til rådighed</h2>
-              {availabilityHistory.length === 0 ? (
+              <h2 className="text-xl font-bold">Tidligere tilgængeligheder</h2>
+              {previousAvailabilityHistory.length === 0 ? (
                 <p className="text-sm font-semibold text-zinc-600">Ingen tidligere tilgængeligheder.</p>
               ) : (
                 <div className="grid gap-2">
-                  {availabilityHistory.map((availability) => (
+                  {previousAvailabilityHistory.map((availability) => (
                     <div
                       className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4"
                       key={availability.id}
