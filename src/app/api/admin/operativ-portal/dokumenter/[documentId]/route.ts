@@ -1,8 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
-import { UserRole } from "@prisma/client";
-import { getCurrentUser } from "@/lib/auth";
+import { canAccessOperationalPortal, getCurrentUser } from "@/lib/auth";
 import {
   OPERATIONAL_DOCUMENT_DIRECTORY,
   getOperationalDocument
@@ -20,8 +19,8 @@ export async function GET(_request: Request, { params }: RouteProps) {
   if (!user) {
     return NextResponse.json({ error: "Log ind for at fortsætte." }, { status: 401 });
   }
-  if (user.role !== UserRole.ADMIN && !user.hasAdminAccess) {
-    return NextResponse.json({ error: "Kun administratorer har adgang." }, { status: 403 });
+  if (!canAccessOperationalPortal(user)) {
+    return NextResponse.json({ error: "Du har ikke adgang til Operativ Portal." }, { status: 403 });
   }
 
   const { documentId } = await params;
