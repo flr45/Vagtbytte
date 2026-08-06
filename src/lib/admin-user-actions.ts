@@ -6,6 +6,7 @@ import { UserRole } from "@prisma/client";
 import { z } from "zod";
 import { requireRole } from "./auth";
 import { normalizeLoginIdentifier } from "./login-identifiers";
+import { setOperationalPortalGrant } from "./operativ-portal-access";
 import { hashPassword, passwordSchema } from "./passwords";
 import { prisma } from "./prisma";
 import {
@@ -35,6 +36,7 @@ const baseUserSchema = z.object({
   stationCode: z.enum(STATION_CODE_VALUES, { required_error: "Vælg en station" }),
   isActive: z.boolean(),
   hasAdminAccess: z.boolean(),
+  hasOperationalPortalAccess: z.boolean(),
   receiveAlarmFollowUps: z.boolean(),
   alarmStations: z.array(z.enum(STATION_CODE_VALUES)).max(STATION_CODE_VALUES.length)
 });
@@ -77,6 +79,7 @@ function userInput(formData: FormData) {
     stationCode,
     isActive: boolFromForm(formData, "isActive"),
     hasAdminAccess: boolFromForm(formData, "hasAdminAccess"),
+    hasOperationalPortalAccess: boolFromForm(formData, "hasOperationalPortalAccess"),
     receiveAlarmFollowUps: boolFromForm(formData, "receiveAlarmFollowUps"),
     alarmStations
   };
@@ -133,6 +136,8 @@ export async function createManagedUserAction(
       hasAdminAccess: parsed.data.hasAdminAccess
     }
   });
+
+  await setOperationalPortalGrant(user.id, parsed.data.hasOperationalPortalAccess);
 
   await prisma.auditLog.create({
     data: {
@@ -192,6 +197,8 @@ export async function updateManagedUserAction(
       hasAdminAccess: parsed.data.hasAdminAccess
     }
   });
+
+  await setOperationalPortalGrant(parsed.data.userId, parsed.data.hasOperationalPortalAccess);
 
   if (!parsed.data.isActive) {
     await prisma.session.deleteMany({ where: { userId: parsed.data.userId } });
