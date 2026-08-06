@@ -6,6 +6,7 @@ import {
   loadAlarmStatisticsRows,
   summarizeAlarmStatistics
 } from "@/lib/alarm-statistics";
+import { listOperationalPortalGrantUserIds } from "@/lib/operativ-portal-access";
 import { prisma } from "@/lib/prisma";
 import { AdminAlarmManagement } from "@/components/AdminAlarmManagement";
 import { TopBar } from "@/components/TopBar";
@@ -15,48 +16,61 @@ import { formatDateTime } from "@/components/TransferSummary";
 export default async function AdminPage() {
   await requireRole(UserRole.ADMIN);
 
-  const [users, vc, auditLogs, alarmStatistics, recentAlarms, latestSystemMonitorEvent] =
-    await Promise.all([
-      prisma.user.findMany({
-        where: {
-          role: UserRole.BRANDFIGHTER,
-          loginIdentifier: { not: "__deleted_user__" }
-        },
-        orderBy: [{ stationCode: "asc" }, { name: "asc" }],
-        select: {
-          id: true,
-          name: true,
-          employeeNumber: true,
-          loginIdentifier: true,
-          email: true,
-          isActive: true,
-          stationCode: true,
-          alarmStations: true,
-          receiveAlarmFollowUps: true,
-          hasAdminAccess: true
+  const [
+    users,
+    operationalAccessUserIds,
+    vc,
+    auditLogs,
+    alarmStatistics,
+    recentAlarms,
+    latestSystemMonitorEvent
+  ] = await Promise.all([
+    prisma.user.findMany({
+      where: {
+        role: UserRole.BRANDFIGHTER,
+        loginIdentifier: { not: "__deleted_user__" }
+      },
+      orderBy: [{ stationCode: "asc" }, { name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        employeeNumber: true,
+        loginIdentifier: true,
+        email: true,
+        isActive: true,
+        stationCode: true,
+        alarmStations: true,
+        receiveAlarmFollowUps: true,
+        hasAdminAccess: true
+      }
+    }),
+    listOperationalPortalGrantUserIds(),
+    prisma.user.findFirst({
+      where: { role: UserRole.VC },
+      select: { loginIdentifier: true, isActive: true }
+    }),
+    prisma.auditLog.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 8,
+      select: { id: true, action: true, description: true, createdAt: true }
+    }),
+    loadAlarmStatisticsRows(),
+    listRecentAlarms(),
+    prisma.auditLog.findFirst({
+      where: {
+        action: {
+          in: ["SMS_GATEWAY_ONLINE", "SMS_GATEWAY_DEGRADED", "SMS_GATEWAY_OFFLINE"]
         }
-      }),
-      prisma.user.findFirst({
-        where: { role: UserRole.VC },
-        select: { loginIdentifier: true, isActive: true }
-      }),
-      prisma.auditLog.findMany({
-        orderBy: { createdAt: "desc" },
-        take: 8,
-        select: { id: true, action: true, description: true, createdAt: true }
-      }),
-      loadAlarmStatisticsRows(),
-      listRecentAlarms(),
-      prisma.auditLog.findFirst({
-        where: {
-          action: {
-            in: ["SMS_GATEWAY_ONLINE", "SMS_GATEWAY_DEGRADED", "SMS_GATEWAY_OFFLINE"]
-          }
-        },
-        orderBy: { createdAt: "desc" },
-        select: { action: true, description: true, createdAt: true }
-      })
-    ]);
+      },
+      orderBy: { createdAt: "desc" },
+      select: { action: true, description: true, createdAt: true }
+    })
+  ]);
+
+  const managedUsers = users.map((user) => ({
+    ...user,
+    hasOperationalPortalAccess: operationalAccessUserIds.has(user.id)
+  }));
   const summary = summarizeAlarmStatistics(alarmStatistics.rows);
   const smsSystemHasProblem =
     latestSystemMonitorEvent && latestSystemMonitorEvent.action !== "SMS_GATEWAY_ONLINE";
@@ -76,9 +90,10 @@ export default async function AdminPage() {
           <AdminLink href="/admin/systemstatus" title="Systemstatus" text="Modem, SMS-gateway, push og seneste fejl." />
           <AdminLink href="/admin/alarmstatistik" title="Alarmstatistik" text="Detaljer, grafer, CSV og nulstilling." />
           <AdminLink href="/admin/alarmer" title="Alarmarkiv" text="Søg, filtrer og eksportér alle gemte alarmer." />
-          <AdminLink href="/admin/brugere" title="Brugeroverblik" text="Stationer, login, mail, adminadgang og push-enheder." />
+          <AdminLink href="/admin/brugere" title="Brugeroverblik" text="Stationer, login, mail, programadgang og push-enheder." />
           <AdminLink href="/admin/backups" title="Backup og gendannelse" text="Automatiske og manuelle backups samt restore." />
           <AdminLink href="/admin/mailrapporter" title="Mailrapporter" text="Planlæg samlet overblik over vagter og vagtbytter." />
+          <AdminLink href="/admin/operativ-portal" title="Operativ Portal" text="Redigér køretøjer, rum, udstyr, videoer og dokumenter." />
         </section>
 
         {smsSystemHasProblem ? (
@@ -146,7 +161,7 @@ export default async function AdminPage() {
                 Åbn brugeroverblik
               </Link>
             </div>
-            <FirefighterEditForms users={users} />
+            <FirefighterEditForms users={managedUsers} />
           </section>
 
           <aside className="grid content-start gap-6">
