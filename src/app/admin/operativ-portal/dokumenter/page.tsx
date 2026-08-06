@@ -1,8 +1,14 @@
-import { UserRole } from "@prisma/client";
 import { OperationalDocumentUploadForm } from "@/components/OperationalDocumentUploadForm";
-import { OperationalPortalHeader, OperationalPortalNav } from "@/components/OperationalPortalNav";
+import {
+  OperationalPageFrame,
+  OperationalPortalHeader,
+  OperationalPortalNav
+} from "@/components/OperationalPortalNav";
 import { TopBar } from "@/components/TopBar";
-import { requireRole } from "@/lib/auth";
+import {
+  canManageOperationalPortal,
+  requireOperationalPortalAccess
+} from "@/lib/auth";
 import {
   deleteManagedOperationalDocumentAction,
   updateManagedOperationalDocumentAction
@@ -26,7 +32,8 @@ type SearchParams = {
 type PageProps = { searchParams: Promise<SearchParams> };
 
 export default async function OperationalDocumentsPage({ searchParams }: PageProps) {
-  await requireRole(UserRole.ADMIN);
+  const user = await requireOperationalPortalAccess();
+  const isEditor = canManageOperationalPortal(user);
   const [allDocuments, options, params] = await Promise.all([
     listManagedOperationalDocuments(),
     listOperationalContentOptions(),
@@ -55,19 +62,20 @@ export default async function OperationalDocumentsPage({ searchParams }: PagePro
 
   return (
     <>
-      <TopBar title="Operative dokumenter" />
-      <main className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-6">
+      <TopBar title="Videnbank" variant="operational" />
+      <OperationalPageFrame>
         <OperationalPortalHeader
-          title="Dokumentbibliotek"
-          description="Upload, kategorisér og tilknyt manualer, instrukser, SOP'er og billeder. Filer udleveres kun efter kontrol af administratorens session."
+          description="Manualer, instrukser, SOP’er, kontrolskemaer og andre operative dokumenter samlet ét sted."
+          isEditor={isEditor}
+          title="Videnbank"
         />
-        <OperationalPortalNav />
+        <OperationalPortalNav isEditor={isEditor} />
 
-        <section className="grid gap-4 lg:grid-cols-[minmax(330px,.75fr)_minmax(0,1.25fr)]">
-          <div className="rounded-2xl border border-brand-line bg-white p-5 shadow-sm">
-            <h2 className="text-xl font-black">Upload dokument</h2>
-            <p className="mt-1 text-sm font-semibold text-zinc-600">Tilknyt filen til hele portalen, et køretøj, et rum eller bestemt udstyr.</p>
-            <div className="mt-5">
+        {isEditor ? (
+          <details className="rounded-2xl border border-red-400/20 bg-red-500/10 p-5" open={Boolean(defaultVehicleId || defaultPlaceId || defaultItemId)}>
+            <summary className="cursor-pointer text-xl font-black text-red-100">Upload dokument</summary>
+            <p className="mt-2 text-sm font-semibold text-red-100/70">Tilknyt filen til hele portalen, et køretøj, et rum eller bestemt udstyr.</p>
+            <div className="mt-5 rounded-2xl border border-white/10 bg-white p-4 text-zinc-950">
               <OperationalDocumentUploadForm
                 defaultItemId={defaultItemId}
                 defaultPlaceId={defaultPlaceId}
@@ -77,56 +85,61 @@ export default async function OperationalDocumentsPage({ searchParams }: PagePro
                 vehicles={options.vehicles}
               />
             </div>
-          </div>
+          </details>
+        ) : null}
 
-          <div className="grid content-start gap-4">
-            <section className="rounded-2xl border border-brand-line bg-white p-5 shadow-sm">
-              <div className="flex flex-wrap items-end justify-between gap-4">
-                <div><h2 className="text-xl font-black">Find dokument</h2><p className="mt-1 text-sm font-semibold text-zinc-600">Søg i titel, beskrivelse, filnavn og placering.</p></div>
-                <p className="text-sm font-black text-zinc-700">{documents.length} af {allDocuments.length} filer</p>
-              </div>
-              <form className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px_auto]" method="get">
-                <input className="focus-ring min-h-12 rounded-xl border border-zinc-200 px-4" defaultValue={q} name="q" placeholder="Søg i dokumenter" type="search" />
-                <select className="focus-ring min-h-12 rounded-xl border border-zinc-200 bg-white px-4" defaultValue={category} name="category"><option value="">Alle kategorier</option>{OPERATIONAL_DOCUMENT_CATEGORIES.map((entry) => <option key={entry}>{entry}</option>)}</select>
-                <button className="app-button-secondary min-h-12" type="submit">Filtrér</button>
-              </form>
-            </section>
-
-            <section className="overflow-hidden rounded-2xl border border-brand-line bg-white shadow-sm">
-              {documents.map((document) => (
-                <article className="border-b border-zinc-100 p-4 last:border-b-0" id={`dokument-${document.id}`} key={document.id}>
-                  <div className="grid grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-3">
-                    <span className="grid size-11 place-items-center rounded-lg bg-zinc-950 text-[9px] font-black text-white">{document.category.slice(0, 3).toUpperCase()}</span>
-                    <a className="min-w-0" href={`/api/admin/operativ-portal/dokumenter/${document.id}`} target="_blank">
-                      <strong className="block truncate">{document.title}</strong>
-                      <small className="block truncate text-zinc-500">{contentLocationLabel(document)} · {document.originalName} · {formatBytes(document.sizeBytes)}</small>
-                    </a>
-                    <a className="app-button-secondary px-3 text-xs" href={`/api/admin/operativ-portal/dokumenter/${document.id}`} target="_blank">Åbn</a>
-                  </div>
-                  {document.description ? <p className="mt-3 text-sm text-zinc-600">{document.description}</p> : null}
-                  <details className="mt-3 rounded-xl border border-zinc-200 p-4">
-                    <summary className="cursor-pointer font-black">Redigér dokument</summary>
-                    <form action={updateManagedOperationalDocumentAction} className="mt-4 grid gap-3">
-                      <input name="documentId" type="hidden" value={document.id} />
-                      <label className="grid gap-1 text-sm font-bold text-zinc-700">Titel<input className="focus-ring min-h-11 rounded-lg border border-zinc-200 px-3" defaultValue={document.title} name="title" required /></label>
-                      <label className="grid gap-1 text-sm font-bold text-zinc-700">Kategori<select className="focus-ring min-h-11 rounded-lg border border-zinc-200 bg-white px-3" defaultValue={document.category} name="category">{OPERATIONAL_DOCUMENT_CATEGORIES.map((entry) => <option key={entry}>{entry}</option>)}</select></label>
-                      <label className="grid gap-1 text-sm font-bold text-zinc-700">Beskrivelse<textarea className="focus-ring min-h-24 rounded-lg border border-zinc-200 p-3" defaultValue={document.description} name="description" /></label>
-                      <label className="grid gap-1 text-sm font-bold text-zinc-700">Køretøj<select className="focus-ring min-h-11 rounded-lg border border-zinc-200 bg-white px-3" defaultValue={document.vehicleId ?? ""} name="vehicleId"><option value="">Generelt</option>{options.vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.name}</option>)}</select></label>
-                      <label className="grid gap-1 text-sm font-bold text-zinc-700">Rum<select className="focus-ring min-h-11 rounded-lg border border-zinc-200 bg-white px-3" defaultValue={document.placeId ?? ""} name="placeId"><option value="">Ikke tilknyttet</option>{options.places.map((place) => <option key={place.id} value={place.id}>{place.vehicleName} · {place.name}</option>)}</select></label>
-                      <label className="grid gap-1 text-sm font-bold text-zinc-700">Udstyr<select className="focus-ring min-h-11 rounded-lg border border-zinc-200 bg-white px-3" defaultValue={document.itemId ?? ""} name="itemId"><option value="">Ikke tilknyttet</option>{options.items.map((item) => <option key={item.id} value={item.id}>{item.vehicleName} · {item.placeName} · {item.name}</option>)}</select></label>
-                      <button className="app-button-primary" type="submit">Gem metadata</button>
-                    </form>
-                    <form action={deleteManagedOperationalDocumentAction} className="mt-3"><input name="documentId" type="hidden" value={document.id} /><button className="app-button-danger text-sm" type="submit">Slet dokument og fil</button></form>
-                  </details>
-                </article>
-              ))}
-              {documents.length === 0 ? <p className="p-8 text-center text-sm font-semibold text-zinc-600">Ingen dokumenter matcher filtreringen.</p> : null}
-            </section>
+        <section className="rounded-[1.5rem] border border-white/10 bg-[#101b2c] p-5 shadow-xl">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div><p className="text-xs font-black uppercase tracking-[0.16em] text-red-300">Dokumentbibliotek</p><h2 className="mt-1 text-2xl font-black">Find dokument</h2><p className="mt-2 text-sm font-semibold text-slate-400">Søg i titel, beskrivelse, filnavn og placering.</p></div>
+            <p className="text-sm font-black text-slate-300">{documents.length} af {allDocuments.length}</p>
           </div>
+          <form className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px_auto]" method="get">
+            <input className="dark-input" defaultValue={q} name="q" placeholder="Søg i dokumenter" type="search" />
+            <select className="dark-input" defaultValue={category} name="category"><option value="">Alle kategorier</option>{OPERATIONAL_DOCUMENT_CATEGORIES.map((entry) => <option key={entry}>{entry}</option>)}</select>
+            <button className="app-button-secondary min-h-12" type="submit">Filtrér</button>
+          </form>
         </section>
-      </main>
+
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {documents.map((document) => (
+            <article className="flex min-h-64 flex-col rounded-[1.5rem] border border-white/10 bg-[#101b2c] p-5 shadow-xl" id={`dokument-${document.id}`} key={document.id}>
+              <div className="flex items-start justify-between gap-3">
+                <span className="grid size-14 place-items-center rounded-2xl bg-red-600 text-xs font-black text-white shadow-lg">{document.category.slice(0, 3).toUpperCase()}</span>
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-slate-300">{formatBytes(document.sizeBytes)}</span>
+              </div>
+              <p className="mt-5 text-xs font-black uppercase tracking-[0.14em] text-red-300">{document.category}</p>
+              <h3 className="mt-2 text-xl font-black">{document.title}</h3>
+              <p className="mt-2 line-clamp-3 text-sm font-semibold leading-6 text-slate-400">{document.description || document.originalName}</p>
+              <p className="mt-4 text-xs font-bold text-slate-500">{contentLocationLabel(document)}</p>
+              <a className="mt-auto pt-5 text-xs font-black uppercase tracking-[0.14em] text-red-300" href={`/api/admin/operativ-portal/dokumenter/${document.id}`} target="_blank">Åbn dokument →</a>
+
+              {isEditor ? (
+                <details className="mt-4 rounded-xl border border-white/10 bg-[#08111f] p-4">
+                  <summary className="cursor-pointer font-black text-slate-200">Redigér dokument</summary>
+                  <form action={updateManagedOperationalDocumentAction} className="mt-4 grid gap-3">
+                    <input name="documentId" type="hidden" value={document.id} />
+                    <DarkField label="Titel"><input className="dark-input" defaultValue={document.title} name="title" required /></DarkField>
+                    <DarkField label="Kategori"><select className="dark-input" defaultValue={document.category} name="category">{OPERATIONAL_DOCUMENT_CATEGORIES.map((entry) => <option key={entry}>{entry}</option>)}</select></DarkField>
+                    <DarkField label="Beskrivelse"><textarea className="dark-input min-h-24 p-3" defaultValue={document.description} name="description" /></DarkField>
+                    <DarkField label="Køretøj"><select className="dark-input" defaultValue={document.vehicleId ?? ""} name="vehicleId"><option value="">Generelt</option>{options.vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.name}</option>)}</select></DarkField>
+                    <DarkField label="Rum"><select className="dark-input" defaultValue={document.placeId ?? ""} name="placeId"><option value="">Ikke tilknyttet</option>{options.places.map((place) => <option key={place.id} value={place.id}>{place.vehicleName} · {place.name}</option>)}</select></DarkField>
+                    <DarkField label="Udstyr"><select className="dark-input" defaultValue={document.itemId ?? ""} name="itemId"><option value="">Ikke tilknyttet</option>{options.items.map((item) => <option key={item.id} value={item.id}>{item.vehicleName} · {item.placeName} · {item.name}</option>)}</select></DarkField>
+                    <button className="app-button-primary" type="submit">Gem metadata</button>
+                  </form>
+                  <form action={deleteManagedOperationalDocumentAction} className="mt-3"><input name="documentId" type="hidden" value={document.id} /><button className="app-button-danger text-sm" type="submit">Slet dokument og fil</button></form>
+                </details>
+              ) : null}
+            </article>
+          ))}
+          {documents.length === 0 ? <p className="rounded-[1.5rem] border border-dashed border-white/15 bg-white/5 p-10 text-center font-semibold text-slate-400 sm:col-span-2 lg:col-span-3">Ingen dokumenter matcher filtreringen.</p> : null}
+        </section>
+      </OperationalPageFrame>
     </>
   );
+}
+
+function DarkField({ label, children }: { label: string; children: React.ReactNode }) {
+  return <label className="grid gap-2 text-sm font-bold text-slate-200">{label}{children}</label>;
 }
 
 function one(value: string | string[] | undefined) {
