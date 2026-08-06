@@ -6,7 +6,7 @@ on:
       - feature/operativ-portal-visual-media
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate:
@@ -27,3 +27,12 @@ jobs:
       - name: Build application
         working-directory: source
         run: npm run build
+      - name: Record successful validation
+        working-directory: source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          printf 'Tests and production build passed at %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > TEMPORARY_CI_SUCCESS.txt
+          git add TEMPORARY_CI_SUCCESS.txt
+          git commit -m "Record temporary CI success [skip ci]"
+          git push origin HEAD:"$GITHUB_REF_NAME"
