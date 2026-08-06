@@ -3,6 +3,11 @@ import { UserRole } from "@prisma/client";
 import { OperationalPortalHeader, OperationalPortalNav } from "@/components/OperationalPortalNav";
 import { TopBar } from "@/components/TopBar";
 import { requireRole } from "@/lib/auth";
+import {
+  contentLocationLabel,
+  listManagedOperationalDocuments,
+  listManagedOperationalVideos
+} from "@/lib/operativ-portal-content";
 import { searchOperationalPortal } from "@/lib/operativ-portal";
 
 export const dynamic = "force-dynamic";
@@ -12,8 +17,19 @@ export default async function OperationalSearchPage({ searchParams }: PageProps)
   await requireRole(UserRole.ADMIN);
   const params = await searchParams;
   const q = Array.isArray(params.q) ? params.q[0] ?? "" : params.q ?? "";
-  const results = await searchOperationalPortal(q);
-  const count = results.vehicles.length + results.places.length + results.items.length + results.videos.length + results.documents.length;
+  const [baseResults, allVideos, allDocuments] = await Promise.all([
+    searchOperationalPortal(q),
+    listManagedOperationalVideos(),
+    listManagedOperationalDocuments()
+  ]);
+  const query = q.trim().toLocaleLowerCase("da-DK");
+  const videos = query
+    ? allVideos.filter((video) => [video.title, video.description, video.category, video.vehicleName, video.placeName, video.itemName].filter(Boolean).join(" ").toLocaleLowerCase("da-DK").includes(query)).slice(0, 25)
+    : [];
+  const documents = query
+    ? allDocuments.filter((document) => [document.title, document.description, document.category, document.originalName, document.vehicleName, document.placeName, document.itemName].filter(Boolean).join(" ").toLocaleLowerCase("da-DK").includes(query)).slice(0, 25)
+    : [];
+  const count = baseResults.vehicles.length + baseResults.places.length + baseResults.items.length + videos.length + documents.length;
 
   return (
     <>
@@ -30,19 +46,19 @@ export default async function OperationalSearchPage({ searchParams }: PageProps)
         {q ? (
           <div className="grid gap-5 lg:grid-cols-2">
             <ResultGroup title="Køretøjer">
-              {results.vehicles.map((item) => <ResultLink href={`/admin/operativ-portal/koeretoejer/${item.id}`} key={item.id} label={item.name} meta={item.description || "Køretøj"} />)}
+              {baseResults.vehicles.map((item) => <ResultLink href={`/admin/operativ-portal/koeretoejer/${item.id}`} key={item.id} label={item.name} meta={item.description || "Køretøj"} />)}
             </ResultGroup>
             <ResultGroup title="Rum">
-              {results.places.map((item) => <ResultLink href={`/admin/operativ-portal/rum/${item.id}`} key={item.id} label={item.name} meta={item.vehicleName} />)}
+              {baseResults.places.map((item) => <ResultLink href={`/admin/operativ-portal/rum/${item.id}`} key={item.id} label={item.name} meta={item.vehicleName} />)}
             </ResultGroup>
             <ResultGroup title="Udstyr">
-              {results.items.map((item) => <ResultLink href={`/admin/operativ-portal/udstyr/${item.id}`} key={item.id} label={item.name} meta={`${item.vehicleName} · ${item.placeName}${item.note ? ` · ${item.note}` : ""}`} />)}
+              {baseResults.items.map((item) => <ResultLink href={`/admin/operativ-portal/udstyr/${item.id}`} key={item.id} label={item.name} meta={`${item.vehicleName} · ${item.placeName}${item.note ? ` · ${item.note}` : ""}`} />)}
             </ResultGroup>
             <ResultGroup title="Videoer">
-              {results.videos.map((item) => <ResultLink href={`/admin/operativ-portal/videoer#video-${item.id}`} key={item.id} label={item.title} meta={`${item.category}${item.vehicleName ? ` · ${item.vehicleName}` : ""}`} />)}
+              {videos.map((item) => <ResultLink href={`/admin/operativ-portal/videoer#video-${item.id}`} key={item.id} label={item.title} meta={`${item.category} · ${contentLocationLabel(item)}`} />)}
             </ResultGroup>
             <ResultGroup title="Dokumenter">
-              {results.documents.map((item) => <ResultLink href={`/api/admin/operativ-portal/dokumenter/${item.id}`} key={item.id} label={item.title} meta={`${item.vehicleName || "Generelt"} · ${item.originalName}`} />)}
+              {documents.map((item) => <ResultLink href={`/api/admin/operativ-portal/dokumenter/${item.id}`} key={item.id} label={item.title} meta={`${item.category} · ${contentLocationLabel(item)} · ${item.originalName}`} />)}
             </ResultGroup>
           </div>
         ) : (
