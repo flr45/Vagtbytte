@@ -35,6 +35,12 @@ describe("Operativ Portal-adgang", () => {
     expect(canManageOperationalPortal(firefighter)).toBe(false);
   });
 
+  it("afviser en VC-konto uden en udtrykkelig tilladelse", () => {
+    const user = { ...firefighter, role: UserRole.VC };
+    expect(canAccessOperationalPortal(user)).toBe(false);
+    expect(canManageOperationalPortal(user)).toBe(false);
+  });
+
   it("afviser en manglende bruger", () => {
     expect(canAccessOperationalPortal(null)).toBe(false);
     expect(canManageOperationalPortal(undefined)).toBe(false);
