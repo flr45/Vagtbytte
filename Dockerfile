@@ -26,12 +26,13 @@ WORKDIR /app
 RUN apk add --no-cache openssl curl && \
     addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs && \
-    mkdir -p /data/backups && \
+    mkdir -p /data/backups /data/operativ-portal/documents && \
     chown -R nextjs:nodejs /data
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+ENV OPERATIV_PORTAL_DATA_DIRECTORY=/data/operativ-portal
 
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
