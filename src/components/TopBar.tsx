@@ -17,6 +17,7 @@ export async function TopBar({ title }: { title: string }) {
       : user?.role === "BRANDFIGHTER"
         ? "/brandmand/notifikationer"
         : roleHome.ADMIN;
+  const hasAdminAccess = Boolean(user && (user.role === "ADMIN" || user.hasAdminAccess));
 
   return (
     <header className="border-b border-brand-line bg-white/95 pt-[env(safe-area-inset-top)] shadow-sm backdrop-blur">
@@ -32,6 +33,7 @@ export async function TopBar({ title }: { title: string }) {
         </div>
 
         <MobileNavigation
+          hasAdminAccess={hasAdminAccess}
           notificationPath={notificationPath}
           unreadCount={unreadCount}
           user={user}
@@ -53,6 +55,11 @@ export async function TopBar({ title }: { title: string }) {
           {user?.role === "VC" ? (
             <Link className="app-button-secondary min-h-11 px-3 text-sm" href="/vagtcentral/historik">
               Historik
+            </Link>
+          ) : null}
+          {hasAdminAccess ? (
+            <Link className="app-button-secondary min-h-11 px-3 text-sm" href="/admin/operativ-portal">
+              Operativ Portal
             </Link>
           ) : null}
           {user?.hasAdminAccess && user.role !== "ADMIN" ? (
@@ -88,11 +95,13 @@ export async function TopBar({ title }: { title: string }) {
 function MobileNavigation({
   user,
   notificationPath,
-  unreadCount
+  unreadCount,
+  hasAdminAccess
 }: {
   user: Awaited<ReturnType<typeof getCurrentUser>>;
   notificationPath: string;
   unreadCount: number;
+  hasAdminAccess: boolean;
 }) {
   if (!user) {
     return null;
@@ -135,6 +144,11 @@ function MobileNavigation({
           {user.role === "VC" ? (
             <Link className="app-button-secondary w-full justify-start text-sm" href="/vagtcentral/historik">
               Historik
+            </Link>
+          ) : null}
+          {hasAdminAccess ? (
+            <Link className="app-button-secondary w-full justify-start text-sm" href="/admin/operativ-portal">
+              Operativ Portal
             </Link>
           ) : null}
           {user.hasAdminAccess && user.role !== "ADMIN" ? (
