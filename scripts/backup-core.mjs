@@ -64,6 +64,7 @@ function manualFileName(date) {
 export async function collectBackupData(prisma, generatedAt = new Date()) {
   const [
     users,
+    operationalPortalUserAccess,
     availabilities,
     shiftTransfers,
     returnRequests,
@@ -78,6 +79,9 @@ export async function collectBackupData(prisma, generatedAt = new Date()) {
     emailReportDeliveries
   ] = await Promise.all([
     prisma.user.findMany({ orderBy: { createdAt: "asc" } }),
+    prisma.$queryRawUnsafe(
+      'SELECT user_id AS "userId", created_at AS "createdAt" FROM operational_portal_user_access ORDER BY created_at'
+    ),
     prisma.availability.findMany({ orderBy: { createdAt: "asc" } }),
     prisma.shiftTransfer.findMany({ orderBy: { createdAt: "asc" } }),
     prisma.returnRequest.findMany({ orderBy: { createdAt: "asc" } }),
@@ -99,6 +103,7 @@ export async function collectBackupData(prisma, generatedAt = new Date()) {
     application: "Vagtbytte",
     tables: {
       users,
+      operationalPortalUserAccess,
       availabilities,
       shiftTransfers,
       returnRequests,
@@ -286,6 +291,7 @@ export async function restoreBackup(prisma, filePath, input = {}) {
       await tx.user.deleteMany();
 
       await createMany(tx.user, tables.users);
+      await createOperationalPortalAccessRows(tx, tables.operationalPortalUserAccess);
       await createMany(tx.alarm, tables.alarms);
       await createMany(tx.alarmStatistic, tables.alarmStatistics);
       await createMany(tx.alarmMessage, tables.alarmMessages);
@@ -349,6 +355,19 @@ async function createMany(model, rows) {
   await model.createMany({ data: rows });
 }
 
+async function createOperationalPortalAccessRows(tx, rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return;
+  for (const row of rows) {
+    if (!row?.userId) continue;
+    const createdAt = row.createdAt ? new Date(row.createdAt) : new Date();
+    await tx.$executeRawUnsafe(
+      'INSERT INTO operational_portal_user_access (user_id, created_at) VALUES ($1, $2) ON CONFLICT (user_id) DO NOTHING',
+      row.userId,
+      createdAt
+    );
+  }
+}
+
 function validateBackup(value) {
   if (!value || value.format !== BACKUP_FORMAT || value.version !== BACKUP_VERSION) {
     throw new Error("Filen er ikke en understøttet Vagtbytte-backup.");
@@ -358,6 +377,7 @@ function validateBackup(value) {
   }
 
   const optionalTables = [
+    "operationalPortalUserAccess",
     "availabilities",
     "shiftTransfers",
     "returnRequests",
