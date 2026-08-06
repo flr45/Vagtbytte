@@ -5,7 +5,13 @@ import { OperationalPortalNav } from "@/components/OperationalPortalNav";
 import { TopBar } from "@/components/TopBar";
 import { requireRole } from "@/lib/auth";
 import { createOperationalItemAction } from "@/lib/operativ-portal-actions";
-import { getOperationalPlace } from "@/lib/operativ-portal";
+import { updateOperationalPlaceDetailsAction } from "@/lib/operativ-portal-content-actions";
+import {
+  contentLocationLabel,
+  listManagedOperationalDocuments,
+  listManagedOperationalVideos
+} from "@/lib/operativ-portal-content";
+import { getOperationalPlace, youtubeEmbedUrl } from "@/lib/operativ-portal";
 
 export const dynamic = "force-dynamic";
 type PageProps = { params: Promise<{ placeId: string }> };
@@ -13,8 +19,14 @@ type PageProps = { params: Promise<{ placeId: string }> };
 export default async function OperationalPlacePage({ params }: PageProps) {
   await requireRole(UserRole.ADMIN);
   const { placeId } = await params;
-  const place = await getOperationalPlace(placeId);
+  const [place, allDocuments, allVideos] = await Promise.all([
+    getOperationalPlace(placeId),
+    listManagedOperationalDocuments(),
+    listManagedOperationalVideos()
+  ]);
   if (!place) notFound();
+  const documents = allDocuments.filter((document) => document.placeId === place.id);
+  const videos = allVideos.filter((video) => video.placeId === place.id);
 
   return (
     <>
@@ -30,18 +42,30 @@ export default async function OperationalPlacePage({ params }: PageProps) {
         <section className="rounded-2xl bg-zinc-950 p-6 text-white shadow-sm">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-red-400">{place.vehicleName} · Rum</p>
           <h1 className="mt-2 text-3xl font-black sm:text-4xl">{place.name}</h1>
-          <p className="mt-3 text-sm font-semibold text-zinc-300">{place.items.length} registrerede udstyrsposter.</p>
+          <div className="mt-4 flex flex-wrap gap-2 text-xs font-black">
+            <span className="rounded-full bg-white/10 px-3 py-2">{place.items.length} udstyrsposter</span>
+            <span className="rounded-full bg-white/10 px-3 py-2">{videos.length} videoer</span>
+            <span className="rounded-full bg-white/10 px-3 py-2">{documents.length} dokumenter</span>
+          </div>
         </section>
 
         <details className="rounded-2xl border border-red-200 bg-red-50 p-5">
-          <summary className="cursor-pointer text-lg font-black text-red-950">Tilføj udstyr</summary>
-          <form action={createOperationalItemAction} className="mt-5 grid gap-4 lg:grid-cols-[minmax(180px,1fr)_100px_minmax(220px,1.3fr)_auto] lg:items-end">
-            <input name="placeId" type="hidden" value={place.id} />
-            <label className="grid gap-2 text-sm font-bold text-zinc-700">Navn<input className="focus-ring min-h-12 rounded-xl border border-zinc-200 px-4" name="name" placeholder="Fx Højtryksslange (HT)" required /></label>
-            <label className="grid gap-2 text-sm font-bold text-zinc-700">Antal<input className="focus-ring min-h-12 rounded-xl border border-zinc-200 px-4" defaultValue="1" min="1" name="quantity" required type="number" /></label>
-            <label className="grid gap-2 text-sm font-bold text-zinc-700">Note<input className="focus-ring min-h-12 rounded-xl border border-zinc-200 px-4" name="note" placeholder="Placering eller bemærkning" /></label>
-            <button className="app-button-primary min-h-12" type="submit">Tilføj</button>
-          </form>
+          <summary className="cursor-pointer text-lg font-black text-red-950">Redigér rum og tilføj udstyr</summary>
+          <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(260px,.65fr)_minmax(0,1.35fr)]">
+            <form action={updateOperationalPlaceDetailsAction} className="grid content-start gap-4 rounded-xl bg-white p-4">
+              <input name="placeId" type="hidden" value={place.id} />
+              <h2 className="font-black">Rumoplysninger</h2>
+              <label className="grid gap-2 text-sm font-bold text-zinc-700">Navn<input className="focus-ring min-h-12 rounded-xl border border-zinc-200 px-4" defaultValue={place.name} name="name" required /></label>
+              <button className="app-button-secondary" type="submit">Gem rumnavn</button>
+            </form>
+            <form action={createOperationalItemAction} className="grid gap-4 rounded-xl bg-white p-4 lg:grid-cols-[minmax(180px,1fr)_100px_minmax(220px,1.3fr)_auto] lg:items-end">
+              <input name="placeId" type="hidden" value={place.id} />
+              <label className="grid gap-2 text-sm font-bold text-zinc-700">Udstyr<input className="focus-ring min-h-12 rounded-xl border border-zinc-200 px-4" name="name" placeholder="Fx Højtryksslange (HT)" required /></label>
+              <label className="grid gap-2 text-sm font-bold text-zinc-700">Antal<input className="focus-ring min-h-12 rounded-xl border border-zinc-200 px-4" defaultValue="1" min="1" name="quantity" required type="number" /></label>
+              <label className="grid gap-2 text-sm font-bold text-zinc-700">Note<input className="focus-ring min-h-12 rounded-xl border border-zinc-200 px-4" name="note" placeholder="Placering eller bemærkning" /></label>
+              <button className="app-button-primary min-h-12" type="submit">Tilføj</button>
+            </form>
+          </div>
         </details>
 
         <section>
@@ -56,6 +80,24 @@ export default async function OperationalPlacePage({ params }: PageProps) {
               </Link>
             ))}
             {place.items.length === 0 ? <p className="p-8 text-center text-sm font-semibold text-zinc-600">Rummet er tomt. Tilføj den første udstyrspost ovenfor.</p> : null}
+          </div>
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-2xl border border-brand-line bg-white p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-3"><div><h2 className="text-xl font-black">Dokumenter</h2><p className="mt-1 text-sm font-semibold text-zinc-600">Filer knyttet til dette rum.</p></div><Link className="app-button-secondary" href={`/admin/operativ-portal/dokumenter?vehicleId=${place.vehicleId}&placeId=${place.id}`}>Tilføj</Link></div>
+            <div className="mt-4 grid gap-2">
+              {documents.map((document) => <a className="rounded-xl border border-zinc-200 p-3 hover:bg-red-50" href={`/api/admin/operativ-portal/dokumenter/${document.id}`} key={document.id} target="_blank"><strong className="block text-sm">{document.title}</strong><small className="text-zinc-500">{document.category} · {contentLocationLabel(document)}</small></a>)}
+              {documents.length === 0 ? <p className="rounded-xl bg-zinc-50 p-4 text-sm font-semibold text-zinc-600">Ingen dokumenter tilknyttet.</p> : null}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-brand-line bg-white p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-3"><div><h2 className="text-xl font-black">Videoer</h2><p className="mt-1 text-sm font-semibold text-zinc-600">Instruktioner knyttet til rummet.</p></div><Link className="app-button-secondary" href={`/admin/operativ-portal/videoer?vehicleId=${place.vehicleId}&placeId=${place.id}`}>Tilføj</Link></div>
+            <div className="mt-4 grid gap-4">
+              {videos.slice(0, 3).map((video) => <article className="overflow-hidden rounded-xl border border-zinc-200" key={video.id}><iframe allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen className="aspect-video w-full" loading="lazy" src={youtubeEmbedUrl(video.youtubeId)} title={video.title} /><div className="p-3"><strong>{video.title}</strong><p className="mt-1 text-sm text-zinc-600">{video.description || video.category}</p></div></article>)}
+              {videos.length === 0 ? <p className="rounded-xl bg-zinc-50 p-4 text-sm font-semibold text-zinc-600">Ingen videoer tilknyttet.</p> : null}
+            </div>
           </div>
         </section>
       </main>
