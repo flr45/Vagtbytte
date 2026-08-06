@@ -3,6 +3,7 @@ import { Prisma, UserRole } from "@prisma/client";
 import { TopBar } from "@/components/TopBar";
 import { formatDateTime } from "@/components/TransferSummary";
 import { requireRole } from "@/lib/auth";
+import { listOperationalPortalGrantUserIds } from "@/lib/operativ-portal-access";
 import { prisma } from "@/lib/prisma";
 import { STATIONS, stationLabel } from "@/lib/stations";
 
@@ -56,7 +57,7 @@ export default async function UserOverviewPage({
       : {})
   };
 
-  const [users, allUsers] = await Promise.all([
+  const [rawUsers, rawAllUsers, operationalAccessUserIds] = await Promise.all([
     prisma.user.findMany({
       where,
       orderBy: [{ stationCode: "asc" }, { name: "asc" }],
@@ -81,6 +82,7 @@ export default async function UserOverviewPage({
     prisma.user.findMany({
       where: baseWhere,
       select: {
+        id: true,
         stationCode: true,
         email: true,
         isActive: true,
@@ -92,11 +94,25 @@ export default async function UserOverviewPage({
           }
         }
       }
-    })
+    }),
+    listOperationalPortalGrantUserIds()
   ]);
+
+  const usersWithAccess = rawUsers.map((user) => ({
+    ...user,
+    hasOperationalPortalAccess: operationalAccessUserIds.has(user.id)
+  }));
+  const users = status === "operativ"
+    ? usersWithAccess.filter((user) => user.hasOperationalPortalAccess)
+    : usersWithAccess;
+  const allUsers = rawAllUsers.map((user) => ({
+    ...user,
+    hasOperationalPortalAccess: operationalAccessUserIds.has(user.id)
+  }));
 
   const activeCount = allUsers.filter((user) => user.isActive).length;
   const adminCount = allUsers.filter((user) => user.hasAdminAccess).length;
+  const operationalCount = allUsers.filter((user) => user.hasOperationalPortalAccess).length;
   const missingEmailCount = allUsers.filter((user) => !user.email).length;
   const missingPushCount = allUsers.filter((user) => user._count.pushSubscriptions === 0).length;
   const neverLoggedInCount = allUsers.filter((user) => !user.lastLoginAt).length;
@@ -112,12 +128,13 @@ export default async function UserOverviewPage({
         <section className="rounded-lg border border-brand-line bg-white p-5 shadow-sm">
           <h1 className="text-3xl font-black">Brugeroverblik</h1>
           <p className="mt-2 text-sm font-semibold text-zinc-600">
-            Se stationstilknytning, mail, opfølgende alarmsendinger, administratoradgang, push-enheder og seneste login.
+            Se stationstilknytning, mail, sending 2+, administratoradgang, Operativ Portal, push-enheder og seneste login.
           </p>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-7">
             <Stat label="Brugere i alt" value={allUsers.length} />
             <Stat label="Aktive" value={activeCount} />
-            <Stat label="Administratoradgang" value={adminCount} />
+            <Stat label="Administrator" value={adminCount} />
+            <Stat label="Operativ Portal" value={operationalCount} />
             <Stat label="Mangler mail" value={missingEmailCount} warning={missingEmailCount > 0} />
             <Stat label="Mangler push" value={missingPushCount} warning={missingPushCount > 0} />
             <Stat label="Aldrig logget ind" value={neverLoggedInCount} warning={neverLoggedInCount > 0} />
@@ -153,38 +170,24 @@ export default async function UserOverviewPage({
           <form className="grid gap-4 md:grid-cols-4" method="get">
             <label className="grid gap-2 text-sm font-bold text-zinc-700 md:col-span-2">
               Søg efter navn, medarbejdernummer eller mail
-              <input
-                className="focus-ring min-h-12 rounded-xl border border-zinc-200 px-4 text-base"
-                defaultValue={query}
-                name="q"
-                type="search"
-              />
+              <input className="focus-ring min-h-12 rounded-xl border border-zinc-200 px-4 text-base" defaultValue={query} name="q" type="search" />
             </label>
             <label className="grid gap-2 text-sm font-bold text-zinc-700">
               Station
-              <select
-                className="focus-ring min-h-12 rounded-xl border border-zinc-200 bg-white px-4 text-base"
-                defaultValue={station}
-                name="station"
-              >
+              <select className="focus-ring min-h-12 rounded-xl border border-zinc-200 bg-white px-4 text-base" defaultValue={station} name="station">
                 <option value="">Alle stationer</option>
-                {STATIONS.map((item) => (
-                  <option key={item.code} value={item.code}>{item.label}</option>
-                ))}
+                {STATIONS.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}
                 <option value="NONE">Uden station</option>
               </select>
             </label>
             <label className="grid gap-2 text-sm font-bold text-zinc-700">
               Status
-              <select
-                className="focus-ring min-h-12 rounded-xl border border-zinc-200 bg-white px-4 text-base"
-                defaultValue={status}
-                name="status"
-              >
+              <select className="focus-ring min-h-12 rounded-xl border border-zinc-200 bg-white px-4 text-base" defaultValue={status} name="status">
                 <option value="">Alle</option>
                 <option value="active">Aktive</option>
                 <option value="inactive">Deaktiverede</option>
                 <option value="admin">Administratoradgang</option>
+                <option value="operativ">Operativ Portal</option>
                 <option value="no-email">Mangler mail</option>
                 <option value="no-push">Mangler push</option>
                 <option value="never-login">Aldrig logget ind</option>
@@ -198,25 +201,15 @@ export default async function UserOverviewPage({
         </section>
 
         <section className="overflow-hidden rounded-lg border border-brand-line bg-white">
-          <div className="border-b border-brand-line p-4">
-            <h2 className="text-xl font-black">Brugere ({users.length})</h2>
-          </div>
+          <div className="border-b border-brand-line p-4"><h2 className="text-xl font-black">Brugere ({users.length})</h2></div>
           {users.length === 0 ? (
             <p className="p-5 text-sm font-semibold text-zinc-600">Ingen brugere matcher filtrene.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1100px] border-collapse text-left text-sm">
+              <table className="w-full min-w-[1200px] border-collapse text-left text-sm">
                 <thead className="bg-zinc-50 text-xs uppercase text-zinc-600">
                   <tr>
-                    <th className="px-4 py-3">Navn</th>
-                    <th className="px-4 py-3">Medarbejdernummer</th>
-                    <th className="px-4 py-3">Mail</th>
-                    <th className="px-4 py-3">Station</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Sending 2+</th>
-                    <th className="px-4 py-3">Admin</th>
-                    <th className="px-4 py-3">Push-enheder</th>
-                    <th className="px-4 py-3">Seneste login</th>
+                    <th className="px-4 py-3">Navn</th><th className="px-4 py-3">Medarbejdernummer</th><th className="px-4 py-3">Mail</th><th className="px-4 py-3">Station</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Sending 2+</th><th className="px-4 py-3">Admin</th><th className="px-4 py-3">Operativ</th><th className="px-4 py-3">Push-enheder</th><th className="px-4 py-3">Seneste login</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -224,25 +217,14 @@ export default async function UserOverviewPage({
                     <tr className="border-t border-zinc-100" key={user.id}>
                       <td className="px-4 py-3 font-bold">{user.name}</td>
                       <td className="px-4 py-3 font-semibold">{user.employeeNumber ?? "—"}</td>
-                      <td className="max-w-xs break-all px-4 py-3">
-                        {user.email ? user.email : <span className="font-bold text-amber-700">Mangler</span>}
-                      </td>
+                      <td className="max-w-xs break-all px-4 py-3">{user.email ? user.email : <span className="font-bold text-amber-700">Mangler</span>}</td>
                       <td className="px-4 py-3">{stationLabel(user.stationCode)}</td>
-                      <td className="px-4 py-3">
-                        <span className={user.isActive ? "font-bold text-emerald-700" : "font-bold text-red-700"}>
-                          {user.isActive ? "Aktiv" : "Deaktiveret"}
-                        </span>
-                      </td>
+                      <td className="px-4 py-3"><span className={user.isActive ? "font-bold text-emerald-700" : "font-bold text-red-700"}>{user.isActive ? "Aktiv" : "Deaktiveret"}</span></td>
                       <td className="px-4 py-3">{user.receiveAlarmFollowUps ? "Ja" : "Nej"}</td>
                       <td className="px-4 py-3">{user.hasAdminAccess ? "Ja" : "Nej"}</td>
-                      <td className="px-4 py-3">
-                        <span className={user._count.pushSubscriptions > 0 ? "font-bold text-emerald-700" : "font-bold text-red-700"}>
-                          {user._count.pushSubscriptions}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {user.lastLoginAt ? formatDateTime(user.lastLoginAt) : "Aldrig"}
-                      </td>
+                      <td className="px-4 py-3"><span className={user.hasOperationalPortalAccess ? "rounded-full bg-slate-900 px-2 py-1 text-xs font-black text-white" : "text-zinc-500"}>{user.hasOperationalPortalAccess ? "Adgang" : "Nej"}</span></td>
+                      <td className="px-4 py-3"><span className={user._count.pushSubscriptions > 0 ? "font-bold text-emerald-700" : "font-bold text-red-700"}>{user._count.pushSubscriptions}</span></td>
+                      <td className="px-4 py-3">{user.lastLoginAt ? formatDateTime(user.lastLoginAt) : "Aldrig"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -256,12 +238,7 @@ export default async function UserOverviewPage({
 }
 
 function Stat({ label, value, warning = false }: { label: string; value: number; warning?: boolean }) {
-  return (
-    <div className={warning ? "rounded-lg border border-amber-200 bg-amber-50 p-4" : "rounded-lg border border-zinc-100 bg-zinc-50 p-4"}>
-      <p className="text-sm font-semibold text-zinc-600">{label}</p>
-      <p className="mt-1 text-3xl font-black">{value}</p>
-    </div>
-  );
+  return <div className={warning ? "rounded-lg border border-amber-200 bg-amber-50 p-4" : "rounded-lg border border-zinc-100 bg-zinc-50 p-4"}><p className="text-sm font-semibold text-zinc-600">{label}</p><p className="mt-1 text-3xl font-black">{value}</p></div>;
 }
 
 function one(value: string | string[] | undefined) {

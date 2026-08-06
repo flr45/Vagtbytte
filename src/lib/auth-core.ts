@@ -13,6 +13,7 @@ export type AuthUser = {
   isActive: boolean;
   mustChangePassword: boolean;
   hasAdminAccess: boolean;
+  hasOperationalPortalAccess?: boolean;
 };
 
 export type AuthRepository = {

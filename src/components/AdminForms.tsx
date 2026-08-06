@@ -25,6 +25,7 @@ type UserListItem = {
   alarmStations: string[];
   receiveAlarmFollowUps: boolean;
   hasAdminAccess: boolean;
+  hasOperationalPortalAccess: boolean;
 };
 
 export function CreateFirefighterForm() {
@@ -57,6 +58,10 @@ export function CreateFirefighterForm() {
       </p>
       <Checkbox defaultChecked label="Aktiv" name="isActive" />
       <Checkbox label="Administratoradgang" name="hasAdminAccess" />
+      <Checkbox label="Adgang til Operativ Portal" name="hasOperationalPortalAccess" />
+      <p className="-mt-2 text-sm font-semibold text-zinc-600">
+        Giver læseadgang til køretøjer, udstyr, videoer og dokumenter uden administratorrettigheder.
+      </p>
       <ActionMessage message={state.message} ok={state.ok} />
       <SubmitButton>Opret bruger</SubmitButton>
     </form>
@@ -120,11 +125,16 @@ function FirefighterEditForm({ user }: { user: UserListItem }) {
     <details className="rounded-lg border border-zinc-200 bg-zinc-50">
       <summary className="focus-ring min-h-12 cursor-pointer rounded-lg px-4 py-3 font-bold">
         <span>{user.name}</span>
-        {!user.email ? (
-          <span className="ml-2 rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-900">
-            Mangler mail
-          </span>
-        ) : null}
+        <span className="ml-2 inline-flex flex-wrap gap-1 align-middle">
+          {user.hasAdminAccess ? <AccessBadge label="Admin" /> : null}
+          {user.hasOperationalPortalAccess ? <AccessBadge label="Operativ" /> : null}
+          {user.receiveAlarmFollowUps ? <AccessBadge label="Sending 2+" /> : null}
+          {!user.email ? (
+            <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-900">
+              Mangler mail
+            </span>
+          ) : null}
+        </span>
       </summary>
       <div className="grid gap-5 border-t border-zinc-200 bg-white p-4">
         <form action={editAction} className="grid gap-4">
@@ -164,6 +174,14 @@ function FirefighterEditForm({ user }: { user: UserListItem }) {
             label="Administratoradgang"
             name="hasAdminAccess"
           />
+          <Checkbox
+            defaultChecked={user.hasOperationalPortalAccess}
+            label="Adgang til Operativ Portal"
+            name="hasOperationalPortalAccess"
+          />
+          <p className="-mt-2 text-sm font-semibold text-zinc-600">
+            Læseadgang til det operative program. Redigering kræver fortsat administratoradgang.
+          </p>
           <ActionMessage message={editState.message} ok={editState.ok} />
           <SubmitButton>Gem bruger</SubmitButton>
         </form>
@@ -202,6 +220,14 @@ function FirefighterEditForm({ user }: { user: UserListItem }) {
         </form>
       </div>
     </details>
+  );
+}
+
+function AccessBadge({ label }: { label: string }) {
+  return (
+    <span className="rounded-full bg-zinc-900 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-white">
+      {label}
+    </span>
   );
 }
 
