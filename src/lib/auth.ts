@@ -10,19 +10,33 @@ import {
   shouldDeleteCookieOnLogout,
   type AuthRepository
 } from "./auth-core";
+import {
+  canAccessOperationalPortal,
+  canManageOperationalPortal,
+  hasOperationalPortalGrant
+} from "./operativ-portal-access";
 import { roleHome } from "./roles";
 
 export const SESSION_COOKIE_NAME = "vagtoverdragelse_session";
 
-export { roleHome };
+export { canAccessOperationalPortal, canManageOperationalPortal, roleHome };
 
 export const prismaAuthRepository: AuthRepository = {
   async findUserByLogin(identifier) {
-    return prisma.user.findFirst({
+    const user = await prisma.user.findFirst({
       where: {
         OR: [{ loginIdentifier: identifier }, { employeeNumber: identifier }]
       }
     });
+
+    if (!user) {
+      return null;
+    }
+
+    return {
+      ...user,
+      hasOperationalPortalAccess: await hasOperationalPortalGrant(user.id)
+    };
   },
   async countRecentFailures(identifier, ipAddress) {
     const since = new Date(Date.now() - 1000 * 60 * 15);
@@ -85,7 +99,17 @@ export async function getCurrentUser() {
     include: { user: true }
   });
 
-  return resolveCurrentUserFromSession(session);
+  if (!session) {
+    return null;
+  }
+
+  return resolveCurrentUserFromSession({
+    ...session,
+    user: {
+      ...session.user,
+      hasOperationalPortalAccess: await hasOperationalPortalGrant(session.userId)
+    }
+  });
 }
 
 export async function requireUser() {
@@ -96,17 +120,31 @@ export async function requireUser() {
   return user;
 }
 
-export async function requireRole(role: UserRole) {
-  const user = await requireUser();
-
+function enforcePasswordChange(user: Awaited<ReturnType<typeof requireUser>>) {
   if (user.mustChangePassword) {
     redirect("/skift-adgangskode");
   }
+}
+
+export async function requireRole(role: UserRole) {
+  const user = await requireUser();
+  enforcePasswordChange(user);
 
   const hasRequiredRole =
     user.role === role || (role === UserRole.ADMIN && user.hasAdminAccess);
 
   if (!hasRequiredRole) {
+    redirect("/forbudt");
+  }
+
+  return user;
+}
+
+export async function requireOperationalPortalAccess() {
+  const user = await requireUser();
+  enforcePasswordChange(user);
+
+  if (!canAccessOperationalPortal(user)) {
     redirect("/forbudt");
   }
 
