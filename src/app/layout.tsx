@@ -4,13 +4,13 @@ import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SBR Portal",
-  description: "Beredskabsportal til alarmfeed, vagtoverdragelse og vagttildeling",
+  title: "SBR Fire App",
+  description: "Alarm, vagter og operativ viden samlet for Slagelse Brand og Redning",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "SBR Portal",
-    statusBarStyle: "default"
+    title: "SBR Fire",
+    statusBarStyle: "black-translucent"
   },
   icons: {
     icon: [
@@ -26,7 +26,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#b91c1c"
+  themeColor: "#b70f18"
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
