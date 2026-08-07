@@ -28,4 +28,19 @@ describe("SBR Fire App profil og installation", () => {
     expect(source).toContain('name="newPassword"');
     expect(source).toContain('name="confirmPassword"');
   });
+
+  it("viser ikke brandmands-notifikationer som dødt link for administrator", () => {
+    const source = fs.readFileSync(path.join(process.cwd(), "src", "app", "app", "mere", "page.tsx"), "utf8");
+    expect(source).toContain('user.role !== "ADMIN"');
+    expect(source).toContain('href={notificationPath}');
+  });
+
+  it("bruger det fælles professionelle SVG-ikonlag", () => {
+    const shell = fs.readFileSync(path.join(process.cwd(), "src", "components", "SbrFireApp.tsx"), "utf8");
+    const more = fs.readFileSync(path.join(process.cwd(), "src", "app", "app", "mere", "page.tsx"), "utf8");
+    expect(shell).toContain("AppIcon");
+    expect(more).toContain('icon="user"');
+    expect(more).toContain('icon="bell"');
+    expect(more).toContain('icon="truck"');
+  });
 });
