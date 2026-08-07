@@ -14,6 +14,13 @@ export type OperationalVehicleSummary = {
   id: string;
   name: string;
   description: string;
+  code: string;
+  model: string;
+  year: number | null;
+  fuel: string;
+  crew: string;
+  functionText: string;
+  interactiveImageId: string | null;
   placeCount: number;
   itemCount: number;
   documentCount: number;
@@ -26,6 +33,7 @@ export type OperationalPlaceSummary = {
   id: string;
   vehicleId: string;
   name: string;
+  description: string;
   sortOrder: number;
   itemCount: number;
   imageCount: number;
@@ -38,6 +46,7 @@ export type OperationalItemSummary = {
   name: string;
   quantity: number;
   note: string;
+  specifications: string;
   sortOrder: number;
   imageCount: number;
   coverImageId: string | null;
@@ -58,6 +67,17 @@ export type OperationalImage = {
   sortOrder: number;
   createdAt: Date;
   updatedAt: Date;
+};
+
+export type OperationalHotspot = {
+  id: string;
+  vehicleId: string;
+  placeId: string;
+  placeName: string;
+  label: string;
+  xPercent: number;
+  yPercent: number;
+  sortOrder: number;
 };
 
 export type OperationalDocument = {
@@ -92,6 +112,7 @@ export type OperationalVehicleDetail = OperationalVehicleSummary & {
   documents: OperationalDocument[];
   videos: OperationalVideo[];
   images: OperationalImage[];
+  hotspots: OperationalHotspot[];
 };
 
 export type OperationalPlaceDetail = {
@@ -99,6 +120,8 @@ export type OperationalPlaceDetail = {
   vehicleId: string;
   vehicleName: string;
   name: string;
+  description: string;
+  sortOrder: number;
   coverImageId: string | null;
   images: OperationalImage[];
   items: OperationalItemSummary[];
@@ -191,6 +214,22 @@ const imageColumns = `
   image.created_at AS "createdAt", image.updated_at AS "updatedAt"
 `;
 
+const vehicleColumns = `
+  v.id, v.name, COALESCE(v.description, '') AS description,
+  COALESCE(v.code, '') AS code, COALESCE(v.model, '') AS model, v.year,
+  COALESCE(v.fuel, '') AS fuel, COALESCE(v.crew, '') AS crew,
+  COALESCE(v.function_text, '') AS "functionText",
+  v.interactive_image_id AS "interactiveImageId",
+  (SELECT COUNT(*)::int FROM operational_place p WHERE p.vehicle_id = v.id) AS "placeCount",
+  (SELECT COUNT(*)::int FROM operational_item i INNER JOIN operational_place p ON p.id = i.place_id WHERE p.vehicle_id = v.id) AS "itemCount",
+  (SELECT COUNT(*)::int FROM operational_document d WHERE d.vehicle_id = v.id) AS "documentCount",
+  (SELECT COUNT(*)::int FROM operational_video video WHERE video.vehicle_id = v.id) AS "videoCount",
+  (SELECT COUNT(*)::int FROM operational_image image WHERE image.vehicle_id = v.id) AS "imageCount",
+  (SELECT cover.id FROM operational_image cover
+   WHERE cover.vehicle_id = v.id AND cover.place_id IS NULL AND cover.item_id IS NULL
+   ORDER BY cover.is_cover DESC, cover.sort_order, cover.created_at LIMIT 1) AS "coverImageId"
+`;
+
 export async function getOperationalStats(): Promise<OperationalStats> {
   const rows = await prisma.$queryRaw<OperationalStats[]>`
     SELECT
@@ -205,63 +244,30 @@ export async function getOperationalStats(): Promise<OperationalStats> {
 }
 
 export async function listOperationalVehicles(): Promise<OperationalVehicleSummary[]> {
-  return prisma.$queryRaw<OperationalVehicleSummary[]>`
-    SELECT v.id, v.name, COALESCE(v.description, '') AS description,
-      COUNT(DISTINCT p.id)::int AS "placeCount",
-      COUNT(DISTINCT i.id)::int AS "itemCount",
-      COUNT(DISTINCT d.id)::int AS "documentCount",
-      COUNT(DISTINCT video.id)::int AS "videoCount",
-      COUNT(DISTINCT image.id)::int AS "imageCount",
-      (SELECT cover.id FROM operational_image cover
-       WHERE cover.vehicle_id = v.id AND cover.place_id IS NULL AND cover.item_id IS NULL
-       ORDER BY cover.is_cover DESC, cover.sort_order, cover.created_at LIMIT 1) AS "coverImageId"
-    FROM operational_vehicle v
-    LEFT JOIN operational_place p ON p.vehicle_id = v.id
-    LEFT JOIN operational_item i ON i.place_id = p.id
-    LEFT JOIN operational_document d ON d.vehicle_id = v.id
-    LEFT JOIN operational_video video ON video.vehicle_id = v.id
-    LEFT JOIN operational_image image ON image.vehicle_id = v.id
-    GROUP BY v.id, v.name, v.description, v.sort_order
-    ORDER BY v.sort_order, v.name
-  `;
+  return prisma.$queryRawUnsafe<OperationalVehicleSummary[]>(
+    `SELECT ${vehicleColumns} FROM operational_vehicle v ORDER BY v.sort_order, v.name`
+  );
 }
 
 export async function getOperationalVehicle(id: string): Promise<OperationalVehicleDetail | null> {
-  const vehicles = await prisma.$queryRaw<OperationalVehicleSummary[]>`
-    SELECT v.id, v.name, COALESCE(v.description, '') AS description,
-      COUNT(DISTINCT p.id)::int AS "placeCount",
-      COUNT(DISTINCT i.id)::int AS "itemCount",
-      COUNT(DISTINCT d.id)::int AS "documentCount",
-      COUNT(DISTINCT video.id)::int AS "videoCount",
-      COUNT(DISTINCT image.id)::int AS "imageCount",
-      (SELECT cover.id FROM operational_image cover
-       WHERE cover.vehicle_id = v.id AND cover.place_id IS NULL AND cover.item_id IS NULL
-       ORDER BY cover.is_cover DESC, cover.sort_order, cover.created_at LIMIT 1) AS "coverImageId"
-    FROM operational_vehicle v
-    LEFT JOIN operational_place p ON p.vehicle_id = v.id
-    LEFT JOIN operational_item i ON i.place_id = p.id
-    LEFT JOIN operational_document d ON d.vehicle_id = v.id
-    LEFT JOIN operational_video video ON video.vehicle_id = v.id
-    LEFT JOIN operational_image image ON image.vehicle_id = v.id
-    WHERE v.id = ${id}
-    GROUP BY v.id, v.name, v.description, v.sort_order
-  `;
+  const vehicles = await prisma.$queryRawUnsafe<OperationalVehicleSummary[]>(
+    `SELECT ${vehicleColumns} FROM operational_vehicle v WHERE v.id = $1`,
+    id
+  );
   const vehicle = vehicles[0];
   if (!vehicle) return null;
 
-  const [places, documents, videos, images] = await Promise.all([
+  const [places, documents, videos, images, hotspots] = await Promise.all([
     prisma.$queryRaw<OperationalPlaceSummary[]>`
-      SELECT p.id, p.vehicle_id AS "vehicleId", p.name, p.sort_order AS "sortOrder",
-        COUNT(DISTINCT i.id)::int AS "itemCount",
-        COUNT(DISTINCT image.id)::int AS "imageCount",
+      SELECT p.id, p.vehicle_id AS "vehicleId", p.name,
+        COALESCE(p.description, '') AS description, p.sort_order AS "sortOrder",
+        (SELECT COUNT(*)::int FROM operational_item i WHERE i.place_id = p.id) AS "itemCount",
+        (SELECT COUNT(*)::int FROM operational_image image WHERE image.place_id = p.id AND image.item_id IS NULL) AS "imageCount",
         (SELECT cover.id FROM operational_image cover
          WHERE cover.place_id = p.id AND cover.item_id IS NULL
          ORDER BY cover.is_cover DESC, cover.sort_order, cover.created_at LIMIT 1) AS "coverImageId"
       FROM operational_place p
-      LEFT JOIN operational_item i ON i.place_id = p.id
-      LEFT JOIN operational_image image ON image.place_id = p.id AND image.item_id IS NULL
       WHERE p.vehicle_id = ${id}
-      GROUP BY p.id, p.vehicle_id, p.name, p.sort_order
       ORDER BY p.sort_order, p.name
     `,
     prisma.$queryRaw<OperationalDocument[]>`
@@ -282,14 +288,24 @@ export async function getOperationalVehicle(id: string): Promise<OperationalVehi
       LEFT JOIN operational_item i ON i.id = video.item_id
       WHERE video.vehicle_id = ${id} ORDER BY video.sort_order, video.created_at DESC
     `,
-    listOperationalImagesForVehicle(id)
+    listOperationalImagesForVehicle(id),
+    listOperationalHotspots(id)
   ]);
-  return { ...vehicle, places, documents, videos, images };
+  return { ...vehicle, places, documents, videos, images, hotspots };
 }
 
 export async function getOperationalPlace(id: string): Promise<OperationalPlaceDetail | null> {
-  const places = await prisma.$queryRaw<Array<{ id: string; vehicleId: string; vehicleName: string; name: string; coverImageId: string | null }>>`
+  const places = await prisma.$queryRaw<Array<{
+    id: string;
+    vehicleId: string;
+    vehicleName: string;
+    name: string;
+    description: string;
+    sortOrder: number;
+    coverImageId: string | null;
+  }>>`
     SELECT p.id, p.vehicle_id AS "vehicleId", v.name AS "vehicleName", p.name,
+      COALESCE(p.description, '') AS description, p.sort_order AS "sortOrder",
       (SELECT cover.id FROM operational_image cover
        WHERE cover.place_id = p.id AND cover.item_id IS NULL
        ORDER BY cover.is_cover DESC, cover.sort_order, cover.created_at LIMIT 1) AS "coverImageId"
@@ -302,7 +318,8 @@ export async function getOperationalPlace(id: string): Promise<OperationalPlaceD
   const [items, images] = await Promise.all([
     prisma.$queryRaw<OperationalItemSummary[]>`
       SELECT i.id, i.place_id AS "placeId", i.name, i.quantity,
-        COALESCE(i.note, '') AS note, i.sort_order AS "sortOrder",
+        COALESCE(i.note, '') AS note, COALESCE(i.specifications, '') AS specifications,
+        i.sort_order AS "sortOrder",
         (SELECT COUNT(*)::int FROM operational_image image WHERE image.item_id = i.id) AS "imageCount",
         (SELECT cover.id FROM operational_image cover WHERE cover.item_id = i.id
          ORDER BY cover.is_cover DESC, cover.sort_order, cover.created_at LIMIT 1) AS "coverImageId"
@@ -317,8 +334,8 @@ export async function getOperationalPlace(id: string): Promise<OperationalPlaceD
 export async function getOperationalItem(id: string): Promise<OperationalItemDetail | null> {
   const items = await prisma.$queryRaw<Array<OperationalItemSummary & { placeName: string; vehicleId: string; vehicleName: string }>>`
     SELECT i.id, i.place_id AS "placeId", i.name, i.quantity,
-      COALESCE(i.note, '') AS note, i.sort_order AS "sortOrder",
-      p.name AS "placeName", v.id AS "vehicleId", v.name AS "vehicleName",
+      COALESCE(i.note, '') AS note, COALESCE(i.specifications, '') AS specifications,
+      i.sort_order AS "sortOrder", p.name AS "placeName", v.id AS "vehicleId", v.name AS "vehicleName",
       (SELECT COUNT(*)::int FROM operational_image image WHERE image.item_id = i.id) AS "imageCount",
       (SELECT cover.id FROM operational_image cover WHERE cover.item_id = i.id
        ORDER BY cover.is_cover DESC, cover.sort_order, cover.created_at LIMIT 1) AS "coverImageId"
@@ -345,6 +362,19 @@ export async function getOperationalItem(id: string): Promise<OperationalItemDet
     listOperationalImagesForItem(id)
   ]);
   return { ...item, videos, images };
+}
+
+export async function listOperationalHotspots(vehicleId: string): Promise<OperationalHotspot[]> {
+  return prisma.$queryRaw<OperationalHotspot[]>`
+    SELECT h.id, h.vehicle_id AS "vehicleId", h.place_id AS "placeId", p.name AS "placeName",
+      COALESCE(h.label, '') AS label,
+      h.x_percent::float8 AS "xPercent", h.y_percent::float8 AS "yPercent",
+      h.sort_order AS "sortOrder"
+    FROM operational_hotspot h
+    INNER JOIN operational_place p ON p.id = h.place_id
+    WHERE h.vehicle_id = ${vehicleId}
+    ORDER BY h.sort_order, h.created_at
+  `;
 }
 
 export async function listOperationalImagesForVehicle(vehicleId: string): Promise<OperationalImage[]> {
@@ -424,19 +454,23 @@ export async function searchOperationalPortal(query: string) {
   const [vehicles, places, items, videos, documents] = await Promise.all([
     prisma.$queryRaw<Array<{ id: string; name: string; description: string }>>`
       SELECT id, name, COALESCE(description, '') AS description FROM operational_vehicle
-      WHERE name ILIKE ${pattern} OR description ILIKE ${pattern} ORDER BY name LIMIT 25
+      WHERE name ILIKE ${pattern} OR description ILIKE ${pattern} OR code ILIKE ${pattern}
+         OR model ILIKE ${pattern} OR function_text ILIKE ${pattern}
+      ORDER BY sort_order, name LIMIT 25
     `,
     prisma.$queryRaw<Array<{ id: string; name: string; vehicleId: string; vehicleName: string }>>`
       SELECT p.id, p.name, v.id AS "vehicleId", v.name AS "vehicleName"
       FROM operational_place p INNER JOIN operational_vehicle v ON v.id = p.vehicle_id
-      WHERE p.name ILIKE ${pattern} ORDER BY p.name LIMIT 25
+      WHERE p.name ILIKE ${pattern} OR p.description ILIKE ${pattern}
+      ORDER BY p.sort_order, p.name LIMIT 25
     `,
     prisma.$queryRaw<Array<{ id: string; name: string; note: string; placeName: string; vehicleName: string }>>`
       SELECT i.id, i.name, COALESCE(i.note, '') AS note, p.name AS "placeName", v.name AS "vehicleName"
       FROM operational_item i
       INNER JOIN operational_place p ON p.id = i.place_id
       INNER JOIN operational_vehicle v ON v.id = p.vehicle_id
-      WHERE i.name ILIKE ${pattern} OR i.note ILIKE ${pattern} ORDER BY i.name LIMIT 50
+      WHERE i.name ILIKE ${pattern} OR i.note ILIKE ${pattern} OR i.specifications ILIKE ${pattern}
+      ORDER BY i.sort_order, i.name LIMIT 50
     `,
     prisma.$queryRaw<OperationalVideo[]>`
       SELECT video.id, video.vehicle_id AS "vehicleId", v.name AS "vehicleName",
