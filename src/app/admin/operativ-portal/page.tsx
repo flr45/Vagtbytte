@@ -76,7 +76,7 @@ export default async function OperationalPortalPage() {
         ))}
       </section>
 
-      <Link className="grid grid-cols-[56px_minmax(0,1fr)_24px] items-center gap-3 rounded-xl border border-white/10 bg-[#11171b] p-4 shadow-lg hover:border-red-500/50" href="/admin/operativ-portal/soeg">
+      <Link className="grid grid-cols-[56px_minmax(0,1fr)_24px] items-center gap-3 rounded-xl border border-white/10 bg-[#11171b] p-4 shadow-lg hover:border-red-500/50" href="/admin/operativ-portal/scan">
         <span className="grid size-12 place-items-center rounded-lg text-3xl text-red-500">⌗</span>
         <span>
           <strong className="block text-sm font-black">SCAN QR-KODE</strong>
