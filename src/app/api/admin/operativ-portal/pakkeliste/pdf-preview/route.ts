@@ -5,9 +5,9 @@ import {
   extractTextFromPackingListPdf,
   normalizeKey,
   normalizePlaceKey,
-  parsePackingListText,
   type PackingListPreviewRow
 } from "@/lib/operativ-packing-list";
+import { parseOperationalPackingListText } from "@/lib/operativ-packing-list-flexible";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -58,10 +58,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "PDF'en kunne ikke læses. Kontrollér at filen er gyldig og prøv igen." }, { status: 422 });
   }
 
-  const parsedRows = parsePackingListText(text);
+  const parsedRows = parseOperationalPackingListText(text);
   if (parsedRows.length === 0) {
     return NextResponse.json(
-      { error: "Der blev ikke fundet en læsbar pakkeliste i PDF'en. Hvis PDF'en kun består af scannede billeder, skal den først gøres tekstgenkendelig." },
+      { error: "Der blev ikke fundet pakkelisteposter i PDF'en. Tekstlaget blev læst, men formatet kunne ikke fortolkes." },
       { status: 422 }
     );
   }
