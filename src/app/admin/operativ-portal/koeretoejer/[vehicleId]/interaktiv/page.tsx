@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { OperationalVehicleInteractiveViewer } from "@/components/OperationalVehicleInteractiveViewer";
 import {
   OperationalPageFrame,
   OperationalPortalNav,
@@ -9,8 +10,9 @@ import {
   canManageOperationalPortal,
   requireOperationalPortalAccess
 } from "@/lib/auth";
-import { getVehicleInteractiveData, groupRooms } from "@/lib/operativ-interactive";
+import { groupRooms } from "@/lib/operativ-interactive";
 import { operationalImageUrl } from "@/lib/operativ-portal";
+import { getOperationalVehicleViewBundle } from "@/lib/operativ-vehicle-views";
 
 export const dynamic = "force-dynamic";
 type PageProps = { params: Promise<{ vehicleId: string }> };
@@ -19,10 +21,9 @@ export default async function OperationalVehicleInteractivePage({ params }: Page
   const user = await requireOperationalPortalAccess();
   const isEditor = canManageOperationalPortal(user);
   const { vehicleId } = await params;
-  const vehicle = await getVehicleInteractiveData(vehicleId);
+  const vehicle = await getOperationalVehicleViewBundle(vehicleId);
   if (!vehicle) notFound();
 
-  const imageId = vehicle.interactiveImageId || vehicle.coverImageId;
   const roomGroups = groupRooms(vehicle.rooms);
 
   return (
@@ -33,35 +34,13 @@ export default async function OperationalVehicleInteractivePage({ params }: Page
       <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#080c0f] shadow-2xl">
         <div className="border-b border-white/10 bg-[#b70f18] px-4 py-3 text-center">
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-100/70">Trin 1 af 2</p>
-          <h1 className="mt-0.5 text-base font-black text-white">Tryk på et + for at åbne et rum</h1>
+          <h1 className="mt-0.5 text-base font-black text-white">Navigér rundt om køretøjet og tryk på et +</h1>
         </div>
 
-        {imageId ? (
-          <div className="relative overflow-hidden bg-black">
-            <img alt={`Interaktiv oversigt over ${vehicle.name}`} className="block w-full" src={operationalImageUrl(imageId)} />
-            {vehicle.hotspots.map((hotspot) => (
-              <Link
-                aria-label={`Åbn ${hotspot.label || hotspot.placeName}`}
-                className="absolute grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-white bg-[#d71920] font-black leading-none text-white shadow-[0_5px_22px_rgba(0,0,0,.75)] transition hover:scale-110 focus:scale-110"
-                href={`/admin/operativ-portal/rum/${hotspot.placeId}/interaktiv`}
-                key={hotspot.id}
-                style={{
-                  left: `${hotspot.xPercent}%`,
-                  top: `${hotspot.yPercent}%`,
-                  width: hotspot.sizePx,
-                  height: hotspot.sizePx,
-                  fontSize: Math.max(18, Math.round(hotspot.sizePx * 0.55))
-                }}
-                title={hotspot.label || hotspot.placeName}
-              >+</Link>
-            ))}
-          </div>
-        ) : (
-          <div className="grid min-h-56 place-items-center px-6 text-center text-sm font-semibold text-slate-500">Der er endnu ikke valgt et interaktivt billede til køretøjet.</div>
-        )}
+        <OperationalVehicleInteractiveViewer hotspots={vehicle.viewHotspots} vehicleName={vehicle.name} views={vehicle.views} />
 
         <div className="border-t border-white/10 bg-[#0d1317] p-3">
-          <p className="text-center text-xs font-bold text-slate-400">Tryk på et rødt plus for at gå ind i rummet. Derinde kan du trykke videre på et nyt plus og åbne værktøjet.</p>
+          <p className="text-center text-xs font-bold text-slate-400">Brug ‹ og › til at gå rundt om køretøjet. Tryk ↑ Tag for at se taget. Et rødt plus åbner det valgte rum, hvor du kan trykke videre til værktøjet.</p>
         </div>
       </section>
 

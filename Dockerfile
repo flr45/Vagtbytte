@@ -14,9 +14,13 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 
-FROM node:22-alpine AS runtime-deps
+# Installér produktionsafhængigheder på build-platformen i stedet for at køre
+# Node gennem QEMU. Prisma henter samtidig CLI-engines til både x64 Alpine og
+# ARM64 Alpine, mens schema.prisma genererer klient-engines til begge platforme.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS runtime-deps
 WORKDIR /app
 RUN apk add --no-cache libc6-compat openssl
+ENV PRISMA_CLI_BINARY_TARGETS=linux-musl-openssl-3.0.x,linux-musl-arm64-openssl-3.0.x
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
 RUN npm ci --omit=dev && npx prisma generate
