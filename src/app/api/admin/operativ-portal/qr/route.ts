@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { NextResponse } from "next/server";
 import { canAccessOperationalPortal, getCurrentUser } from "@/lib/auth";
+import { isAllowedOperationalPath } from "@/lib/operativ-qr";
 
 const execFileAsync = promisify(execFile);
 
@@ -17,9 +18,7 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const path = url.searchParams.get("path")?.trim() ?? "";
-  if (!isAllowedOperationalPath(path)) {
-    return NextResponse.json({ error: "QR-linket er ugyldigt." }, { status: 400 });
-  }
+  if (!isAllowedOperationalPath(path)) return NextResponse.json({ error: "QR-linket er ugyldigt." }, { status: 400 });
 
   const targetUrl = new URL(path, url.origin).toString();
   try {
@@ -36,13 +35,8 @@ export async function GET(request: Request) {
         "X-Content-Type-Options": "nosniff"
       }
     });
-  } catch {
+  } catch (error) {
+    console.error("Operational QR generation failed", error);
     return NextResponse.json({ error: "QR-koden kunne ikke genereres." }, { status: 500 });
   }
-}
-
-function isAllowedOperationalPath(path: string) {
-  if (!path.startsWith("/admin/operativ-portal/")) return false;
-  if (path.includes("..") || path.includes("\\") || path.includes("\u0000")) return false;
-  return /^\/admin\/operativ-portal\/(?:koeretoejer\/[0-9a-f-]{36}|rum\/[0-9a-f-]{36}|udstyr\/[0-9a-f-]{36})(?:[#?].*)?$/i.test(path);
 }
