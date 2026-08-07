@@ -15,6 +15,7 @@ import {
   type OperationalVehicleViewHotspot,
   type OperationalVehicleViewKey
 } from "@/lib/operativ-vehicle-view-model";
+import { OperationalQuickImageCapture } from "./OperationalQuickImageCapture";
 
 type ImageOption = { id: string; title: string; originalName: string };
 type PlaceOption = { id: string; name: string };
@@ -55,7 +56,7 @@ export function OperationalVehicleViewManager({
     <section className="rounded-xl border border-white/10 bg-[#0d1317] p-4 shadow-lg">
       <p className="text-[10px] font-black uppercase tracking-[0.16em] text-red-500">Interaktiv køretøjsnavigation</p>
       <h2 className="mt-1 text-xl font-black">Billeder rundt om køretøjet</h2>
-      <p className="mt-2 max-w-3xl text-xs font-semibold leading-5 text-slate-500">Vælg et billede til hver side. Brandmanden får pile til venstre/højre rundt om bilen og en pil op på taget. Pluspunkter gemmes separat pr. billede.</p>
+      <p className="mt-2 max-w-3xl text-xs font-semibold leading-5 text-slate-500">Vælg et eksisterende billede eller tag et nyt direkte med mobilen. Brandmanden får pile til venstre/højre rundt om bilen og en pil op på taget. Pluspunkter gemmes separat pr. billede.</p>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
         {OPERATIONAL_VIEW_KEYS.map((viewKey) => {
@@ -83,8 +84,17 @@ export function OperationalVehicleViewManager({
         })}
       </div>
 
+      <div className="mt-4">
+        <OperationalQuickImageCapture
+          label={`${OPERATIONAL_VIEW_CONFIG[activeKey].label} · køretøjsbillede`}
+          mode="vehicle-view"
+          vehicleId={vehicleId}
+          viewKey={activeKey}
+        />
+      </div>
+
       {!activeView ? (
-        <div className="mt-4 rounded-lg border border-dashed border-white/15 p-6 text-center text-sm font-semibold text-slate-500">Vælg og gem først et billede til {OPERATIONAL_VIEW_CONFIG[activeKey].label.toLowerCase()}.</div>
+        <div className="mt-4 rounded-lg border border-dashed border-white/15 p-6 text-center text-sm font-semibold text-slate-500">Tag eller vælg først et billede til {OPERATIONAL_VIEW_CONFIG[activeKey].label.toLowerCase()}.</div>
       ) : (
         <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(280px,.55fr)]">
           <div>
