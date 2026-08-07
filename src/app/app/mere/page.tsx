@@ -11,9 +11,12 @@ export default async function SbrFireMorePage() {
   const hasAdminAccess = user.role === "ADMIN" || user.hasAdminAccess;
   const hasOperationalAccess = canAccessOperationalPortal(user);
   const notificationPath = user.role === "VC" ? "/vagtcentral/notifikationer" : "/brandmand/notifikationer";
-  const unreadCount = user.role === "ADMIN" ? 0 : await prisma.notification.count({
-    where: { recipientUserId: user.id, readAt: null, publishedAt: { not: null }, cancelledAt: null }
-  });
+  const [unreadCount, account] = await Promise.all([
+    user.role === "ADMIN" ? Promise.resolve(0) : prisma.notification.count({
+      where: { recipientUserId: user.id, readAt: null, publishedAt: { not: null }, cancelledAt: null }
+    }),
+    prisma.user.findUnique({ where: { id: user.id }, select: { email: true } })
+  ]);
 
   return (
     <SbrFirePageFrame active="more" backHref="/app" title="Mere">
@@ -28,7 +31,7 @@ export default async function SbrFireMorePage() {
         <div className="mt-3 grid gap-2 text-sm font-semibold text-slate-400 sm:grid-cols-2">
           <p>Rolle: <strong className="text-white">{roleLabel(user.role)}</strong></p>
           <p>Medarbejdernummer: <strong className="text-white">{user.employeeNumber ?? "—"}</strong></p>
-          <p className="sm:col-span-2">E-mail: <strong className="text-white">{user.email ?? "Ikke registreret"}</strong></p>
+          <p className="sm:col-span-2">E-mail: <strong className="text-white">{account?.email ?? "Ikke registreret"}</strong></p>
         </div>
       </section>
 
