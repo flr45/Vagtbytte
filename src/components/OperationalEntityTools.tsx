@@ -97,12 +97,13 @@ export function OperationalContextTools() {
   }, [target]);
 
   if (!target) return null;
+  const currentTarget = target;
 
   async function toggle() {
     if (busy) return;
     setBusy(true);
     try {
-      setFavorite(await setFavoriteState(target.type, target.id, !favorite));
+      setFavorite(await setFavoriteState(currentTarget.type, currentTarget.id, !favorite));
     } catch (error) {
       window.alert(error instanceof Error ? error.message : "Favoritten kunne ikke gemmes.");
     } finally {
@@ -121,7 +122,7 @@ export function OperationalContextTools() {
     <aside aria-label="Hurtigværktøjer" className="fixed bottom-20 right-3 z-40 grid grid-cols-3 gap-1 rounded-xl border border-white/10 bg-[#0b1013]/95 p-1.5 shadow-2xl backdrop-blur md:bottom-4 md:right-4">
       <button aria-label={favorite ? "Fjern fra favoritter" : "Tilføj til favoritter"} className="grid size-12 place-items-center rounded-lg bg-[#151b1f] text-xl text-white hover:bg-[#1b2227] disabled:opacity-50" disabled={busy} onClick={() => void toggle()} title={favorite ? "Fjern fra favoritter" : "Tilføj til favoritter"} type="button">{favorite ? "★" : "☆"}</button>
       <button aria-label="Del siden" className="grid size-12 place-items-center rounded-lg bg-[#151b1f] text-lg text-white hover:bg-[#1b2227]" onClick={() => void share()} title={copied ? "Link kopieret" : "Del"} type="button">{copied ? "✓" : "↗"}</button>
-      <a aria-label="Åbn QR-label" className="grid size-12 place-items-center rounded-lg bg-[#151b1f] text-lg text-white hover:bg-[#1b2227]" href={`/admin/operativ-portal/qr-label?type=${encodeURIComponent(target.type)}&id=${encodeURIComponent(target.id)}`} title="QR-kode">⌗</a>
+      <a aria-label="Åbn QR-label" className="grid size-12 place-items-center rounded-lg bg-[#151b1f] text-lg text-white hover:bg-[#1b2227]" href={`/admin/operativ-portal/qr-label?type=${encodeURIComponent(currentTarget.type)}&id=${encodeURIComponent(currentTarget.id)}`} title="QR-kode">⌗</a>
     </aside>
   );
 }
