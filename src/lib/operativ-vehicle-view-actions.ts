@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { UserRole } from "@prisma/client";
 import { z } from "zod";
 import { requireRole } from "./auth";
-import { OPERATIONAL_VIEW_CONFIG, OPERATIONAL_VIEW_KEYS } from "./operativ-vehicle-views";
+import { OPERATIONAL_VIEW_CONFIG, OPERATIONAL_VIEW_KEYS } from "./operativ-vehicle-view-model";
 import { prisma } from "./prisma";
 
 const uuidSchema = z.string().uuid();
