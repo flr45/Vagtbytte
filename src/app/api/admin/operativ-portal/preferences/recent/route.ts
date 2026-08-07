@@ -28,7 +28,7 @@ export async function POST(request: Request) {
 
   await prisma.$executeRaw`
     INSERT INTO operational_recent (id, user_id, target_type, target_id, view_count, last_viewed_at)
-    VALUES (${randomUUID()}, ${user.id}, ${parsed.data.type}, ${parsed.data.id}, 1, CURRENT_TIMESTAMP)
+    VALUES (${randomUUID()}::uuid, ${user.id}, ${parsed.data.type}, ${parsed.data.id}, 1, CURRENT_TIMESTAMP)
     ON CONFLICT (user_id, target_type, target_id)
     DO UPDATE SET view_count = operational_recent.view_count + 1, last_viewed_at = CURRENT_TIMESTAMP
   `;
