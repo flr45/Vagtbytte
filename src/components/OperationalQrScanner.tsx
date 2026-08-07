@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { normalizeOperationalQrValue } from "@/lib/operativ-qr";
 
 type DetectorResult = { rawValue?: string };
 type Detector = { detect(source: CanvasImageSource): Promise<DetectorResult[]> };
@@ -19,7 +20,7 @@ export function OperationalQrScanner() {
   const [uploading, setUploading] = useState(false);
 
   const openQrValue = useCallback((rawValue: string) => {
-    const path = normalizeOperationalQrValue(rawValue);
+    const path = normalizeOperationalQrValue(rawValue, window.location.href);
     if (!path || navigatingRef.current) return false;
     navigatingRef.current = true;
     setStatus("QR-kode fundet – åbner…");
@@ -133,21 +134,4 @@ export function OperationalQrScanner() {
       </div>
     </section>
   );
-}
-
-function normalizeOperationalQrValue(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  let path = trimmed;
-  if (/^https?:\/\//i.test(trimmed)) {
-    try {
-      const parsed = new URL(trimmed);
-      if (parsed.host !== window.location.host) return null;
-      path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
-    } catch {
-      return null;
-    }
-  }
-  if (path.includes("..") || path.includes("\\")) return null;
-  return /^\/admin\/operativ-portal\/(?:koeretoejer\/[0-9a-f-]{36}|rum\/[0-9a-f-]{36}|udstyr\/[0-9a-f-]{36})(?:[#?].*)?$/i.test(path) ? path : null;
 }
