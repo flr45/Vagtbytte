@@ -47,7 +47,7 @@ export async function getOperationalAdminVehicle(vehicleId: string): Promise<Ope
   `;
 
   const items = rooms.length
-    ? await prisma.$queryRaw<OperationalAdminItem & { placeId: string }[]>`
+    ? await prisma.$queryRaw<Array<OperationalAdminItem & { placeId: string }>>`
         SELECT id, place_id AS "placeId", name, quantity,
           COALESCE(note, '') AS note,
           COALESCE(specifications, '') AS specifications,
