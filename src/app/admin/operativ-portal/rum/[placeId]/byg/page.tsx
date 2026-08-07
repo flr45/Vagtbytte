@@ -1,0 +1,34 @@
+import { notFound } from "next/navigation";
+import { UserRole } from "@prisma/client";
+import { OperationalContentBuilder } from "@/components/OperationalContentBuilder";
+import {
+  OperationalPageFrame,
+  OperationalPortalNav,
+  OperationalScreenHeader
+} from "@/components/OperationalPortalNav";
+import { requireRole } from "@/lib/auth";
+import { getOperationalInteractiveContext } from "@/lib/operativ-content-builder";
+
+export const dynamic = "force-dynamic";
+
+type PageProps = {
+  params: Promise<{ placeId: string }>;
+  searchParams: Promise<{ node?: string | string[] }>;
+};
+
+export default async function OperationalContentBuilderPage({ params, searchParams }: PageProps) {
+  await requireRole(UserRole.ADMIN);
+  const { placeId } = await params;
+  const query = await searchParams;
+  const nodeId = typeof query.node === "string" ? query.node : null;
+  const context = await getOperationalInteractiveContext(placeId, nodeId);
+  if (!context) notFound();
+
+  return (
+    <OperationalPageFrame>
+      <OperationalScreenHeader backHref={`/admin/operativ-portal/rum/${placeId}`} right="✚" title={`Byg · ${context.nodeName || context.placeName}`} />
+      <OperationalPortalNav isEditor />
+      <OperationalContentBuilder context={context} />
+    </OperationalPageFrame>
+  );
+}
