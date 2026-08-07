@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { AppIcon } from "@/components/AppIcon";
 import { OperationalContextTools } from "@/components/OperationalEntityTools";
 import { OperationalPwaManager } from "@/components/OperationalPwaManager";
 import { SbrFireNavigation } from "@/components/SbrFireApp";
@@ -39,23 +40,23 @@ export function OperationalPortalNav({ isEditor = false }: { isEditor?: boolean 
 export function OperationalScreenHeader({
   title,
   backHref,
-  right = "☆"
+  right
 }: {
   title: string;
   backHref?: string;
-  right?: string;
+  right?: ReactNode;
 }) {
   return (
     <header className="sticky top-0 z-30 -mx-3 -mt-3 grid min-h-14 grid-cols-[52px_minmax(0,1fr)_52px] items-center border-b border-red-950 bg-[#b70f18] px-2 text-white shadow-lg sm:-mx-5 sm:-mt-5">
       <div>
         {backHref ? (
-          <Link aria-label="Tilbage" className="grid size-11 place-items-center text-3xl font-light" href={backHref}>‹</Link>
+          <Link aria-label="Tilbage" className="grid size-11 place-items-center rounded-lg transition hover:bg-white/10" href={backHref}><AppIcon className="size-6" name="back" /></Link>
         ) : (
-          <Link aria-label="SBR Fire App" className="grid size-11 place-items-center text-xl" href="/app">☰</Link>
+          <Link aria-label="SBR Fire App" className="grid size-11 place-items-center rounded-lg transition hover:bg-white/10" href="/app"><AppIcon className="size-6" name="menu" /></Link>
         )}
       </div>
       <h1 className="truncate text-center text-base font-bold sm:text-lg">{title}</h1>
-      <span aria-hidden="true" className="grid size-11 place-items-center justify-self-end text-2xl">{right}</span>
+      <span className="grid size-11 place-items-center justify-self-end text-slate-100">{right ?? <AppIcon className="size-5" name="star" />}</span>
     </header>
   );
 }
