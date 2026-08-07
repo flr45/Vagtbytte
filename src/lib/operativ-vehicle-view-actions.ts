@@ -181,6 +181,35 @@ export async function updateOperationalVehicleViewHotspotAction(formData: FormDa
   revalidateVehicle(parsed.data.vehicleId);
 }
 
+export async function moveOperationalVehicleViewHotspotAction(formData: FormData) {
+  await requireRole(UserRole.ADMIN);
+  const parsed = z.object({
+    hotspotId: uuidSchema,
+    vehicleId: uuidSchema,
+    viewKey: viewKeySchema,
+    xPercent: percentSchema,
+    yPercent: percentSchema
+  }).safeParse({
+    hotspotId: formData.get("hotspotId"),
+    vehicleId: formData.get("vehicleId"),
+    viewKey: formData.get("viewKey"),
+    xPercent: formData.get("xPercent"),
+    yPercent: formData.get("yPercent")
+  });
+  if (!parsed.success) return { ok: false as const, error: "Ugyldig placering." };
+
+  const changed = await prisma.$executeRaw`
+    UPDATE operational_hotspot
+    SET x_percent = ${parsed.data.xPercent}, y_percent = ${parsed.data.yPercent}, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ${parsed.data.hotspotId}
+      AND vehicle_id = ${parsed.data.vehicleId}
+      AND view_key = ${parsed.data.viewKey}
+  `;
+  if (!changed) return { ok: false as const, error: "Pluspunktet blev ikke fundet." };
+  revalidateVehicle(parsed.data.vehicleId);
+  return { ok: true as const };
+}
+
 export async function deleteOperationalVehicleViewHotspotAction(formData: FormData) {
   await requireRole(UserRole.ADMIN);
   const parsed = z.object({ hotspotId: uuidSchema, vehicleId: uuidSchema }).safeParse({

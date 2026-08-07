@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OperationalImageManager } from "@/components/OperationalImageManager";
-import { OperationalPlaceHotspotEditor } from "@/components/OperationalPlaceHotspotEditor";
 import {
   OperationalPageFrame,
   OperationalPanel,
@@ -20,8 +19,6 @@ import {
   listManagedOperationalDocuments,
   listManagedOperationalVideos
 } from "@/lib/operativ-portal-content";
-import { setOperationalPlaceInteractiveImageAction } from "@/lib/operativ-portal-hotspot-actions";
-import { getPlaceInteractiveData } from "@/lib/operativ-interactive";
 import {
   getOperationalPlace,
   operationalImageUrl,
@@ -41,8 +38,6 @@ export default async function OperationalPlacePage({ params }: PageProps) {
     listManagedOperationalVideos()
   ]);
   if (!place) notFound();
-  const interactive = await getPlaceInteractiveData(place.id);
-  const interactiveImageId = interactive?.interactiveImageId || interactive?.coverImageId;
   const documents = allDocuments.filter((document) => document.placeId === place.id);
   const videos = allVideos.filter((video) => video.placeId === place.id);
 
@@ -70,7 +65,7 @@ export default async function OperationalPlacePage({ params }: PageProps) {
           </p>
           <div className="mt-5 grid gap-2 sm:grid-cols-2">
             <Link className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 text-sm font-black text-white hover:bg-red-700" href={`/admin/operativ-portal/rum/${place.id}/interaktiv`}>⌗ Interaktivt overblik</Link>
-            <a className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-red-600 px-4 text-sm font-black text-red-500 hover:bg-red-600/10" href="#indhold">Se liste over indhold</a>
+            {isEditor ? <Link className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-red-600 bg-red-600/10 px-4 text-sm font-black text-red-400 hover:bg-red-600/20" href={`/admin/operativ-portal/rum/${place.id}/byg`}>✚ Åbn Indholdsbygger</Link> : <a className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-red-600 px-4 text-sm font-black text-red-500 hover:bg-red-600/10" href="#indhold">Se liste over indhold</a>}
           </div>
         </div>
       </section>
@@ -134,35 +129,16 @@ export default async function OperationalPlacePage({ params }: PageProps) {
             </form>
           </div>
 
-          <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(260px,.55fr)_minmax(0,1.45fr)]">
-            <form action={setOperationalPlaceInteractiveImageAction} className="grid content-start gap-3 rounded-lg bg-[#0d1317] p-4">
-              <input name="placeId" type="hidden" value={place.id} />
-              <input name="vehicleId" type="hidden" value={place.vehicleId} />
-              <h2 className="text-sm font-black">Interaktivt rumbillede</h2>
-              <p className="text-xs font-semibold leading-5 text-slate-500">Vælg et billede af det åbne rum. Derefter kan du placere et plus direkte på hvert værktøj.</p>
-              <select className="dark-input" defaultValue={interactive?.interactiveImageId ?? ""} name="imageId">
-                <option value="">Brug rummets forsidebillede / intet valgt</option>
-                {place.images.map((image) => <option key={image.id} value={image.id}>{image.title || image.originalName}</option>)}
-              </select>
-              <button className="app-button-primary" type="submit">Gem interaktivt rumbillede</button>
-            </form>
-
-            {interactive && interactiveImageId ? (
-              <OperationalPlaceHotspotEditor
-                hotspots={interactive.hotspots}
-                imageSrc={operationalImageUrl(interactiveImageId)}
-                items={interactive.items.map((item) => ({ id: item.id, name: item.name }))}
-                placeId={place.id}
-                vehicleId={place.vehicleId}
-              />
-            ) : (
-              <div className="rounded-lg bg-[#0d1317] p-5 text-sm font-semibold text-slate-500">Upload først et billede af rummet. Derefter kan du placere plusser på udstyret.</div>
-            )}
+          <div className="mt-4 rounded-xl border border-red-500/20 bg-[#0d1317] p-4">
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-red-400">Interaktiv opbygning</p>
+            <h2 className="mt-1 text-lg font-black">Byg rum → hylde → kasse → værktøj visuelt</h2>
+            <p className="mt-2 max-w-3xl text-xs font-semibold leading-5 text-slate-500">Indholdsbyggeren er nu det eneste sted til interaktive pluspunkter. Her kan du tage billeder direkte, oprette underområder, trække plusser og fortryde fejl.</p>
+            <Link className="mt-4 flex min-h-12 items-center justify-center rounded-lg bg-red-600 px-4 text-sm font-black text-white hover:bg-red-700" href={`/admin/operativ-portal/rum/${place.id}/byg`}>✚ Åbn Indholdsbygger</Link>
           </div>
         </details>
       ) : null}
 
-      {isEditor ? <OperationalImageManager description="Upload et oversigtsbillede af det åbne rum. Billedet kan bagefter bruges som interaktivt rumbillede." images={place.images} placeId={place.id} title={`Billeder af ${place.name}`} vehicleId={place.vehicleId} /> : null}
+      {isEditor ? <OperationalImageManager description="Upload billeder af rummet, hylder og kasser. De kan genbruges direkte i Indholdsbyggeren." images={place.images} placeId={place.id} title={`Billeder af ${place.name}`} vehicleId={place.vehicleId} /> : null}
     </OperationalPageFrame>
   );
 }
