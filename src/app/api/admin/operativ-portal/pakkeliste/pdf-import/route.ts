@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { canManageOperationalPortal, getCurrentUser } from "@/lib/auth";
-import { normalizeKey } from "@/lib/operativ-packing-list";
+import { normalizeKey, normalizePlaceKey } from "@/lib/operativ-packing-list";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
   const uniqueRows = new Map<string, z.infer<typeof rowSchema>>();
   for (const row of parsed.data.rows) {
     if (row.confidence < 0.75 && !row.confirmed) continue;
-    const key = `${normalizeKey(row.placeName)}::${normalizeKey(row.itemName)}`;
+    const key = `${normalizePlaceKey(row.placeName)}::${normalizeKey(row.itemName)}`;
     if (!uniqueRows.has(key)) uniqueRows.set(key, row);
   }
   if (uniqueRows.size === 0) {
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
     let nextPlaceSort = 0;
     for (const row of existing) {
       nextPlaceSort = Math.max(nextPlaceSort, row.placeSortOrder + 1);
-      const key = normalizeKey(row.placeName);
+      const key = normalizePlaceKey(row.placeName);
       const current = placeByKey.get(key);
       const nextItemSort = Math.max(current?.nextItemSort ?? 0, (row.itemSortOrder ?? -1) + 1);
       placeByKey.set(key, { id: row.placeId, name: row.placeName, nextItemSort });
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
     let updatedItems = 0;
 
     for (const row of uniqueRows.values()) {
-      const placeKey = normalizeKey(row.placeName);
+      const placeKey = normalizePlaceKey(row.placeName);
       let place = placeByKey.get(placeKey);
       if (!place) {
         const placeId = randomUUID();
