@@ -45,30 +45,30 @@ export function OperationalImageUploadForm({
   }
 
   return (
-    <form className="grid gap-4" onSubmit={submit} ref={formRef}>
+    <form className="grid min-w-0 gap-4 overflow-hidden" onSubmit={submit} ref={formRef}>
       <input name="vehicleId" type="hidden" value={vehicleId} />
       <input name="placeId" type="hidden" value={placeId} />
       <input name="itemId" type="hidden" value={itemId} />
-      {preview ? <img alt="Forhåndsvisning" className="aspect-video w-full rounded-xl bg-zinc-100 object-contain" src={preview} /> : null}
-      <label className="grid gap-2 text-sm font-bold text-zinc-700">
+      {preview ? <img alt="Forhåndsvisning" className="aspect-video w-full min-w-0 rounded-xl bg-[#20272c] object-contain" src={preview} /> : null}
+      <label className="grid min-w-0 gap-2 text-sm font-bold text-slate-300">
         Billede
-        <input className="focus-ring rounded-xl border border-zinc-200 bg-white p-3" accept="image/jpeg,image/png,image/webp" name="file" onChange={selectFile} required type="file" />
+        <input className="focus-ring block w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-white/10 bg-[#11171b] p-3 text-sm text-slate-300 file:mr-3 file:max-w-full file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-2 file:font-bold file:text-white" accept="image/jpeg,image/png,image/webp" name="file" onChange={selectFile} required type="file" />
       </label>
-      <label className="grid gap-2 text-sm font-bold text-zinc-700">
+      <label className="grid min-w-0 gap-2 text-sm font-bold text-slate-300">
         Titel
-        <input className="focus-ring min-h-12 rounded-xl border border-zinc-200 px-4" maxLength={180} name="title" placeholder="Fx M2 set fra venstre side" />
+        <input className="dark-input min-w-0" maxLength={180} name="title" placeholder="Fx M2 set fra venstre side" />
       </label>
-      <label className="grid gap-2 text-sm font-bold text-zinc-700">
+      <label className="grid min-w-0 gap-2 text-sm font-bold text-slate-300">
         Alternativ tekst
-        <input className="focus-ring min-h-12 rounded-xl border border-zinc-200 px-4" maxLength={300} name="altText" placeholder="Beskriv kort hvad billedet viser" />
+        <input className="dark-input min-w-0" maxLength={300} name="altText" placeholder="Beskriv kort hvad billedet viser" />
       </label>
-      <label className="flex items-center gap-3 rounded-xl bg-zinc-50 p-3 text-sm font-bold text-zinc-700">
-        <input className="size-5" name="isCover" type="checkbox" value="true" />
-        Brug som forsidebillede
+      <label className="flex min-w-0 items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-3 text-sm font-bold text-slate-300">
+        <input className="size-5 shrink-0" name="isCover" type="checkbox" value="true" />
+        <span className="min-w-0">Brug som forsidebillede</span>
       </label>
-      <p className="text-xs font-semibold text-zinc-500">JPEG, PNG eller WebP. Maks. 12 MB. Billedet kan kun åbnes med administratoradgang.</p>
-      {message ? <p className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm font-bold text-zinc-700" role="status">{message}</p> : null}
-      <button className="app-button-primary min-h-12" disabled={busy} type="submit">{busy ? "Uploader…" : "Upload billede"}</button>
+      <p className="text-xs font-semibold leading-5 text-slate-500">JPEG, PNG eller WebP. Maks. 12 MB. Billedet kan kun åbnes af brugere med adgang til Operativ Portal.</p>
+      {message ? <p className="rounded-xl border border-white/10 bg-white/5 p-3 text-sm font-bold text-slate-300" role="status">{message}</p> : null}
+      <button className="app-button-primary min-h-12 w-full" disabled={busy} type="submit">{busy ? "Uploader…" : "Upload billede"}</button>
     </form>
   );
 }
