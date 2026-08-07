@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { OperationalDocumentUploadForm } from "@/components/OperationalDocumentUploadForm";
 import { OperationalHotspotEditor } from "@/components/OperationalHotspotEditor";
 import { OperationalImageManager } from "@/components/OperationalImageManager";
+import { OperationalPackingListPdfManager } from "@/components/OperationalPackingListPdfManager";
 import { OperationalVehicleAdminEditor } from "@/components/OperationalVehicleAdminEditor";
 import {
   OperationalPageFrame,
@@ -69,9 +70,14 @@ export default async function OperationalVehiclePage({ params }: PageProps) {
             <div><h2 className="font-black text-white">Funktion</h2><p className="mt-1 text-slate-400">{vehicle.functionText || "Ingen funktionsbeskrivelse endnu."}</p></div>
           </div>
 
-          <Link className="mt-5 flex min-h-12 items-center justify-center gap-2 rounded-lg bg-[#c71019] px-4 text-sm font-black text-white shadow-lg hover:bg-red-700" href="#interaktivt">
-            <span aria-hidden="true">⌗</span> Se køretøjet interaktivt
-          </Link>
+          <div className="mt-5 grid gap-2 sm:grid-cols-2">
+            <Link className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-[#c71019] px-4 text-sm font-black text-white shadow-lg hover:bg-red-700" href="#interaktivt">
+              <span aria-hidden="true">⌗</span> Se køretøjet interaktivt
+            </Link>
+            <a className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-white/10 bg-[#151b1f] px-4 text-sm font-black text-white hover:border-red-500/40 hover:bg-[#1b2227]" href={`/api/admin/operativ-portal/pakkeliste/${vehicle.id}/pdf`}>
+              <span aria-hidden="true">PDF</span> Download pakkeliste
+            </a>
+          </div>
         </div>
       </section>
 
@@ -159,6 +165,8 @@ export default async function OperationalVehiclePage({ params }: PageProps) {
           </div>
         </details>
       ) : null}
+
+      {isEditor ? <OperationalPackingListPdfManager vehicleId={vehicle.id} vehicleName={vehicle.name} /> : null}
 
       {isEditor ? (
         <OperationalImageManager description="Upload oversigtsbilleder af køretøjet. Et af billederne kan bruges til den interaktive hotspot-visning." images={vehicle.images} title={`Billeder af ${vehicle.name}`} vehicleId={vehicle.id} />
