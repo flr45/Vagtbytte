@@ -41,26 +41,28 @@ function navigationFor(user: NonNullable<Awaited<ReturnType<typeof getCurrentUse
   return items;
 }
 
-export async function SbrFireNavigation({ active }: { active: SbrFireModule }) {
+export async function SbrFireNavigation({ active, desktop = true }: { active: SbrFireModule; desktop?: boolean }) {
   const user = await getCurrentUser();
   if (!user) return null;
   const items = navigationFor(user);
 
   return (
     <>
-      <nav aria-label="SBR Fire App" className="hidden items-center gap-1 rounded-xl border border-white/10 bg-[#0d1317] p-1.5 md:flex">
-        {items.map((item) => (
-          <Link
-            className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm font-black transition ${active === item.key ? "bg-red-600 text-white" : "text-slate-400 hover:bg-white/10 hover:text-white"}`}
-            href={item.href}
-            key={item.key}
-          >
-            <span aria-hidden="true">{item.icon}</span>
-            {item.label}
-          </Link>
-        ))}
-        <span className="ml-auto hidden rounded-lg bg-white/5 px-3 py-2 text-xs font-bold text-slate-500 lg:block">{user.name}</span>
-      </nav>
+      {desktop ? (
+        <nav aria-label="SBR Fire App" className="hidden items-center gap-1 rounded-xl border border-white/10 bg-[#0d1317] p-1.5 md:flex">
+          {items.map((item) => (
+            <Link
+              className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm font-black transition ${active === item.key ? "bg-red-600 text-white" : "text-slate-400 hover:bg-white/10 hover:text-white"}`}
+              href={item.href}
+              key={item.key}
+            >
+              <span aria-hidden="true">{item.icon}</span>
+              {item.label}
+            </Link>
+          ))}
+          <span className="ml-auto hidden rounded-lg bg-white/5 px-3 py-2 text-xs font-bold text-slate-500 lg:block">{user.name}</span>
+        </nav>
+      ) : null}
 
       <nav
         aria-label="SBR Fire mobilnavigation"
