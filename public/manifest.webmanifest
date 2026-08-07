@@ -1,0 +1,49 @@
+{
+  "name": "SBR Fire App",
+  "short_name": "SBR Fire",
+  "description": "Alarm, vagter og operativ viden samlet for Slagelse Brand og Redning",
+  "id": "/",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#070b0e",
+  "theme_color": "#b70f18",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "SBR Fire Hjem",
+      "short_name": "Hjem",
+      "url": "/app"
+    },
+    {
+      "name": "Alarmer",
+      "short_name": "Alarmer",
+      "url": "/brandmand/alarmer"
+    },
+    {
+      "name": "Vagtbytte",
+      "short_name": "Vagt",
+      "url": "/brandmand"
+    },
+    {
+      "name": "Operativ",
+      "short_name": "Operativ",
+      "url": "/admin/operativ-portal"
+    }
+  ]
+}
