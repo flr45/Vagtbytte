@@ -39,18 +39,18 @@ export async function TopBar({ title, activeModule }: TopBarProps) {
           </Link>
 
           <nav aria-label="Hovednavigation" className="hidden min-w-0 flex-wrap items-center justify-end gap-2 sm:flex">
-            {user ? <Link className="min-h-10 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm font-black text-white hover:bg-white/15" href="/app">Hjem</Link> : null}
-            {user?.role === "BRANDFIGHTER" ? <Link className="min-h-10 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm font-black text-white hover:bg-white/15" href="/brandmand/alarmer">🚨 Alarmer</Link> : null}
-            {hasOperationalAccess ? <Link className="min-h-10 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm font-black text-white hover:bg-white/15" href="/admin/operativ-portal">🚒 Operativ</Link> : null}
-            {hasAdminAccess && user?.role !== "ADMIN" ? <Link className="min-h-10 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm font-black text-white hover:bg-white/15" href="/admin">Admin</Link> : null}
+            {user ? <Link className="min-h-11 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm font-black text-white hover:bg-white/15" href="/app">Hjem</Link> : null}
+            {user?.role === "BRANDFIGHTER" ? <Link className="min-h-11 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm font-black text-white hover:bg-white/15" href="/brandmand/alarmer">🚨 Alarmer</Link> : null}
+            {hasOperationalAccess ? <Link className="min-h-11 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm font-black text-white hover:bg-white/15" href="/admin/operativ-portal">🚒 Operativ</Link> : null}
+            {hasAdminAccess && user?.role !== "ADMIN" ? <Link className="min-h-11 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm font-black text-white hover:bg-white/15" href="/admin">Admin</Link> : null}
             {user?.role !== "ADMIN" ? (
-              <Link aria-label={unreadCount > 0 ? `Notifikationer, ${unreadCount} ulæste` : "Notifikationer"} className="relative grid min-h-10 min-w-10 place-items-center rounded-lg border border-white/15 bg-white/10 px-3 text-white hover:bg-white/15" href={notificationPath}>
+              <Link aria-label={unreadCount > 0 ? `Notifikationer, ${unreadCount} ulæste` : "Notifikationer"} className="relative grid min-h-11 min-w-11 place-items-center rounded-lg border border-white/15 bg-white/10 px-3 text-white hover:bg-white/15" href={notificationPath}>
                 <BellIcon className="size-4" />
                 {unreadCount > 0 ? <span className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-white px-1 text-[10px] font-black text-red-700">{unreadCount > 99 ? "99+" : unreadCount}</span> : null}
               </Link>
             ) : null}
             <form action={logoutAction}>
-              <button className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 text-sm font-black text-white hover:bg-white/15" type="submit"><LogOutIcon className="size-4" />Log ud</button>
+              <button className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 text-sm font-black text-white hover:bg-white/15" type="submit"><LogOutIcon className="size-4" />Log ud</button>
             </form>
           </nav>
 
