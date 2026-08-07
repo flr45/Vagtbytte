@@ -40,7 +40,7 @@ export default async function SbrFireMorePage() {
 
       <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#0d1317] shadow-xl">
         <MenuLink description="Navn, e-mail og adgangskode" href="/app/profil" icon="user" title="Mine oplysninger" />
-        <MenuLink description={unreadCount ? `${unreadCount} ulæste` : "Se beskeder og hændelser"} href={notificationPath} icon="bell" title="Notifikationer" />
+        {user.role !== "ADMIN" ? <MenuLink description={unreadCount ? `${unreadCount} ulæste` : "Se beskeder og hændelser"} href={notificationPath} icon="bell" title="Notifikationer" /> : null}
         {hasOperationalAccess ? <MenuLink description="Køretøjer, søgning, QR og favoritter" href="/admin/operativ-portal" icon="truck" title="Operativ" /> : null}
         {hasAdminAccess ? <MenuLink description="Brugere, alarmer, system og opsætning" href="/admin" icon="settings" title="Administration" /> : null}
         {user.role === "VC" ? <MenuLink description="Tidligere vagtsager og hændelser" href="/vagtcentral/historik" icon="history" title="Historik" /> : null}
