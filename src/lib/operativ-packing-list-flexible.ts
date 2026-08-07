@@ -115,9 +115,9 @@ function isPackingListNoise(value: string) {
   if (/^\d{1,3}$/.test(line)) return true;
   if (/^antal\s+ben[æe]vnelse$/i.test(line)) return true;
   if (/^side\s+\d+(?:\s+af\s+\d+)?$/i.test(line)) return true;
-  if (/^slagelse\s+brand\s+og\s+redning$/i.test(line)) return true;
-  if (/^station\s+slagelse$/i.test(line)) return true;
-  if (/^pakningsliste\s+for\s+automobilsprøjte$/i.test(line)) return true;
+  if (/^slagelse\s+brand\s+og\s+redning(?:\s|$)/i.test(line)) return true;
+  if (/^station\s+slagelse(?:\s|$)/i.test(line)) return true;
+  if (/^pakningsliste\s+for\s+automobilsprøjte(?:\s|$)/i.test(line)) return true;
   if (/^m2$/i.test(line)) return true;
   if (/^dato\s*:/i.test(line)) return true;
   if (/^digitaliseret(?:,|\s)/i.test(line)) return true;
