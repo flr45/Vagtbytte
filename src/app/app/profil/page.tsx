@@ -1,11 +1,13 @@
 import { SbrFirePageFrame } from "@/components/SbrFireApp";
 import { ProfileSettingsForms } from "@/components/ProfileSettingsForms";
 import { requireUser } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 export default async function SbrFireProfilePage() {
   const user = await requireUser();
+  const account = await prisma.user.findUnique({ where: { id: user.id }, select: { email: true } });
 
   return (
     <SbrFirePageFrame active="more" backHref="/app/mere" title="Profil">
@@ -18,7 +20,7 @@ export default async function SbrFireProfilePage() {
         </div>
       </section>
 
-      <ProfileSettingsForms name={user.name} email={user.email} />
+      <ProfileSettingsForms name={user.name} email={account?.email ?? null} />
     </SbrFirePageFrame>
   );
 }
