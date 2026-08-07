@@ -92,13 +92,16 @@ export default async function OperationalPortalPage() {
             <Link className="text-xs font-bold text-red-500" href="/admin/operativ-portal/koeretoejer">Alle køretøjer</Link>
           </div>
           <div className="grid gap-2 md:grid-cols-2">
-            {vehicles.slice(0, 4).map((vehicle) => (
-              <Link className="grid grid-cols-[74px_minmax(0,1fr)_18px] items-center gap-3 rounded-lg bg-[#12191e] p-2 hover:bg-[#172026]" href={`/admin/operativ-portal/koeretoejer/${vehicle.id}`} key={vehicle.id}>
-                {vehicle.coverImageId ? <img alt={vehicle.name} className="h-14 w-[74px] rounded-md object-cover" src={operationalImageUrl(vehicle.coverImageId)} /> : <div className="grid h-14 w-[74px] place-items-center rounded-md bg-[#20272c] text-xs font-black text-slate-500">{vehicleCode(vehicle.name)}</div>}
-                <span className="min-w-0"><strong className="block truncate text-sm">{vehicle.name}</strong><small className="mt-1 block truncate text-xs text-slate-500">{vehicle.placeCount} rum · {vehicle.itemCount} udstyr</small></span>
-                <span className="text-xl text-slate-500">›</span>
-              </Link>
-            ))}
+            {vehicles.slice(0, 4).map((vehicle) => {
+              const code = vehicle.code || vehicleCode(vehicle.name);
+              return (
+                <Link className="grid grid-cols-[74px_minmax(0,1fr)_18px] items-center gap-3 rounded-lg bg-[#12191e] p-2 hover:bg-[#172026]" href={`/admin/operativ-portal/koeretoejer/${vehicle.id}`} key={vehicle.id}>
+                  {vehicle.coverImageId ? <img alt={vehicle.name} className="h-14 w-[74px] rounded-md object-cover" src={operationalImageUrl(vehicle.coverImageId)} /> : <div className="grid h-14 w-[74px] place-items-center rounded-md bg-[#20272c] text-xs font-black text-slate-500">{code}</div>}
+                  <span className="min-w-0"><strong className="block truncate text-sm">{vehicle.name}</strong><small className="mt-1 block truncate text-xs text-slate-500">{vehicle.model || `${vehicle.placeCount} rum · ${vehicle.itemCount} udstyr`}</small><span className="mt-1 inline-flex rounded bg-red-600 px-1.5 py-0.5 text-[8px] font-black text-white">{code}</span></span>
+                  <span className="text-xl text-slate-500">›</span>
+                </Link>
+              );
+            })}
           </div>
         </section>
       ) : null}
