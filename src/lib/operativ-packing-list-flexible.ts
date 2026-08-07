@@ -53,9 +53,7 @@ function isPlaceHeading(lines: string[], index: number, line: string) {
 function nextMeaningfulLine(lines: string[], start: number) {
   for (let index = start; index < lines.length; index += 1) {
     const line = clean(lines[index] ?? "");
-    if (!line) continue;
-    if (/^\f+$/.test(line)) continue;
-    return line;
+    if (line) return line;
   }
   return "";
 }
@@ -64,35 +62,7 @@ function looksLikeKnownPlace(value: string) {
   const line = clean(value);
   if (!line || line.length > 90) return false;
 
-  return /^(?:
-    h\s*\d{1,2}|
-    v\s*\d{1,2}|
-    rum\s*\d{1,2}(?:\s*[-–].+)?|
-    skab\s*\d{1,2}(?:\s*[-–].+)?|
-    førerhus(?:\s*[-–]\s*handskerum)?|
-    førerkabine|
-    mandskabskabine(?:\s*\(.+\))?|
-    hylde\s*system(?:\s*\(.+\))?|
-    hyldesystem(?:\s*\(.+\))?|
-    bagvæg|
-    under\s+sæder|
-    under\s+(?:højre|venstre)\s+trinbræt|
-    på\s+taget|
-    tag|
-    (?:højre|venstre|venstreside)\s*(?:side\s*)?(?:forreste|midterste|bagerste)\s+rum(?:\s*\(.+\))?|
-    udtrækshylde|
-    pumpehuset|
-    pumpe\s*panel|
-    pumpepanel|
-    faldsikringsudstyr(?:\s*\(.+\))?|
-    brandsårs\s+kit|
-    førstehjælpstaske(?:\s*\(lille\))?|
-    skorstensudstyr|
-    værktøjskuffert|
-    kabine|
-    front|
-    bagende
-  )$/ix.test(line);
+  return /^(?:h\s*\d{1,2}|v\s*\d{1,2}|rum\s*\d{1,2}(?:\s*[-–].+)?|skab\s*\d{1,2}(?:\s*[-–].+)?|førerhus(?:\s*[-–]\s*handskerum)?|førerkabine|mandskabskabine(?:\s*\(.+\))?|hylde\s*system(?:\s*\(.+\))?|hyldesystem(?:\s*\(.+\))?|bagvæg|under\s+sæder|under\s+(?:højre|venstre)\s+trinbræt|på\s+taget|tag|(?:højre|venstre|venstreside)\s*(?:side\s*)?(?:forreste|midterste|bagerste)\s+rum(?:\s*\(.+\))?|udtrækshylde|pumpehuset|pumpe\s*panel|pumpepanel|faldsikringsudstyr(?:\s*\(.+\))?|brandsårs\s+kit|førstehjælpstaske(?:\s*\(lille\))?|skorstensudstyr|værktøjskuffert|kabine|front|bagende)$/i.test(line);
 }
 
 function parseItem(value: string) {
