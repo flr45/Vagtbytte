@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateOperationalVehicleAction } from "@/lib/operativ-portal-actions";
@@ -59,7 +60,10 @@ export function OperationalVehicleAdminEditor({ vehicle }: { vehicle: VehicleDra
       onSubmit={submit}
     >
       <input name="vehicleId" type="hidden" value={vehicle.id} />
-      <h2 className="text-sm font-black">Køretøjsoplysninger</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-black">Køretøjsoplysninger</h2>
+        <Link className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-[10px] font-black text-red-300" href={`/admin/operativ-portal/koeretoejer/${vehicle.id}/administration`}>⚙ Organisér rum & udstyr</Link>
+      </div>
       <p className="text-xs font-semibold text-slate-500">Klik i et felt og skriv. Ændringer gemmes først, når du trykker på Gem køretøj.</p>
 
       <div className="grid min-w-0 gap-3 sm:grid-cols-2">
