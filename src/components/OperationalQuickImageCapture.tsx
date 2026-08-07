@@ -21,25 +21,39 @@ type VehicleViewTarget = {
 };
 
 type Props = ContextTarget | VehicleViewTarget;
+type CropMode = "original" | "4:3" | "1:1";
 
-async function rotatedFile(file: File, rotation: number): Promise<File> {
+function cropRect(width: number, height: number, mode: CropMode) {
+  if (mode === "original") return { sx: 0, sy: 0, sw: width, sh: height };
+  const ratio = mode === "4:3" ? 4 / 3 : 1;
+  const current = width / height;
+  if (current > ratio) {
+    const sw = height * ratio;
+    return { sx: (width - sw) / 2, sy: 0, sw, sh: height };
+  }
+  const sh = width / ratio;
+  return { sx: 0, sy: (height - sh) / 2, sw: width, sh };
+}
+
+async function preparedFile(file: File, rotation: number, cropMode: CropMode): Promise<File> {
   const normalized = ((rotation % 360) + 360) % 360;
-  if (!normalized) return file;
+  if (!normalized && cropMode === "original") return file;
 
   const url = URL.createObjectURL(file);
   try {
     const image = new Image();
     image.src = url;
     await image.decode();
+    const { sx, sy, sw, sh } = cropRect(image.naturalWidth, image.naturalHeight, cropMode);
     const swap = normalized === 90 || normalized === 270;
     const canvas = document.createElement("canvas");
-    canvas.width = swap ? image.naturalHeight : image.naturalWidth;
-    canvas.height = swap ? image.naturalWidth : image.naturalHeight;
+    canvas.width = Math.max(1, Math.round(swap ? sh : sw));
+    canvas.height = Math.max(1, Math.round(swap ? sw : sh));
     const ctx = canvas.getContext("2d");
     if (!ctx) return file;
     ctx.translate(canvas.width / 2, canvas.height / 2);
     ctx.rotate((normalized * Math.PI) / 180);
-    ctx.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2);
+    ctx.drawImage(image, sx, sy, sw, sh, -sw / 2, -sh / 2, sw, sh);
     const mime = file.type === "image/png" || file.type === "image/webp" ? file.type : "image/jpeg";
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, mime, 0.94));
     return blob ? new File([blob], file.name, { type: mime, lastModified: Date.now() }) : file;
@@ -51,6 +65,7 @@ async function rotatedFile(file: File, rotation: number): Promise<File> {
 export function OperationalQuickImageCapture(props: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [rotation, setRotation] = useState(0);
+  const [cropMode, setCropMode] = useState<CropMode>("original");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const previewUrl = useMemo(() => file ? URL.createObjectURL(file) : "", [file]);
@@ -60,6 +75,7 @@ export function OperationalQuickImageCapture(props: Props) {
   function select(next: File | undefined) {
     setFile(next ?? null);
     setRotation(0);
+    setCropMode("original");
     setMessage("");
   }
 
@@ -68,7 +84,7 @@ export function OperationalQuickImageCapture(props: Props) {
     setBusy(true);
     setMessage("");
     try {
-      const prepared = await rotatedFile(file, rotation);
+      const prepared = await preparedFile(file, rotation, cropMode);
       const form = new FormData();
       form.set("file", prepared);
       form.set("vehicleId", props.vehicleId);
@@ -100,17 +116,30 @@ export function OperationalQuickImageCapture(props: Props) {
     }
   }
 
+  const previewAspect = cropMode === "4:3" ? "4 / 3" : cropMode === "1:1" ? "1 / 1" : undefined;
+
   return (
     <div className="grid gap-3 rounded-xl border border-white/10 bg-[#11191e] p-3">
       <div className="flex items-center justify-between gap-2">
         <div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-red-400">Hurtigt billede</p><strong className="text-sm text-white">{props.label}</strong></div>
         {file ? <button className="rounded-lg border border-white/10 px-3 py-2 text-xs font-black text-white" onClick={() => setRotation((value) => (value + 90) % 360)} type="button">↻ Rotér</button> : null}
       </div>
+
       {file && previewUrl ? (
-        <div className="grid min-h-44 place-items-center overflow-hidden rounded-lg bg-black">
-          <img alt="Forhåndsvisning" className="max-h-72 max-w-full object-contain transition-transform" src={previewUrl} style={{ transform: `rotate(${rotation}deg)` }} />
+        <div className="grid min-h-44 place-items-center overflow-hidden rounded-lg bg-black" style={{ aspectRatio: previewAspect }}>
+          <img alt="Forhåndsvisning" className={`max-h-72 max-w-full transition-transform ${cropMode === "original" ? "object-contain" : "h-full w-full object-cover"}`} src={previewUrl} style={{ transform: `rotate(${rotation}deg)` }} />
         </div>
       ) : null}
+
+      {file ? (
+        <div className="grid gap-2 sm:grid-cols-[auto_1fr] sm:items-center">
+          <span className="text-[10px] font-black uppercase tracking-wide text-slate-500">Beskær</span>
+          <div className="grid grid-cols-3 gap-1.5">
+            {(["original", "4:3", "1:1"] as CropMode[]).map((mode) => <button className={`rounded-lg border px-2 py-2 text-[10px] font-black ${cropMode === mode ? "border-red-400 bg-red-600 text-white" : "border-white/10 bg-white/5 text-slate-300"}`} key={mode} onClick={() => setCropMode(mode)} type="button">{mode === "original" ? "Original" : mode}</button>)}
+          </div>
+        </div>
+      ) : null}
+
       <div className="grid gap-2 sm:grid-cols-2">
         <label className="flex min-h-12 cursor-pointer items-center justify-center rounded-lg bg-red-600 px-3 text-center text-xs font-black text-white hover:bg-red-700">
           📷 Tag foto
@@ -123,7 +152,7 @@ export function OperationalQuickImageCapture(props: Props) {
       </div>
       {file ? <button className="app-button-primary min-h-11" disabled={busy} onClick={upload} type="button">{busy ? "Gemmer…" : "Brug billedet her"}</button> : null}
       {message ? <p className="text-xs font-bold text-slate-300" role="status">{message}</p> : null}
-      <p className="text-[10px] font-semibold leading-4 text-slate-500">JPEG, PNG eller WebP · maks. 12 MB. Kameraet åbnes direkte på mobil, når browseren understøtter det.</p>
+      <p className="text-[10px] font-semibold leading-4 text-slate-500">JPEG, PNG eller WebP · maks. 12 MB. Rotation og beskæring sker lokalt på enheden før upload.</p>
     </div>
   );
 }
