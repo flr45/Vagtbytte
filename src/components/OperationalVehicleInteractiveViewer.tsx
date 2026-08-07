@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { operationalImageUrl } from "@/lib/operativ-portal";
+import { operationalImageUrl } from "@/lib/operativ-client";
 import type {
   OperationalVehicleView,
   OperationalVehicleViewHotspot,
   OperationalVehicleViewKey
-} from "@/lib/operativ-vehicle-views";
+} from "@/lib/operativ-vehicle-view-model";
 
 const groundOrder: OperationalVehicleViewKey[] = ["front", "right", "rear", "left"];
 
