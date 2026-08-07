@@ -1,18 +1,17 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 
-const links = [
-  { href: "/admin/operativ-portal", label: "Hjem", icon: "⌂" },
-  { href: "/admin/operativ-portal/koeretoejer", label: "Køretøjer", icon: "🚒" },
-  { href: "/admin/operativ-portal/videoer", label: "Video", icon: "▶" },
-  { href: "/admin/operativ-portal/dokumenter", label: "Viden", icon: "▤" },
-  { href: "/admin/operativ-portal/soeg", label: "Søg", icon: "⌕" }
+const bottomLinks = [
+  { href: "/admin/operativ-portal", label: "Forside", icon: "⌂" },
+  { href: "/admin/operativ-portal/koeretoejer", label: "Favoritter", icon: "☆" },
+  { href: "/admin/operativ-portal/soeg", label: "Søg", icon: "⌕" },
+  { href: "/", label: "Profil", icon: "♙" }
 ];
 
 export function OperationalPageFrame({ children }: { children: ReactNode }) {
   return (
-    <main className="min-h-[calc(100vh-4rem)] bg-[radial-gradient(circle_at_top,#17253b_0,#08111f_38%,#050a12_100%)] pb-28 text-white md:pb-10">
-      <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-5 sm:px-6 sm:py-7">
+    <main className="min-h-[calc(100vh-4rem)] bg-[#070b0e] pb-24 text-white md:pb-10">
+      <div className="mx-auto grid w-full max-w-5xl gap-4 px-3 py-3 sm:px-5 sm:py-5">
         {children}
       </div>
     </main>
@@ -22,42 +21,21 @@ export function OperationalPageFrame({ children }: { children: ReactNode }) {
 export function OperationalPortalNav({ isEditor = false }: { isEditor?: boolean }) {
   return (
     <>
-      <nav
-        aria-label="Operativ Portal"
-        className="hidden items-center gap-2 rounded-2xl border border-white/10 bg-[#101b2c]/95 p-2 shadow-xl backdrop-blur md:flex"
-      >
-        {links.map((link) => (
-          <Link
-            className="focus-ring flex min-h-12 items-center gap-2 rounded-xl px-4 text-sm font-black text-slate-200 transition hover:bg-white/10 hover:text-white"
-            href={link.href}
-            key={link.href}
-          >
-            <span aria-hidden="true" className="text-lg">{link.icon}</span>
-            {link.label}
-          </Link>
-        ))}
-        {isEditor ? (
-          <span className="ml-auto rounded-full border border-red-300/30 bg-red-500/15 px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-red-200">
-            Redigering aktiv
-          </span>
-        ) : (
-          <span className="ml-auto rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-emerald-200">
-            Læseadgang
-          </span>
-        )}
+      <nav aria-label="Operativ Portal" className="hidden items-center gap-1 rounded-xl border border-white/10 bg-[#0d1317] p-1.5 md:flex">
+        <Link className="operativ-nav-link" href="/admin/operativ-portal">Forside</Link>
+        <Link className="operativ-nav-link" href="/admin/operativ-portal/koeretoejer">Køretøjer</Link>
+        <Link className="operativ-nav-link" href="/admin/operativ-portal/videoer">Videoakademi</Link>
+        <Link className="operativ-nav-link" href="/admin/operativ-portal/dokumenter">Videnbank</Link>
+        <Link className="operativ-nav-link" href="/admin/operativ-portal/soeg">Søg</Link>
+        <span className="ml-auto rounded-md bg-[#171d21] px-2.5 py-2 text-[10px] font-black uppercase tracking-[0.13em] text-slate-400">
+          {isEditor ? "Admin" : "Læseadgang"}
+        </span>
       </nav>
 
-      <nav
-        aria-label="Operativ mobilnavigation"
-        className="fixed inset-x-3 bottom-[max(.75rem,env(safe-area-inset-bottom))] z-50 grid grid-cols-5 overflow-hidden rounded-2xl border border-white/10 bg-[#0c1626]/95 p-1.5 shadow-2xl backdrop-blur md:hidden"
-      >
-        {links.map((link) => (
-          <Link
-            className="focus-ring grid min-h-14 place-items-center gap-0.5 rounded-xl px-1 py-1 text-center text-[10px] font-black text-slate-300 hover:bg-white/10 hover:text-white"
-            href={link.href}
-            key={link.href}
-          >
-            <span aria-hidden="true" className="text-xl leading-none">{link.icon}</span>
+      <nav aria-label="Operativ mobilnavigation" className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-4 border-t border-white/10 bg-[#090e11]/98 pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_32px_rgba(0,0,0,.4)] backdrop-blur md:hidden">
+        {bottomLinks.map((link, index) => (
+          <Link className={`grid min-h-16 place-items-center gap-0.5 px-1 py-2 text-center text-[10px] font-bold ${index === 0 ? "text-red-500" : "text-slate-400"}`} href={link.href} key={link.label}>
+            <span aria-hidden="true" className="text-[22px] leading-none">{link.icon}</span>
             <span>{link.label}</span>
           </Link>
         ))}
@@ -66,11 +44,35 @@ export function OperationalPortalNav({ isEditor = false }: { isEditor?: boolean 
   );
 }
 
+export function OperationalScreenHeader({
+  title,
+  backHref,
+  right = "☆"
+}: {
+  title: string;
+  backHref?: string;
+  right?: string;
+}) {
+  return (
+    <header className="sticky top-0 z-30 -mx-3 -mt-3 grid min-h-14 grid-cols-[52px_minmax(0,1fr)_52px] items-center border-b border-red-950 bg-[#b70f18] px-2 text-white shadow-lg sm:-mx-5 sm:-mt-5">
+      <div>
+        {backHref ? (
+          <Link aria-label="Tilbage" className="grid size-11 place-items-center text-3xl font-light" href={backHref}>‹</Link>
+        ) : (
+          <Link aria-label="Menu" className="grid size-11 place-items-center text-xl" href="/">☰</Link>
+        )}
+      </div>
+      <h1 className="truncate text-center text-base font-bold sm:text-lg">{title}</h1>
+      <span aria-hidden="true" className="grid size-11 place-items-center justify-self-end text-2xl">{right}</span>
+    </header>
+  );
+}
+
 export function OperationalPortalHeader({
   title,
   description,
   isEditor = false,
-  eyebrow = "Station Slagelse"
+  eyebrow = "Slagelse Brand og Redning"
 }: {
   title: string;
   description: string;
@@ -78,38 +80,29 @@ export function OperationalPortalHeader({
   eyebrow?: string;
 }) {
   return (
-    <section className="relative overflow-hidden rounded-[1.75rem] border border-red-400/20 bg-gradient-to-br from-[#c71924] via-[#9d111a] to-[#51070d] p-6 shadow-2xl sm:p-8">
-      <div className="absolute -right-16 -top-20 size-64 rounded-full bg-white/10 blur-2xl" />
-      <div className="absolute -bottom-24 left-1/3 size-56 rounded-full bg-black/20 blur-3xl" />
-      <div className="relative grid gap-5 sm:grid-cols-[72px_minmax(0,1fr)_auto] sm:items-center">
-        <div className="grid size-16 place-items-center rounded-2xl border border-white/20 bg-black/20 text-xl font-black tracking-tight shadow-inner sm:size-[72px]">
-          SBR
-        </div>
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-red-100/80">{eyebrow}</p>
-          <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-5xl">{title}</h1>
-          <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-red-50/85 sm:text-base">
-            {description}
-          </p>
-        </div>
-        <span className="w-fit rounded-full border border-white/20 bg-black/20 px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-white">
-          {isEditor ? "Administrator" : "Operativ adgang"}
-        </span>
-      </div>
+    <section className="rounded-xl border border-white/10 bg-[#0d1317] p-5 shadow-xl">
+      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-500">{eyebrow}</p>
+      <h1 className="mt-2 text-3xl font-black tracking-tight">{title}</h1>
+      <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-slate-400">{description}</p>
+      {isEditor ? <span className="mt-3 inline-flex rounded bg-red-600/15 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-red-400">Administrator</span> : null}
     </section>
   );
 }
 
-export function OperationalPanel({
-  children,
-  className = ""
+export function OperationalPanel({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return <section className={`rounded-xl border border-white/10 bg-[#0d1317] p-4 shadow-lg ${className}`}>{children}</section>;
+}
+
+export function OperationalTabs({
+  items
 }: {
-  children: ReactNode;
-  className?: string;
+  items: Array<{ href: string; label: string; active?: boolean }>;
 }) {
   return (
-    <section className={`rounded-[1.5rem] border border-white/10 bg-[#101b2c]/90 p-5 shadow-xl ${className}`}>
-      {children}
-    </section>
+    <nav className="flex overflow-x-auto border-b border-white/10 bg-[#0a0f12] px-1">
+      {items.map((item) => (
+        <a className={`whitespace-nowrap border-b-2 px-3 py-3 text-xs font-bold ${item.active ? "border-red-500 text-red-500" : "border-transparent text-slate-400"}`} href={item.href} key={item.label}>{item.label}</a>
+      ))}
+    </nav>
   );
 }
