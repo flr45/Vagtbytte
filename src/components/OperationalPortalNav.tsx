@@ -2,17 +2,11 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { OperationalContextTools } from "@/components/OperationalEntityTools";
 import { OperationalPwaManager } from "@/components/OperationalPwaManager";
-
-const bottomLinks = [
-  { href: "/admin/operativ-portal", label: "Forside", icon: "⌂" },
-  { href: "/admin/operativ-portal/favoritter", label: "Favoritter", icon: "☆" },
-  { href: "/admin/operativ-portal/soeg", label: "Søg", icon: "⌕" },
-  { href: "/", label: "Profil", icon: "♙" }
-];
+import { SbrFireNavigation } from "@/components/SbrFireApp";
 
 export function OperationalPageFrame({ children }: { children: ReactNode }) {
   return (
-    <main className="min-h-[calc(100vh-4rem)] bg-[#070b0e] pb-24 text-white md:pb-10">
+    <main className="sbr-fire-skin min-h-[calc(100vh-4rem)] bg-[#070b0e] pb-24 text-white md:pb-10">
       <div className="mx-auto grid w-full max-w-5xl gap-4 px-3 py-3 sm:px-5 sm:py-5">
         {children}
       </div>
@@ -32,19 +26,12 @@ export function OperationalPortalNav({ isEditor = false }: { isEditor?: boolean 
         <Link className="operativ-nav-link" href="/admin/operativ-portal/videoer">Videoakademi</Link>
         <Link className="operativ-nav-link" href="/admin/operativ-portal/dokumenter">Videnbank</Link>
         <Link className="operativ-nav-link" href="/admin/operativ-portal/soeg">Søg</Link>
-        <span className="ml-auto rounded-md bg-[#171d21] px-2.5 py-2 text-[10px] font-black uppercase tracking-[0.13em] text-slate-400">
+        <Link className="operativ-nav-link ml-auto" href="/app">SBR Fire App</Link>
+        <span className="rounded-md bg-[#171d21] px-2.5 py-2 text-[10px] font-black uppercase tracking-[0.13em] text-slate-400">
           {isEditor ? "Admin" : "Læseadgang"}
         </span>
       </nav>
-
-      <nav aria-label="Operativ mobilnavigation" className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-4 border-t border-white/10 bg-[#090e11]/98 pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_32px_rgba(0,0,0,.4)] backdrop-blur md:hidden">
-        {bottomLinks.map((link, index) => (
-          <Link className={`grid min-h-16 place-items-center gap-0.5 px-1 py-2 text-center text-[10px] font-bold ${index === 0 ? "text-red-500" : "text-slate-400"}`} href={link.href} key={link.label}>
-            <span aria-hidden="true" className="text-[22px] leading-none">{link.icon}</span>
-            <span>{link.label}</span>
-          </Link>
-        ))}
-      </nav>
+      <SbrFireNavigation active="operativ" desktop={false} />
     </>
   );
 }
@@ -64,7 +51,7 @@ export function OperationalScreenHeader({
         {backHref ? (
           <Link aria-label="Tilbage" className="grid size-11 place-items-center text-3xl font-light" href={backHref}>‹</Link>
         ) : (
-          <Link aria-label="Menu" className="grid size-11 place-items-center text-xl" href="/">☰</Link>
+          <Link aria-label="SBR Fire App" className="grid size-11 place-items-center text-xl" href="/app">☰</Link>
         )}
       </div>
       <h1 className="truncate text-center text-base font-bold sm:text-lg">{title}</h1>

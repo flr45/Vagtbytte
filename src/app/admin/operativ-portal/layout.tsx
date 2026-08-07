@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "SBR Fire App",
+  title: "SBR Fire App · Operativ",
   description: "Operativ køretøjs-, rum- og udstyrsguide for Slagelse Brand og Redning",
-  manifest: "/operativ-manifest.webmanifest",
+  manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "SBR Fire App",
+    title: "SBR Fire",
     statusBarStyle: "black-translucent"
   },
   icons: {

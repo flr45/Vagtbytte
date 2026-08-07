@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getCurrentUser, roleHome } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 
 export default async function HomePage() {
   const user = await getCurrentUser();
@@ -9,5 +9,5 @@ export default async function HomePage() {
   if (user.mustChangePassword) {
     redirect("/skift-adgangskode");
   }
-  redirect(roleHome[user.role]);
+  redirect("/app");
 }
