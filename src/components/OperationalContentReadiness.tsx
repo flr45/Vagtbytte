@@ -1,6 +1,9 @@
 import Link from "next/link";
 import type { OperationalContentReadiness } from "@/lib/operativ-content-builder";
 
+const chipClass = "rounded-md border border-white/10 bg-black/20 px-2 py-1 text-[10px] font-bold text-slate-400";
+const linkChipClass = `${chipClass} transition hover:border-red-500/40 hover:text-white`;
+
 export function OperationalContentReadinessPanel({ data }: { data: OperationalContentReadiness }) {
   const issueCount = data.missingVehicleViews.length
     + data.roomsMissingImage.length
@@ -26,12 +29,12 @@ export function OperationalContentReadinessPanel({ data }: { data: OperationalCo
 
       {!ready ? (
         <div className="mt-4 grid gap-3 lg:grid-cols-2">
-          {data.missingVehicleViews.length ? <Issue title="Køretøjsvisninger" count={data.missingVehicleViews.length}>{data.missingVehicleViews.map((name) => <span className="chip" key={name}>{name}</span>)}</Issue> : null}
-          {data.roomsMissingImage.length ? <Issue title="Rum uden interaktivt billede" count={data.roomsMissingImage.length}>{data.roomsMissingImage.map((room) => <Link className="chip hover:border-red-500/40 hover:text-white" href={`/admin/operativ-portal/rum/${room.id}/byg`} key={room.id}>{room.name}</Link>)}</Issue> : null}
-          {data.roomsMissingInteractiveLinks.length ? <Issue title="Rum uden pluspunkter" count={data.roomsMissingInteractiveLinks.length}>{data.roomsMissingInteractiveLinks.map((room) => <Link className="chip hover:border-red-500/40 hover:text-white" href={`/admin/operativ-portal/rum/${room.id}/byg`} key={room.id}>{room.name}</Link>)}</Issue> : null}
-          {data.itemsMissingImage.length ? <Issue title="Værktøj uden billede" count={data.itemsMissingImage.length}>{data.itemsMissingImage.slice(0, 18).map((item) => <Link className="chip hover:border-red-500/40 hover:text-white" href={`/admin/operativ-portal/udstyr/${item.id}`} key={item.id}>{item.placeName} · {item.name}</Link>)}</Issue> : null}
-          {data.nodesMissingImage.length ? <Issue title="Underområder uden billede" count={data.nodesMissingImage.length}>{data.nodesMissingImage.map((node) => <Link className="chip hover:border-red-500/40 hover:text-white" href={`/admin/operativ-portal/rum/${node.placeId}/byg?node=${node.id}`} key={node.id}>{node.placeName} · {node.name}</Link>)}</Issue> : null}
-          {data.nodesMissingLinks.length ? <Issue title="Underområder uden næste trin" count={data.nodesMissingLinks.length}>{data.nodesMissingLinks.map((node) => <Link className="chip hover:border-red-500/40 hover:text-white" href={`/admin/operativ-portal/rum/${node.placeId}/byg?node=${node.id}`} key={node.id}>{node.placeName} · {node.name}</Link>)}</Issue> : null}
+          {data.missingVehicleViews.length ? <Issue count={data.missingVehicleViews.length} title="Køretøjsvisninger">{data.missingVehicleViews.map((name) => <span className={chipClass} key={name}>{name}</span>)}</Issue> : null}
+          {data.roomsMissingImage.length ? <Issue count={data.roomsMissingImage.length} title="Rum uden interaktivt billede">{data.roomsMissingImage.map((room) => <Link className={linkChipClass} href={`/admin/operativ-portal/rum/${room.id}/byg`} key={room.id}>{room.name}</Link>)}</Issue> : null}
+          {data.roomsMissingInteractiveLinks.length ? <Issue count={data.roomsMissingInteractiveLinks.length} title="Rum uden pluspunkter">{data.roomsMissingInteractiveLinks.map((room) => <Link className={linkChipClass} href={`/admin/operativ-portal/rum/${room.id}/byg`} key={room.id}>{room.name}</Link>)}</Issue> : null}
+          {data.itemsMissingImage.length ? <Issue count={data.itemsMissingImage.length} title="Værktøj uden billede">{data.itemsMissingImage.slice(0, 18).map((item) => <Link className={linkChipClass} href={`/admin/operativ-portal/udstyr/${item.id}`} key={item.id}>{item.placeName} · {item.name}</Link>)}</Issue> : null}
+          {data.nodesMissingImage.length ? <Issue count={data.nodesMissingImage.length} title="Underområder uden billede">{data.nodesMissingImage.map((node) => <Link className={linkChipClass} href={`/admin/operativ-portal/rum/${node.placeId}/byg?node=${node.id}`} key={node.id}>{node.placeName} · {node.name}</Link>)}</Issue> : null}
+          {data.nodesMissingLinks.length ? <Issue count={data.nodesMissingLinks.length} title="Underområder uden næste trin">{data.nodesMissingLinks.map((node) => <Link className={linkChipClass} href={`/admin/operativ-portal/rum/${node.placeId}/byg?node=${node.id}`} key={node.id}>{node.placeName} · {node.name}</Link>)}</Issue> : null}
         </div>
       ) : null}
     </section>
