@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AvailabilityStatus } from "@prisma/client";
 import { SbrFirePageFrame } from "@/components/SbrFireApp";
 import { canAccessOperationalPortal, requireUser } from "@/lib/auth";
@@ -21,7 +22,7 @@ const activeTransferStatuses = [
 
 export default async function SbrFireHomePage() {
   const user = await requireUser();
-  if (user.mustChangePassword) return null;
+  if (user.mustChangePassword) redirect("/skift-adgangskode");
 
   const unreadCount = await prisma.notification.count({
     where: { recipientUserId: user.id, readAt: null, publishedAt: { not: null }, cancelledAt: null }
