@@ -52,6 +52,45 @@ async function validItem(placeId: string, itemId: string) {
   return rows[0] ?? null;
 }
 
+type Target = { targetNodeId: string | null; itemId: string | null; targetName: string };
+
+async function resolveTarget(
+  placeId: string,
+  sourceNodeId: string | null,
+  targetType: "item" | "node" | "new-node",
+  targetId: string,
+  newNodeName: string
+): Promise<Target | null> {
+  if (targetType === "item") {
+    const item = uuidSchema.safeParse(targetId);
+    if (!item.success) return null;
+    const found = await validItem(placeId, item.data);
+    return found ? { targetNodeId: null, itemId: found.id, targetName: found.name } : null;
+  }
+
+  if (targetType === "node") {
+    const nodeId = uuidSchema.safeParse(targetId);
+    if (!nodeId.success || nodeId.data === sourceNodeId) return null;
+    const rows = await prisma.$queryRaw<Array<{ id: string; name: string }>>`
+      SELECT id, name FROM operational_interactive_node
+      WHERE id = ${nodeId.data}
+        AND place_id = ${placeId}
+        AND parent_node_id IS NOT DISTINCT FROM ${sourceNodeId}
+      LIMIT 1
+    `;
+    return rows[0] ? { targetNodeId: rows[0].id, itemId: null, targetName: rows[0].name } : null;
+  }
+
+  const name = newNodeName.trim().slice(0, 120);
+  if (!name) return null;
+  const id = randomUUID();
+  await prisma.$executeRaw`
+    INSERT INTO operational_interactive_node (id, place_id, parent_node_id, name, description, sort_order)
+    VALUES (${id}, ${placeId}, ${sourceNodeId}, ${name}, '', 0)
+  `;
+  return { targetNodeId: id, itemId: null, targetName: name };
+}
+
 export async function setOperationalInteractiveContextImageAction(formData: FormData) {
   await requireRole(UserRole.ADMIN);
   const parsed = z.object({
@@ -65,7 +104,9 @@ export async function setOperationalInteractiveContextImageAction(formData: Form
   });
   if (!parsed.success) return { ok: false as const, error: "Ugyldig placering." };
   const place = await getPlaceVehicle(parsed.data.placeId);
-  if (!place || !(await validNode(parsed.data.placeId, parsed.data.nodeId))) return { ok: false as const, error: "Placeringen findes ikke." };
+  if (!place || !(await validNode(parsed.data.placeId, parsed.data.nodeId))) {
+    return { ok: false as const, error: "Placeringen findes ikke." };
+  }
 
   if (parsed.data.imageId) {
     const images = await prisma.$queryRaw<Array<{ id: string }>>`
@@ -78,12 +119,14 @@ export async function setOperationalInteractiveContextImageAction(formData: Form
 
   if (parsed.data.nodeId) {
     await prisma.$executeRaw`
-      UPDATE operational_interactive_node SET image_id = ${parsed.data.imageId}, updated_at = CURRENT_TIMESTAMP
+      UPDATE operational_interactive_node
+      SET image_id = ${parsed.data.imageId}, updated_at = CURRENT_TIMESTAMP
       WHERE id = ${parsed.data.nodeId} AND place_id = ${parsed.data.placeId}
     `;
   } else {
     await prisma.$executeRaw`
-      UPDATE operational_place SET interactive_image_id = ${parsed.data.imageId}, updated_at = CURRENT_TIMESTAMP
+      UPDATE operational_place
+      SET interactive_image_id = ${parsed.data.imageId}, updated_at = CURRENT_TIMESTAMP
       WHERE id = ${parsed.data.placeId}
     `;
   }
@@ -110,7 +153,9 @@ export async function createOperationalInteractiveNodeAction(formData: FormData)
   });
   if (!parsed.success) return { ok: false as const, error: "Kontrollér navn og placering." };
   const place = await getPlaceVehicle(parsed.data.placeId);
-  if (!place || !(await validNode(parsed.data.placeId, parsed.data.parentNodeId))) return { ok: false as const, error: "Placeringen findes ikke." };
+  if (!place || !(await validNode(parsed.data.placeId, parsed.data.parentNodeId))) {
+    return { ok: false as const, error: "Placeringen findes ikke." };
+  }
 
   const id = randomUUID();
   await prisma.$executeRaw`
@@ -141,47 +186,19 @@ export async function updateOperationalInteractiveNodeAction(formData: FormData)
   });
   if (!parsed.success) return { ok: false as const, error: "Kontrollér felterne." };
   const place = await getPlaceVehicle(parsed.data.placeId);
-  if (!place || !(await validNode(parsed.data.placeId, parsed.data.nodeId))) return { ok: false as const, error: "Underområdet findes ikke." };
+  if (!place || !(await validNode(parsed.data.placeId, parsed.data.nodeId))) {
+    return { ok: false as const, error: "Underområdet findes ikke." };
+  }
 
   await prisma.$executeRaw`
     UPDATE operational_interactive_node
-    SET name = ${parsed.data.name}, description = ${parsed.data.description}, sort_order = ${parsed.data.sortOrder}, updated_at = CURRENT_TIMESTAMP
+    SET name = ${parsed.data.name}, description = ${parsed.data.description},
+      sort_order = ${parsed.data.sortOrder}, updated_at = CURRENT_TIMESTAMP
     WHERE id = ${parsed.data.nodeId} AND place_id = ${parsed.data.placeId}
   `;
   await audit("OPERATIONAL_INTERACTIVE_NODE_UPDATED", `Underområdet ${parsed.data.name} blev opdateret`);
   revalidateBuilder(parsed.data.placeId, place.vehicleId);
   return { ok: true as const };
-}
-
-type Target = { targetNodeId: string | null; itemId: string | null; targetName: string };
-
-async function resolveTarget(placeId: string, targetType: string, targetId: string, newNodeName: string, sourceNodeId: string | null): Promise<Target | null> {
-  if (targetType === "item") {
-    const item = uuidSchema.safeParse(targetId);
-    if (!item.success) return null;
-    const found = await validItem(placeId, item.data);
-    return found ? { targetNodeId: null, itemId: found.id, targetName: found.name } : null;
-  }
-  if (targetType === "node") {
-    const nodeId = uuidSchema.safeParse(targetId);
-    if (!nodeId.success) return null;
-    const rows = await prisma.$queryRaw<Array<{ id: string; name: string }>>`
-      SELECT id, name FROM operational_interactive_node
-      WHERE id = ${nodeId.data} AND place_id = ${placeId} LIMIT 1
-    `;
-    return rows[0] ? { targetNodeId: rows[0].id, itemId: null, targetName: rows[0].name } : null;
-  }
-  if (targetType === "new-node") {
-    const name = newNodeName.trim().slice(0, 120);
-    if (!name) return null;
-    const id = randomUUID();
-    await prisma.$executeRaw`
-      INSERT INTO operational_interactive_node (id, place_id, parent_node_id, name, description, sort_order)
-      VALUES (${id}, ${placeId}, ${sourceNodeId}, ${name}, '', 0)
-    `;
-    return { targetNodeId: id, itemId: null, targetName: name };
-  }
-  return null;
 }
 
 export async function createOperationalInteractiveLinkAction(formData: FormData) {
@@ -211,9 +228,17 @@ export async function createOperationalInteractiveLinkAction(formData: FormData)
   });
   if (!parsed.success) return { ok: false as const, error: "Kontrollér pluspunktets felter." };
   const place = await getPlaceVehicle(parsed.data.placeId);
-  if (!place || !(await validNode(parsed.data.placeId, parsed.data.sourceNodeId))) return { ok: false as const, error: "Placeringen findes ikke." };
+  if (!place || !(await validNode(parsed.data.placeId, parsed.data.sourceNodeId))) {
+    return { ok: false as const, error: "Placeringen findes ikke." };
+  }
 
-  const target = await resolveTarget(parsed.data.placeId, parsed.data.targetType, parsed.data.targetId, parsed.data.newNodeName, parsed.data.sourceNodeId);
+  const target = await resolveTarget(
+    parsed.data.placeId,
+    parsed.data.sourceNodeId,
+    parsed.data.targetType,
+    parsed.data.targetId,
+    parsed.data.newNodeName
+  );
   if (!target) return { ok: false as const, error: "Vælg et gyldigt mål." };
 
   const id = randomUUID();
@@ -234,6 +259,8 @@ export async function updateOperationalInteractiveLinkAction(formData: FormData)
   const parsed = z.object({
     linkId: uuidSchema,
     placeId: uuidSchema,
+    targetType: z.enum(["item", "node"]),
+    targetId: uuidSchema,
     label: z.string().trim().max(100),
     xPercent: percentSchema,
     yPercent: percentSchema,
@@ -242,6 +269,8 @@ export async function updateOperationalInteractiveLinkAction(formData: FormData)
   }).safeParse({
     linkId: formData.get("linkId"),
     placeId: formData.get("placeId"),
+    targetType: formData.get("targetType"),
+    targetId: formData.get("targetId"),
     label: String(formData.get("label") ?? ""),
     xPercent: formData.get("xPercent"),
     yPercent: formData.get("yPercent"),
@@ -252,13 +281,32 @@ export async function updateOperationalInteractiveLinkAction(formData: FormData)
   const place = await getPlaceVehicle(parsed.data.placeId);
   if (!place) return { ok: false as const, error: "Rummet findes ikke." };
 
+  const linkRows = await prisma.$queryRaw<Array<{ sourceNodeId: string | null }>>`
+    SELECT source_node_id AS "sourceNodeId"
+    FROM operational_interactive_link
+    WHERE id = ${parsed.data.linkId} AND place_id = ${parsed.data.placeId} AND deleted_at IS NULL
+    LIMIT 1
+  `;
+  const link = linkRows[0];
+  if (!link) return { ok: false as const, error: "Pluspunktet findes ikke længere." };
+
+  const target = await resolveTarget(
+    parsed.data.placeId,
+    link.sourceNodeId,
+    parsed.data.targetType,
+    parsed.data.targetId,
+    ""
+  );
+  if (!target) return { ok: false as const, error: "Vælg et mål på det aktuelle niveau." };
+
   await prisma.$executeRaw`
     UPDATE operational_interactive_link
-    SET label = ${parsed.data.label}, x_percent = ${parsed.data.xPercent}, y_percent = ${parsed.data.yPercent},
+    SET target_node_id = ${target.targetNodeId}, item_id = ${target.itemId},
+      label = ${parsed.data.label}, x_percent = ${parsed.data.xPercent}, y_percent = ${parsed.data.yPercent},
       size_px = ${parsed.data.sizePx}, sort_order = ${parsed.data.sortOrder}, updated_at = CURRENT_TIMESTAMP
     WHERE id = ${parsed.data.linkId} AND place_id = ${parsed.data.placeId} AND deleted_at IS NULL
   `;
-  await audit("OPERATIONAL_INTERACTIVE_LINK_UPDATED", `Et pluspunkt blev opdateret i ${place.placeName}`);
+  await audit("OPERATIONAL_INTERACTIVE_LINK_UPDATED", `Et pluspunkt blev opdateret til ${target.targetName} i ${place.placeName}`);
   revalidateBuilder(parsed.data.placeId, place.vehicleId);
   return { ok: true as const };
 }
@@ -336,7 +384,12 @@ export async function cloneOperationalInteractiveNodeAction(formData: FormData) 
   if (!place) return { ok: false as const, error: "Rummet findes ikke." };
 
   const nodes = await prisma.$queryRaw<Array<{
-    id: string; parentNodeId: string | null; name: string; description: string; imageId: string | null; sortOrder: number;
+    id: string;
+    parentNodeId: string | null;
+    name: string;
+    description: string;
+    imageId: string | null;
+    sortOrder: number;
   }>>`
     WITH RECURSIVE subtree AS (
       SELECT id, parent_node_id, name, description, image_id, sort_order, created_at
@@ -355,22 +408,36 @@ export async function cloneOperationalInteractiveNodeAction(formData: FormData) 
   const sourceRoot = nodes.find((node) => node.id === parsed.data.nodeId);
   if (!sourceRoot) return { ok: false as const, error: "Underområdet findes ikke." };
 
-  const ids = new Map(nodes.map((node) => [node.id, randomUUID()]));
-  const sourceIds = nodes.map((node) => node.id);
-  const links = sourceIds.length ? await prisma.$queryRaw<Array<{
-    id: string; sourceNodeId: string | null; targetNodeId: string | null; itemId: string | null; label: string;
-    xPercent: number; yPercent: number; sizePx: number; sortOrder: number;
+  const links = await prisma.$queryRaw<Array<{
+    id: string;
+    sourceNodeId: string;
+    targetNodeId: string | null;
+    itemId: string | null;
+    label: string;
+    xPercent: number;
+    yPercent: number;
+    sizePx: number;
+    sortOrder: number;
   }>>`
-    SELECT id, source_node_id AS "sourceNodeId", target_node_id AS "targetNodeId", item_id AS "itemId",
-      COALESCE(label, '') AS label, x_percent::float8 AS "xPercent", y_percent::float8 AS "yPercent",
-      size_px AS "sizePx", sort_order AS "sortOrder"
-    FROM operational_interactive_link
-    WHERE place_id = ${parsed.data.placeId}
-      AND source_node_id = ANY(${sourceIds})
-      AND deleted_at IS NULL
-    ORDER BY sort_order, created_at
-  ` : [];
+    WITH RECURSIVE subtree AS (
+      SELECT id FROM operational_interactive_node
+      WHERE id = ${parsed.data.nodeId} AND place_id = ${parsed.data.placeId}
+      UNION ALL
+      SELECT child.id
+      FROM operational_interactive_node child
+      INNER JOIN subtree parent ON child.parent_node_id = parent.id
+      WHERE child.place_id = ${parsed.data.placeId}
+    )
+    SELECT l.id, l.source_node_id AS "sourceNodeId", l.target_node_id AS "targetNodeId", l.item_id AS "itemId",
+      COALESCE(l.label, '') AS label, l.x_percent::float8 AS "xPercent", l.y_percent::float8 AS "yPercent",
+      l.size_px AS "sizePx", l.sort_order AS "sortOrder"
+    FROM operational_interactive_link l
+    INNER JOIN subtree source ON source.id = l.source_node_id
+    WHERE l.place_id = ${parsed.data.placeId} AND l.deleted_at IS NULL
+    ORDER BY l.sort_order, l.created_at
+  `;
 
+  const ids = new Map(nodes.map((node) => [node.id, randomUUID()]));
   await prisma.$transaction(async (tx) => {
     for (const node of nodes) {
       const newId = ids.get(node.id)!;
@@ -382,11 +449,13 @@ export async function cloneOperationalInteractiveNodeAction(formData: FormData) 
         INSERT INTO operational_interactive_node
           (id, place_id, parent_node_id, name, description, image_id, sort_order)
         VALUES
-          (${newId}, ${parsed.data.placeId}, ${parentId}, ${name}, ${node.description}, ${node.imageId}, ${node.sortOrder + (node.id === sourceRoot.id ? 1 : 0)})
+          (${newId}, ${parsed.data.placeId}, ${parentId}, ${name}, ${node.description}, ${node.imageId},
+           ${node.sortOrder + (node.id === sourceRoot.id ? 1 : 0)})
       `;
     }
+
     for (const link of links) {
-      const sourceId = link.sourceNodeId ? ids.get(link.sourceNodeId) : null;
+      const sourceId = ids.get(link.sourceNodeId);
       if (!sourceId) continue;
       const targetNodeId = link.targetNodeId ? (ids.get(link.targetNodeId) ?? link.targetNodeId) : null;
       await tx.$executeRaw`
