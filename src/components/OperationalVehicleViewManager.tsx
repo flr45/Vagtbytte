@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { operationalImageUrl } from "@/lib/operativ-portal";
+import { operationalImageUrl } from "@/lib/operativ-client";
 import {
   createOperationalVehicleViewHotspotAction,
   deleteOperationalVehicleViewHotspotAction,
@@ -14,7 +14,7 @@ import {
   type OperationalVehicleView,
   type OperationalVehicleViewHotspot,
   type OperationalVehicleViewKey
-} from "@/lib/operativ-vehicle-views";
+} from "@/lib/operativ-vehicle-view-model";
 
 type ImageOption = { id: string; title: string; originalName: string };
 type PlaceOption = { id: string; name: string };
