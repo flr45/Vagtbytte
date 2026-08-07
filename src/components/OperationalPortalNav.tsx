@@ -3,7 +3,7 @@ import Link from "next/link";
 
 const bottomLinks = [
   { href: "/admin/operativ-portal", label: "Forside", icon: "⌂" },
-  { href: "/admin/operativ-portal/koeretoejer", label: "Favoritter", icon: "☆" },
+  { href: "/admin/operativ-portal/favoritter", label: "Favoritter", icon: "☆" },
   { href: "/admin/operativ-portal/soeg", label: "Søg", icon: "⌕" },
   { href: "/", label: "Profil", icon: "♙" }
 ];
@@ -24,6 +24,7 @@ export function OperationalPortalNav({ isEditor = false }: { isEditor?: boolean 
       <nav aria-label="Operativ Portal" className="hidden items-center gap-1 rounded-xl border border-white/10 bg-[#0d1317] p-1.5 md:flex">
         <Link className="operativ-nav-link" href="/admin/operativ-portal">Forside</Link>
         <Link className="operativ-nav-link" href="/admin/operativ-portal/koeretoejer">Køretøjer</Link>
+        <Link className="operativ-nav-link" href="/admin/operativ-portal/favoritter">Favoritter</Link>
         <Link className="operativ-nav-link" href="/admin/operativ-portal/videoer">Videoakademi</Link>
         <Link className="operativ-nav-link" href="/admin/operativ-portal/dokumenter">Videnbank</Link>
         <Link className="operativ-nav-link" href="/admin/operativ-portal/soeg">Søg</Link>
