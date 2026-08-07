@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { type FormEvent, useMemo, useRef, useState } from "react";
 import {
   cloneOperationalInteractiveNodeAction,
   createOperationalInteractiveLinkAction,
@@ -33,6 +33,8 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
   const [targetId, setTargetId] = useState(context.children[0]?.id ?? context.items[0]?.id ?? "");
   const [newNodeName, setNewNodeName] = useState("");
   const [sizePx, setSizePx] = useState(40);
+  const [editTargetType, setEditTargetType] = useState<"item" | "node">("item");
+  const [editTargetId, setEditTargetId] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -40,6 +42,10 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
   const currentName = context.nodeName || context.placeName;
   const builderBase = `/admin/operativ-portal/rum/${context.placeId}/byg`;
   const interactiveBase = `/admin/operativ-portal/rum/${context.placeId}/interaktiv`;
+
+  function reloadSoon(delay = 180) {
+    window.setTimeout(() => window.location.reload(), delay);
+  }
 
   function pointFromEvent(event: React.PointerEvent) {
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -59,12 +65,19 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
     setMessage("");
   }
 
+  function selectLink(link: OperationalInteractiveLink) {
+    setSelectedId(link.id);
+    setDraft(null);
+    setEditTargetType(link.targetType);
+    setEditTargetId(link.targetNodeId ?? link.itemId ?? "");
+  }
+
   function beginDrag(event: React.PointerEvent<HTMLButtonElement>, link: OperationalInteractiveLink) {
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
     setDragging({ id: link.id, oldX: link.xPercent, oldY: link.yPercent });
-    setSelectedId(link.id);
+    selectLink(link);
     setUndoDeleteId(null);
   }
 
@@ -122,6 +135,11 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
     if (type === "new-node") setTargetId("");
   }
 
+  function editTargetChanged(type: "item" | "node") {
+    setEditTargetType(type);
+    setEditTargetId(type === "node" ? context.children[0]?.id ?? "" : context.items[0]?.id ?? "");
+  }
+
   async function createLink() {
     if (!draft || busy) return;
     setBusy(true);
@@ -144,20 +162,26 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
       return;
     }
     setMessage("Plusset er oprettet.");
-    window.setTimeout(() => window.location.reload(), 200);
+    reloadSoon(200);
   }
 
   async function saveLink(link: OperationalInteractiveLink, formElement: HTMLFormElement) {
+    if (!editTargetId) {
+      setMessage("Vælg hvad plusset skal åbne.");
+      return;
+    }
     setBusy(true);
     const form = new FormData(formElement);
     form.set("linkId", link.id);
     form.set("placeId", context.placeId);
+    form.set("targetType", editTargetType);
+    form.set("targetId", editTargetId);
     form.set("xPercent", String(link.xPercent));
     form.set("yPercent", String(link.yPercent));
     const result = await updateOperationalInteractiveLinkAction(form);
     setBusy(false);
     setMessage(result?.ok ? "Plusset er gemt." : result?.error || "Plusset kunne ikke gemmes.");
-    if (result?.ok) window.setTimeout(() => window.location.reload(), 180);
+    if (result?.ok) reloadSoon();
   }
 
   async function deleteLink(linkId: string) {
@@ -181,6 +205,48 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
     if (result?.ok) window.location.reload();
   }
 
+  async function saveExistingImage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    const result = await setOperationalInteractiveContextImageAction(new FormData(event.currentTarget));
+    setBusy(false);
+    setMessage(result?.ok ? "Billedet er valgt." : result?.error || "Billedet kunne ikke vælges.");
+    if (result?.ok) reloadSoon();
+  }
+
+  async function saveNode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    const result = await updateOperationalInteractiveNodeAction(new FormData(event.currentTarget));
+    setBusy(false);
+    setMessage(result?.ok ? "Underområdet er gemt." : result?.error || "Underområdet kunne ikke gemmes.");
+    if (result?.ok) reloadSoon();
+  }
+
+  async function cloneNode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    const result = await cloneOperationalInteractiveNodeAction(new FormData(event.currentTarget));
+    setBusy(false);
+    if (!result?.ok) {
+      setMessage(result?.error || "Underområdet kunne ikke klones.");
+      return;
+    }
+    window.location.href = `${builderBase}?node=${result.id}`;
+  }
+
+  async function createChildNode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    const result = await createOperationalInteractiveNodeAction(new FormData(event.currentTarget));
+    setBusy(false);
+    if (!result?.ok) {
+      setMessage(result?.error || "Underområdet kunne ikke oprettes.");
+      return;
+    }
+    window.location.href = `${builderBase}?node=${result.id}`;
+  }
+
   return (
     <div className="grid gap-5">
       <section className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
@@ -201,24 +267,18 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
-        <OperationalQuickImageCapture
-          label={`Interaktivt billede · ${currentName}`}
-          mode="context"
-          nodeId={context.nodeId}
-          placeId={context.placeId}
-          vehicleId={context.vehicleId}
-        />
+        <OperationalQuickImageCapture label={`Interaktivt billede · ${currentName}`} mode="context" nodeId={context.nodeId} placeId={context.placeId} vehicleId={context.vehicleId} />
 
         <div className="grid content-start gap-3 rounded-xl border border-white/10 bg-[#0d1317] p-4">
           <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">Eksisterende billede</p>
-          <form action={setOperationalInteractiveContextImageAction} className="grid gap-3">
+          <form className="grid gap-3" onSubmit={(event) => void saveExistingImage(event)}>
             <input name="placeId" type="hidden" value={context.placeId} />
             <input name="nodeId" type="hidden" value={context.nodeId ?? ""} />
             <select className="dark-input" defaultValue={context.imageId ?? ""} name="imageId">
               <option value="">Intet interaktivt billede</option>
               {context.images.map((image) => <option key={image.id} value={image.id}>{image.title || image.originalName}</option>)}
             </select>
-            <button className="app-button-primary" type="submit">Brug valgt billede</button>
+            <button className="app-button-primary" disabled={busy} type="submit">Brug valgt billede</button>
           </form>
           <p className="text-xs font-semibold leading-5 text-slate-500">Alle billeder, der er uploadet til {context.placeName}, kan genbruges i underområder.</p>
         </div>
@@ -226,18 +286,18 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
 
       {context.nodeId ? (
         <section className="grid gap-4 rounded-xl border border-white/10 bg-[#0d1317] p-4 lg:grid-cols-[minmax(0,1fr)_auto]">
-          <form action={updateOperationalInteractiveNodeAction} className="grid gap-3 sm:grid-cols-2">
+          <form className="grid gap-3 sm:grid-cols-2" onSubmit={(event) => void saveNode(event)}>
             <input name="placeId" type="hidden" value={context.placeId} />
             <input name="nodeId" type="hidden" value={context.nodeId} />
             <label className="grid gap-1.5 text-xs font-black text-slate-300">Navn<input className="dark-input" defaultValue={context.nodeName ?? ""} name="name" required /></label>
             <label className="grid gap-1.5 text-xs font-black text-slate-300">Rækkefølge<input className="dark-input" defaultValue="0" min="0" name="sortOrder" type="number" /></label>
             <label className="grid gap-1.5 text-xs font-black text-slate-300 sm:col-span-2">Beskrivelse<textarea className="dark-input min-h-20 p-3" defaultValue={context.nodeDescription} name="description" /></label>
-            <button className="app-button-primary sm:col-span-2" type="submit">Gem underområde</button>
+            <button className="app-button-primary sm:col-span-2" disabled={busy} type="submit">Gem underområde</button>
           </form>
-          <form action={cloneOperationalInteractiveNodeAction} className="self-end">
+          <form className="self-end" onSubmit={(event) => void cloneNode(event)}>
             <input name="placeId" type="hidden" value={context.placeId} />
             <input name="nodeId" type="hidden" value={context.nodeId} />
-            <button className="min-h-11 rounded-lg border border-white/10 bg-white/5 px-4 text-xs font-black text-white hover:bg-white/10" type="submit">⧉ Klon hele dette niveau</button>
+            <button className="min-h-11 rounded-lg border border-white/10 bg-white/5 px-4 text-xs font-black text-white hover:bg-white/10 disabled:opacity-40" disabled={busy} type="submit">⧉ Klon hele dette niveau</button>
           </form>
         </section>
       ) : null}
@@ -256,7 +316,7 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
                 aria-label={`Redigér ${link.label || link.targetName}`}
                 className={`absolute z-20 grid -translate-x-1/2 -translate-y-1/2 touch-none place-items-center rounded-full border-2 font-black leading-none text-white shadow-[0_5px_22px_rgba(0,0,0,.75)] ${selectedId === link.id ? "border-yellow-300 bg-red-500 ring-4 ring-yellow-300/30" : "border-white bg-red-600"}`}
                 key={link.id}
-                onClick={(event) => { event.preventDefault(); event.stopPropagation(); setSelectedId(link.id); setDraft(null); }}
+                onClick={(event) => { event.preventDefault(); event.stopPropagation(); selectLink(link); }}
                 onPointerDown={(event) => beginDrag(event, link)}
                 onPointerMove={drag}
                 onPointerUp={finishDrag}
@@ -267,12 +327,18 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
             ))}
             {draft ? <span className="pointer-events-none absolute z-10 grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-emerald-100 bg-emerald-600 font-black text-white shadow-xl" style={{ left: `${draft.x}%`, top: `${draft.y}%`, width: sizePx, height: sizePx, fontSize: Math.max(18, Math.round(sizePx * 0.55)) }}>+</span> : null}
           </div>
-        ) : (
-          <div className="grid min-h-64 place-items-center p-6 text-center text-sm font-semibold text-slate-500">Tag eller vælg et billede ovenfor. Derefter kan du placere plusser direkte på billedet.</div>
-        )}
+        ) : <div className="grid min-h-64 place-items-center p-6 text-center text-sm font-semibold text-slate-500">Tag eller vælg et billede ovenfor. Derefter kan du placere plusser direkte på billedet.</div>}
 
         <div className="border-t border-white/10 bg-[#0d1317] p-4">
-          {message ? <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/5 p-3 text-xs font-bold text-slate-300"><span>{message}</span><span className="flex gap-2">{undoMove ? <button className="rounded-lg bg-white px-3 py-2 font-black text-black" onClick={undoLastMove} type="button">Fortryd flytning</button> : null}{undoDeleteId ? <button className="rounded-lg bg-white px-3 py-2 font-black text-black" onClick={restoreDeleted} type="button">Fortryd sletning</button> : null}</span></div> : null}
+          {message ? (
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/5 p-3 text-xs font-bold text-slate-300">
+              <span>{message}</span>
+              <span className="flex gap-2">
+                {undoMove ? <button className="rounded-lg bg-white px-3 py-2 font-black text-black" onClick={undoLastMove} type="button">Fortryd flytning</button> : null}
+                {undoDeleteId ? <button className="rounded-lg bg-white px-3 py-2 font-black text-black" onClick={restoreDeleted} type="button">Fortryd sletning</button> : null}
+              </span>
+            </div>
+          ) : null}
 
           {draft ? (
             <div className="grid gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
@@ -290,11 +356,20 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
             </div>
           ) : selected ? (
             <form className="grid gap-3 rounded-xl border border-yellow-300/20 bg-yellow-300/5 p-4" onSubmit={(event) => { event.preventDefault(); void saveLink(selected, event.currentTarget); }}>
-              <div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-yellow-300">Valgt plus</p><h3 className="text-sm font-black">{selected.targetName}</h3><p className="text-xs text-slate-500">{selected.targetType === "node" ? "Åbner underområde" : "Åbner værktøj"}</p></div><button className="rounded-lg border border-red-500/30 px-3 py-2 text-xs font-black text-red-400" onClick={() => void deleteLink(selected.id)} type="button">Slet</button></div>
+              <div className="flex items-start justify-between gap-3">
+                <div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-yellow-300">Valgt plus</p><h3 className="text-sm font-black">{selected.targetName}</h3><p className="text-xs text-slate-500">Mål, label, størrelse og placering kan ændres.</p></div>
+                <button className="rounded-lg border border-red-500/30 px-3 py-2 text-xs font-black text-red-400" onClick={() => void deleteLink(selected.id)} type="button">Slet</button>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1.5 text-xs font-black text-slate-300">Åbn type<select className="dark-input" onChange={(event) => editTargetChanged(event.target.value as "item" | "node")} value={editTargetType}><option value="item">Værktøj</option><option disabled={!context.children.length} value="node">Underområde</option></select></label>
+                <label className="grid gap-1.5 text-xs font-black text-slate-300">Åbner{editTargetType === "node" ? <select className="dark-input" onChange={(event) => setEditTargetId(event.target.value)} value={editTargetId}>{context.children.map((node) => <option key={node.id} value={node.id}>{node.name}</option>)}</select> : <select className="dark-input" onChange={(event) => setEditTargetId(event.target.value)} value={editTargetId}>{context.items.map((item) => <option key={item.id} value={item.id}>{item.name}{item.quantity > 1 ? ` ×${item.quantity}` : ""}</option>)}</select>}</label>
+              </div>
+
               <label className="grid gap-1.5 text-xs font-black text-slate-300">Label<input className="dark-input" defaultValue={selected.label} maxLength={100} name="label" placeholder={selected.targetName} /></label>
               <div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-1.5 text-xs font-black text-slate-300">Størrelse<input className="dark-input" defaultValue={selected.sizePx} max="96" min="24" name="sizePx" step="2" type="number" /></label><label className="grid gap-1.5 text-xs font-black text-slate-300">Rækkefølge<input className="dark-input" defaultValue={selected.sortOrder} min="0" name="sortOrder" type="number" /></label></div>
               <p className="text-[10px] font-semibold text-slate-500">Placering: {selected.xPercent.toFixed(1)}% / {selected.yPercent.toFixed(1)}% · træk plusset direkte på billedet for at flytte det.</p>
-              <button className="app-button-primary" disabled={busy} type="submit">Gem label og størrelse</button>
+              <button className="app-button-primary" disabled={busy || !editTargetId} type="submit">Gem pluspunkt</button>
             </form>
           ) : <p className="text-center text-xs font-semibold text-slate-500">Tryk på billedet for at oprette et nyt plus, eller tryk på et eksisterende plus for at redigere det.</p>}
         </div>
@@ -305,13 +380,13 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
         <div className="grid gap-2 sm:grid-cols-2">
           {context.children.map((node) => <Link className="grid min-h-16 grid-cols-[minmax(0,1fr)_24px] items-center gap-2 rounded-lg border border-white/10 bg-[#11191e] p-3 hover:border-red-500/30" href={`${builderBase}?node=${node.id}`} key={node.id}><span><strong className="block text-sm text-white">{node.name}</strong><small className="mt-1 block text-xs text-slate-500">{node.imageId ? "Billede valgt" : "Mangler billede"}</small></span><span className="text-xl text-red-500">›</span></Link>)}
         </div>
-        <form action={createOperationalInteractiveNodeAction} className="mt-2 grid gap-2 rounded-lg border border-dashed border-white/15 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_110px_auto]">
+        <form className="mt-2 grid gap-2 rounded-lg border border-dashed border-white/15 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_110px_auto]" onSubmit={(event) => void createChildNode(event)}>
           <input name="placeId" type="hidden" value={context.placeId} />
           <input name="parentNodeId" type="hidden" value={context.nodeId ?? ""} />
           <input className="dark-input" maxLength={120} name="name" placeholder="Nyt underområde" required />
           <input className="dark-input" maxLength={500} name="description" placeholder="Kort beskrivelse" />
           <input className="dark-input" defaultValue={context.children.length} min="0" name="sortOrder" type="number" />
-          <button className="rounded-lg bg-white px-4 py-2 text-xs font-black text-black" type="submit">Opret</button>
+          <button className="rounded-lg bg-white px-4 py-2 text-xs font-black text-black disabled:opacity-40" disabled={busy} type="submit">Opret</button>
         </form>
       </section>
     </div>
