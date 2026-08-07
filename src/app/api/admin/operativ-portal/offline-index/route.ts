@@ -11,10 +11,21 @@ type VehicleRow = {
   coverImageId: string | null;
 };
 
+type VehicleViewRow = {
+  vehicleId: string;
+  imageId: string;
+};
+
 type PlaceRow = {
   id: string;
   interactiveImageId: string | null;
   coverImageId: string | null;
+};
+
+type InteractiveNodeRow = {
+  id: string;
+  placeId: string;
+  imageId: string | null;
 };
 
 type ItemRow = {
@@ -29,7 +40,7 @@ export async function GET() {
     return NextResponse.json({ error: "Du har ikke adgang til Operativ Portal." }, { status: 403 });
   }
 
-  const [vehicles, places, items] = await Promise.all([
+  const [vehicles, vehicleViews, places, interactiveNodes, items] = await Promise.all([
     prisma.$queryRaw<VehicleRow[]>`
       SELECT v.id, v.interactive_image_id AS "interactiveImageId",
         (SELECT image.id FROM operational_image image
@@ -38,6 +49,11 @@ export async function GET() {
       FROM operational_vehicle v
       ORDER BY v.sort_order, v.name
     `,
+    prisma.$queryRaw<VehicleViewRow[]>`
+      SELECT vehicle_id AS "vehicleId", image_id AS "imageId"
+      FROM operational_vehicle_view
+      ORDER BY vehicle_id, sort_order, created_at
+    `,
     prisma.$queryRaw<PlaceRow[]>`
       SELECT p.id, p.interactive_image_id AS "interactiveImageId",
         (SELECT image.id FROM operational_image image
@@ -45,6 +61,11 @@ export async function GET() {
          ORDER BY image.is_cover DESC, image.sort_order, image.created_at LIMIT 1) AS "coverImageId"
       FROM operational_place p
       ORDER BY p.sort_order, p.name
+    `,
+    prisma.$queryRaw<InteractiveNodeRow[]>`
+      SELECT id, place_id AS "placeId", image_id AS "imageId"
+      FROM operational_interactive_node
+      ORDER BY place_id, sort_order, created_at
     `,
     prisma.$queryRaw<ItemRow[]>`
       SELECT i.id,
@@ -71,11 +92,18 @@ export async function GET() {
     if (vehicle.interactiveImageId) imageIds.add(vehicle.interactiveImageId);
   }
 
+  for (const view of vehicleViews) imageIds.add(view.imageId);
+
   for (const place of places) {
     urls.add(`/admin/operativ-portal/rum/${place.id}`);
     urls.add(`/admin/operativ-portal/rum/${place.id}/interaktiv`);
     if (place.coverImageId) imageIds.add(place.coverImageId);
     if (place.interactiveImageId) imageIds.add(place.interactiveImageId);
+  }
+
+  for (const node of interactiveNodes) {
+    urls.add(`/admin/operativ-portal/rum/${node.placeId}/interaktiv?node=${encodeURIComponent(node.id)}`);
+    if (node.imageId) imageIds.add(node.imageId);
   }
 
   for (const item of items) {
@@ -89,11 +117,13 @@ export async function GET() {
 
   return NextResponse.json(
     {
-      version: 1,
+      version: 2,
       generatedAt: new Date().toISOString(),
       counts: {
         vehicles: vehicles.length,
+        vehicleViews: vehicleViews.length,
         places: places.length,
+        interactiveNodes: interactiveNodes.length,
         items: items.length,
         images: imageIds.size,
         urls: urls.size
