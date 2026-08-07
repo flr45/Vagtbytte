@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { OperationalContextTools } from "@/components/OperationalEntityTools";
 
 const bottomLinks = [
   { href: "/admin/operativ-portal", label: "Forside", icon: "⌂" },
@@ -14,6 +15,7 @@ export function OperationalPageFrame({ children }: { children: ReactNode }) {
       <div className="mx-auto grid w-full max-w-5xl gap-4 px-3 py-3 sm:px-5 sm:py-5">
         {children}
       </div>
+      <OperationalContextTools />
     </main>
   );
 }
