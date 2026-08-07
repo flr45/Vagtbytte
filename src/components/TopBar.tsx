@@ -11,8 +11,9 @@ type TopBarProps = {
   activeModule?: SbrFireModule;
 };
 
-export async function TopBar({ title, activeModule = "vagt" }: TopBarProps) {
+export async function TopBar({ title, activeModule }: TopBarProps) {
   const user = await getCurrentUser();
+  const resolvedModule: SbrFireModule = activeModule ?? (title.toLocaleLowerCase("da-DK").includes("alarm") ? "alarm" : "vagt");
   const unreadCount = user
     ? await prisma.notification.count({
         where: { recipientUserId: user.id, readAt: null, publishedAt: { not: null }, cancelledAt: null }
@@ -56,7 +57,7 @@ export async function TopBar({ title, activeModule = "vagt" }: TopBarProps) {
           <Link className="relative grid size-11 place-items-center rounded-lg border border-white/15 bg-white/10 text-white sm:hidden" href="/app/mere" aria-label="Mere">•••</Link>
         </div>
       </header>
-      <SbrFireNavigation active={activeModule} desktop={false} />
+      <SbrFireNavigation active={resolvedModule} desktop={false} />
     </>
   );
 }
