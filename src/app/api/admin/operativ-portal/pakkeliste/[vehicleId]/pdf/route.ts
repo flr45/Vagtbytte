@@ -20,29 +20,29 @@ export async function GET(_request: Request, { params }: RouteProps) {
   if (!vehicle) return NextResponse.json({ error: "Køretøjet blev ikke fundet." }, { status: 404 });
 
   const placeDetails = await Promise.all(vehicle.places.map((place) => getOperationalPlace(place.id)));
+  const places = placeDetails.flatMap((place) => place ? [{
+    name: place.name,
+    description: place.description,
+    items: place.items.map((item) => ({
+      name: item.name,
+      quantity: item.quantity,
+      note: item.note,
+      specifications: item.specifications
+    }))
+  }] : []);
+
   const pdf = createPackingListPdf({
     vehicleName: vehicle.name,
     code: vehicle.code,
     model: vehicle.model,
-    places: placeDetails
-      .filter((place): place is NonNullable<typeof place> => Boolean(place))
-      .map((place) => ({
-        name: place.name,
-        description: place.description,
-        items: place.items.map((item) => ({
-          name: item.name,
-          quantity: item.quantity,
-          note: item.note,
-          specifications: item.specifications
-        }))
-      }))
+    places
   });
 
   const fileBase = (vehicle.code || vehicle.name || "koeretoej")
     .replace(/[^A-Za-z0-9ÆØÅæøå_-]+/g, "-")
     .replace(/^-+|-+$/g, "") || "koeretoej";
 
-  return new Response(pdf, {
+  return new Response(Buffer.from(pdf), {
     headers: {
       "Cache-Control": "private, no-store",
       "Content-Type": "application/pdf",
