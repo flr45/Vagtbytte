@@ -1,4 +1,4 @@
-import type { SVGProps } from "react";
+import type { ReactNode, SVGProps } from "react";
 
 export type AppIconName =
   | "home"
@@ -16,7 +16,12 @@ export type AppIconName =
   | "history"
   | "phone"
   | "logout"
-  | "status";
+  | "status"
+  | "document"
+  | "video"
+  | "book"
+  | "qr"
+  | "star";
 
 export function AppIcon({ name, ...props }: { name: AppIconName } & SVGProps<SVGSVGElement>) {
   const common = {
@@ -29,7 +34,7 @@ export function AppIcon({ name, ...props }: { name: AppIconName } & SVGProps<SVG
     "aria-hidden": true
   };
 
-  const paths: Record<AppIconName, React.ReactNode> = {
+  const paths: Record<AppIconName, ReactNode> = {
     home: <><path d="M3 10.8 12 3l9 7.8"/><path d="M5.5 9.5V21h13V9.5"/><path d="M9.5 21v-6h5v6"/></>,
     alarm: <><path d="M9 3h6"/><path d="M10 6h4"/><path d="M7.2 10.2a5 5 0 0 1 9.6 0L19 18H5l2.2-7.8Z"/><path d="M9.5 21h5"/><path d="M4 7 2.5 5.5"/><path d="M20 7l1.5-1.5"/></>,
     swap: <><path d="M4 7h14"/><path d="m15 4 3 3-3 3"/><path d="M20 17H6"/><path d="m9 14-3 3 3 3"/></>,
@@ -45,7 +50,12 @@ export function AppIcon({ name, ...props }: { name: AppIconName } & SVGProps<SVG
     history: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/><path d="M12 7v5l3 2"/></>,
     phone: <><rect x="6.5" y="2" width="11" height="20" rx="2"/><path d="M10 5h4M11 19h2"/></>,
     logout: <><path d="M10 4H5v16h5"/><path d="M14 8l4 4-4 4"/><path d="M18 12H9"/></>,
-    status: <><circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/></>
+    status: <><circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/></>,
+    document: <><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v5h5M9 12h6M9 16h6"/></>,
+    video: <><rect x="3" y="5" width="14" height="14" rx="2"/><path d="m17 10 4-2v8l-4-2z"/><path d="m9 9 4 3-4 3z"/></>,
+    book: <><path d="M4 4.5A3.5 3.5 0 0 1 7.5 8H12v12H7.5A3.5 3.5 0 0 0 4 23.5z" transform="translate(0 -2)"/><path d="M20 4.5A3.5 3.5 0 0 0 16.5 8H12v12h4.5a3.5 3.5 0 0 1 3.5 3.5z" transform="translate(0 -2)"/></>,
+    qr: <><rect x="3" y="3" width="6" height="6"/><rect x="15" y="3" width="6" height="6"/><rect x="3" y="15" width="6" height="6"/><path d="M15 15h2v2h-2zM19 15h2M19 19h2v2h-2M15 19v2h2"/></>,
+    star: <><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"/></>
   };
 
   return <svg {...common} {...props}>{paths[name]}</svg>;
