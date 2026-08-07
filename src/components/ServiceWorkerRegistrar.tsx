@@ -8,9 +8,12 @@ export function ServiceWorkerRegistrar() {
       return;
     }
 
-    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {
-      // PushManager shows actionable registration errors when the user enables push.
-    });
+    navigator.serviceWorker
+      .register("/sw.js", { scope: "/", updateViaCache: "none" })
+      .then((registration) => registration.update())
+      .catch(() => {
+        // PushManager og Operativ Portal viser konkrete fejl, når funktionerne bruges.
+      });
   }, []);
 
   return null;
