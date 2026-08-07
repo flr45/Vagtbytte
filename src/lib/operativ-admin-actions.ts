@@ -32,6 +32,12 @@ function revalidateVehicle(vehicleId: string) {
   revalidatePath("/admin/operativ-portal/soeg");
 }
 
+function revalidatePlace(placeId: string) {
+  revalidatePath(`/admin/operativ-portal/rum/${placeId}`);
+  revalidatePath(`/admin/operativ-portal/rum/${placeId}/interaktiv`);
+  revalidatePath(`/admin/operativ-portal/rum/${placeId}/byg`);
+}
+
 export async function saveOperationalRoomOrderAction(vehicleIdInput: string, orderedIdsInput: string[]) {
   await requireRole(UserRole.ADMIN);
   const vehicleId = uuidSchema.safeParse(vehicleIdInput);
@@ -94,8 +100,7 @@ export async function saveOperationalItemOrderAction(placeIdInput: string, order
     }
   });
   await audit("OPERATIONAL_ITEMS_REORDERED", `Rækkefølgen på ${orderedIds.data.length} udstyrsposter blev ændret`);
-  revalidatePath(`/admin/operativ-portal/rum/${placeId.data}`);
-  revalidatePath(`/admin/operativ-portal/rum/${placeId.data}/interaktiv`);
+  revalidatePlace(placeId.data);
   revalidateVehicle(place.vehicleId);
   return { ok: true };
 }
@@ -134,6 +139,7 @@ export async function moveOperationalItemsAction(itemIdsInput: string[], targetP
   await prisma.$transaction(async (tx) => {
     for (const itemId of itemIds.data) {
       await tx.$executeRaw`DELETE FROM operational_place_hotspot WHERE item_id = ${itemId}`;
+      await tx.$executeRaw`DELETE FROM operational_interactive_link WHERE item_id = ${itemId}`;
       await tx.$executeRaw`
         UPDATE operational_item
         SET place_id = ${targetPlaceId.data}, sort_order = ${nextSort++}, updated_at = CURRENT_TIMESTAMP
@@ -142,13 +148,9 @@ export async function moveOperationalItemsAction(itemIdsInput: string[], targetP
     }
   });
 
-  await audit("OPERATIONAL_ITEMS_MOVED", `${itemIds.data.length} udstyrsposter blev flyttet til ${target.name}`);
-  for (const sourcePlaceId of sourcePlaceIds) {
-    revalidatePath(`/admin/operativ-portal/rum/${sourcePlaceId}`);
-    revalidatePath(`/admin/operativ-portal/rum/${sourcePlaceId}/interaktiv`);
-  }
-  revalidatePath(`/admin/operativ-portal/rum/${targetPlaceId.data}`);
-  revalidatePath(`/admin/operativ-portal/rum/${targetPlaceId.data}/interaktiv`);
+  await audit("OPERATIONAL_ITEMS_MOVED", `${itemIds.data.length} udstyrsposter blev flyttet til ${target.name}; gamle interaktive plusser blev ryddet`);
+  for (const sourcePlaceId of sourcePlaceIds) revalidatePlace(sourcePlaceId);
+  revalidatePlace(targetPlaceId.data);
   revalidateVehicle(target.vehicleId);
   return { ok: true };
 }
@@ -188,7 +190,7 @@ export async function cloneOperationalItemAction(itemIdInput: string) {
     VALUES (${newId}, ${item.placeId}, ${newName}, ${item.quantity}, ${item.note}, ${item.specifications}, ${orderRows[0]?.nextOrder ?? 0})
   `;
   await audit("OPERATIONAL_ITEM_CLONED", `Udstyret ${item.name} blev kopieret som ${newName}`);
-  revalidatePath(`/admin/operativ-portal/rum/${item.placeId}`);
+  revalidatePlace(item.placeId);
   revalidateVehicle(item.vehicleId);
   return { ok: true, newId };
 }
