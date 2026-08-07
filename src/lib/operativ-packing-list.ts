@@ -150,14 +150,32 @@ function parseContextualItem(line: string, placeName: string, sourceLine: number
 }
 
 function parseItemAndQuantity(value: string) {
-  let input = normalizeDisplayText(value)
+  const raw = String(value ?? "")
+    .replace(/\u00a0/g, " ")
     .replace(/^[•·▪◦►▶-]\s*/, "")
-    .replace(/^\d+[.)]\s+/, "");
-  if (!input || isNoiseLine(input)) return null;
+    .replace(/^\d+[.)]\s+/, "")
+    .trim();
+  if (!raw || isNoiseLine(raw)) return null;
 
+  const spacedColumns = raw.match(/^(.{3,}?)\s{2,}(\d{1,3})(?:\s{2,}(.+))?$/);
+  if (spacedColumns) {
+    return {
+      name: normalizeDisplayText(spacedColumns[1]),
+      quantity: clampQuantity(Number(spacedColumns[2])),
+      note: normalizeDisplayText(spacedColumns[3] ?? ""),
+      hadQuantity: true
+    };
+  }
+
+  let input = normalizeDisplayText(raw);
   const leading = input.match(/^(\d{1,3})\s*[x×]\s*(.+)$/i);
   if (leading) {
     return { name: normalizeDisplayText(leading[2]), quantity: clampQuantity(Number(leading[1])), note: "", hadQuantity: true };
+  }
+
+  const leadingX = input.match(/^[x×]\s*(\d{1,3})\s+(.+)$/i);
+  if (leadingX) {
+    return { name: normalizeDisplayText(leadingX[2]), quantity: clampQuantity(Number(leadingX[1])), note: "", hadQuantity: true };
   }
 
   const trailingX = input.match(/^(.+?)\s+[x×]\s*(\d{1,3})(?:\s+[-–]\s*(.+))?$/i);
@@ -166,16 +184,6 @@ function parseItemAndQuantity(value: string) {
       name: normalizeDisplayText(trailingX[1]),
       quantity: clampQuantity(Number(trailingX[2])),
       note: normalizeDisplayText(trailingX[3] ?? ""),
-      hadQuantity: true
-    };
-  }
-
-  const trailingNumber = input.match(/^(.{3,}?)\s{2,}(\d{1,3})(?:\s{2,}(.+))?$/);
-  if (trailingNumber) {
-    return {
-      name: normalizeDisplayText(trailingNumber[1]),
-      quantity: clampQuantity(Number(trailingNumber[2])),
-      note: normalizeDisplayText(trailingNumber[3] ?? ""),
       hadQuantity: true
     };
   }
@@ -207,7 +215,7 @@ function looksLikePlaceToken(value: string) {
 }
 
 function looksLikeSectionLabel(value: string) {
-  return /^(?:pakkeliste|indhold|udstyr|materiel|placering|rum|antal|bemærkning|note|navn|side\s+\d+)/i.test(value);
+  return /^(?:pakkeliste|indhold|udstyr|materiel|placering|rum|antal|bemærkning|note|navn|beskrivelse|spec(?:ifikationer)?\.?|genereret|sbr\s+operativ|side\s+\d+)/i.test(value);
 }
 
 function isNoiseLine(value: string) {
@@ -221,7 +229,7 @@ function isNoiseLine(value: string) {
 function dedupeParsedRows(rows: ParsedPackingListRow[]) {
   const seen = new Map<string, ParsedPackingListRow>();
   for (const row of rows) {
-    const key = `${normalizeKey(row.placeName)}::${normalizeKey(row.itemName)}`;
+    const key = `${normalizePlaceKey(row.placeName)}::${normalizeKey(row.itemName)}`;
     const previous = seen.get(key);
     if (!previous || row.confidence > previous.confidence) seen.set(key, row);
   }
@@ -233,9 +241,14 @@ export function normalizeKey(value: string) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .replace(/\b(?:rum|skab|kasse)\b/g, (word) => word)
     .replace(/[^a-z0-9æøå]+/g, "")
     .trim();
+}
+
+export function normalizePlaceKey(value: string) {
+  const display = normalizeDisplayText(value).toLowerCase();
+  const coded = display.match(/^(h\s*\d{1,2}|v\s*\d{1,2}|rum\s*\d{1,2}|skab\s*\d{1,2}|kasse\s*\d{1,2})\b/i);
+  return normalizeKey(coded?.[1] ?? display);
 }
 
 function normalizeDisplayText(value: string) {
@@ -289,7 +302,7 @@ export function createPackingListPdf(input: PackingListPdfInput): Uint8Array {
     y -= 6;
     page.lines.push({ text: place.name, x: 50, y, size: 13, bold: true, accent: true });
     y -= 19;
-    if (place.description) write(place.description, { size: 8, gap: 13 });
+    if (place.description) write(`Beskrivelse: ${place.description}`, { size: 8, gap: 13 });
 
     if (place.items.length === 0) {
       write("Ingen udstyrsposter", { size: 9, indent: 12, gap: 17 });
@@ -297,8 +310,8 @@ export function createPackingListPdf(input: PackingListPdfInput): Uint8Array {
     }
 
     for (const item of place.items) {
-      const quantity = `x${Math.max(1, item.quantity)}`;
-      write(`${quantity}  ${item.name}`, { size: 10, bold: true, indent: 12, gap: 15 });
+      const quantity = Math.max(1, item.quantity);
+      write(`${quantity} x ${item.name}`, { size: 10, bold: true, indent: 12, gap: 15 });
       if (item.note) write(`Note: ${item.note}`, { size: 8, indent: 24, gap: 13 });
       if (item.specifications) write(`Spec.: ${item.specifications}`, { size: 8, indent: 24, gap: 13 });
       y -= 2;
@@ -324,10 +337,10 @@ function buildPdf(pages: PdfPage[], title: string) {
   objectBuffers.set(3, pdfBuffer("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"));
   objectBuffers.set(4, pdfBuffer("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>"));
 
-  pages.forEach((page, index) => {
+  pages.forEach((pdfPage, index) => {
     const pageId = pageIds[index];
     const contentId = pageId + 1;
-    const stream = renderPageContent(page, index + 1, pages.length, title);
+    const stream = renderPageContent(pdfPage, index + 1, pages.length, title);
     objectBuffers.set(pageId, pdfBuffer(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentId} 0 R >>`));
     const streamBuffer = pdfBuffer(stream);
     objectBuffers.set(contentId, Buffer.concat([
@@ -351,7 +364,7 @@ function buildPdf(pages: PdfPage[], title: string) {
   }
 
   const xrefOffset = offset;
-  const xref = [`xref`, `0 ${maxObject + 1}`, "0000000000 65535 f "];
+  const xref = ["xref", `0 ${maxObject + 1}`, "0000000000 65535 f "];
   for (let id = 1; id <= maxObject; id += 1) xref.push(`${String(offsets[id]).padStart(10, "0")} 00000 n `);
   const trailer = `${xref.join("\n")}\ntrailer\n<< /Size ${maxObject + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
   chunks.push(pdfBuffer(trailer));
