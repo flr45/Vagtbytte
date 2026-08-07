@@ -5,19 +5,22 @@ import { setOperationalInteractiveContextImageAction } from "@/lib/operativ-cont
 import { setOperationalVehicleViewAction } from "@/lib/operativ-vehicle-view-actions";
 import type { OperationalVehicleViewKey } from "@/lib/operativ-vehicle-view-model";
 
-type ContextTarget = {
+type SharedTarget = {
+  label: string;
+  successHref?: string;
+};
+
+type ContextTarget = SharedTarget & {
   mode: "context";
   vehicleId: string;
   placeId: string;
   nodeId?: string | null;
-  label: string;
 };
 
-type VehicleViewTarget = {
+type VehicleViewTarget = SharedTarget & {
   mode: "vehicle-view";
   vehicleId: string;
   viewKey: OperationalVehicleViewKey;
-  label: string;
 };
 
 type Props = ContextTarget | VehicleViewTarget;
@@ -108,8 +111,12 @@ export function OperationalQuickImageCapture(props: Props) {
         assign.set("viewKey", props.viewKey);
         await setOperationalVehicleViewAction(assign);
       }
-      setMessage("Billedet er gemt.");
-      window.setTimeout(() => window.location.reload(), 250);
+
+      setMessage(props.successHref ? "Billedet er gemt · åbner næste…" : "Billedet er gemt.");
+      window.setTimeout(() => {
+        if (props.successHref) window.location.assign(props.successHref);
+        else window.location.reload();
+      }, 250);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Billedet kunne ikke gemmes.");
       setBusy(false);
@@ -150,7 +157,7 @@ export function OperationalQuickImageCapture(props: Props) {
           <input accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => select(event.target.files?.[0])} type="file" />
         </label>
       </div>
-      {file ? <button className="app-button-primary min-h-11" disabled={busy} onClick={upload} type="button">{busy ? "Gemmer…" : "Brug billedet her"}</button> : null}
+      {file ? <button className="app-button-primary min-h-11" disabled={busy} onClick={upload} type="button">{busy ? "Gemmer…" : props.successHref ? "Gem og fortsæt" : "Brug billedet her"}</button> : null}
       {message ? <p className="text-xs font-bold text-slate-300" role="status">{message}</p> : null}
       <p className="text-[10px] font-semibold leading-4 text-slate-500">JPEG, PNG eller WebP · maks. 12 MB. Rotation og beskæring sker lokalt på enheden før upload.</p>
     </div>
