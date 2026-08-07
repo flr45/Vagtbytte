@@ -6,6 +6,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { NextResponse } from "next/server";
 import { canAccessOperationalPortal, getCurrentUser } from "@/lib/auth";
+import { normalizeOperationalQrValue } from "@/lib/operativ-qr";
 
 const execFileAsync = promisify(execFile);
 const MAX_QR_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
       maxBuffer: 1024 * 1024
     });
     const raw = stdout.split(/\r?\n/).map((value) => value.trim()).find(Boolean) ?? "";
-    const operationalPath = normalizeOperationalQrValue(raw, new URL(request.url));
+    const operationalPath = normalizeOperationalQrValue(raw, request.url);
     if (!operationalPath) {
       return NextResponse.json({ error: "QR-koden er ikke en gyldig SBR Fire App-kode." }, { status: 422 });
     }
@@ -52,22 +53,4 @@ export async function POST(request: Request) {
   } finally {
     await rm(directory, { recursive: true, force: true }).catch(() => undefined);
   }
-}
-
-function normalizeOperationalQrValue(value: string, requestUrl: URL) {
-  if (!value) return null;
-  let pathname = value;
-  if (/^https?:\/\//i.test(value)) {
-    try {
-      const parsed = new URL(value);
-      if (parsed.host !== requestUrl.host) return null;
-      pathname = `${parsed.pathname}${parsed.search}${parsed.hash}`;
-    } catch {
-      return null;
-    }
-  }
-  if (pathname.includes("..") || pathname.includes("\\") || pathname.includes("\u0000")) return null;
-  return /^\/admin\/operativ-portal\/(?:koeretoejer\/[0-9a-f-]{36}|rum\/[0-9a-f-]{36}|udstyr\/[0-9a-f-]{36})(?:[#?].*)?$/i.test(pathname)
-    ? pathname
-    : null;
 }
