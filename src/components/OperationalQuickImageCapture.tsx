@@ -1,0 +1,129 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { setOperationalInteractiveContextImageAction } from "@/lib/operativ-content-builder-actions";
+import { setOperationalVehicleViewAction } from "@/lib/operativ-vehicle-view-actions";
+import type { OperationalVehicleViewKey } from "@/lib/operativ-vehicle-view-model";
+
+type ContextTarget = {
+  mode: "context";
+  vehicleId: string;
+  placeId: string;
+  nodeId?: string | null;
+  label: string;
+};
+
+type VehicleViewTarget = {
+  mode: "vehicle-view";
+  vehicleId: string;
+  viewKey: OperationalVehicleViewKey;
+  label: string;
+};
+
+type Props = ContextTarget | VehicleViewTarget;
+
+async function rotatedFile(file: File, rotation: number): Promise<File> {
+  const normalized = ((rotation % 360) + 360) % 360;
+  if (!normalized) return file;
+
+  const url = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    const swap = normalized === 90 || normalized === 270;
+    const canvas = document.createElement("canvas");
+    canvas.width = swap ? image.naturalHeight : image.naturalWidth;
+    canvas.height = swap ? image.naturalWidth : image.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate((normalized * Math.PI) / 180);
+    ctx.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2);
+    const mime = file.type === "image/png" || file.type === "image/webp" ? file.type : "image/jpeg";
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, mime, 0.94));
+    return blob ? new File([blob], file.name, { type: mime, lastModified: Date.now() }) : file;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+export function OperationalQuickImageCapture(props: Props) {
+  const [file, setFile] = useState<File | null>(null);
+  const [rotation, setRotation] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const previewUrl = useMemo(() => file ? URL.createObjectURL(file) : "", [file]);
+
+  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
+
+  function select(next: File | undefined) {
+    setFile(next ?? null);
+    setRotation(0);
+    setMessage("");
+  }
+
+  async function upload() {
+    if (!file || busy) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const prepared = await rotatedFile(file, rotation);
+      const form = new FormData();
+      form.set("file", prepared);
+      form.set("vehicleId", props.vehicleId);
+      form.set("title", props.label);
+      form.set("altText", props.label);
+      if (props.mode === "context") form.set("placeId", props.placeId);
+
+      const response = await fetch("/api/admin/operativ-portal/billeder", { method: "POST", body: form });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.imageId) throw new Error(data.error || "Billedet kunne ikke uploades.");
+
+      const assign = new FormData();
+      assign.set("imageId", data.imageId);
+      if (props.mode === "context") {
+        assign.set("placeId", props.placeId);
+        assign.set("nodeId", props.nodeId ?? "");
+        const result = await setOperationalInteractiveContextImageAction(assign);
+        if (!result?.ok) throw new Error(result?.error || "Billedet kunne ikke vælges.");
+      } else {
+        assign.set("vehicleId", props.vehicleId);
+        assign.set("viewKey", props.viewKey);
+        await setOperationalVehicleViewAction(assign);
+      }
+      setMessage("Billedet er gemt.");
+      window.setTimeout(() => window.location.reload(), 250);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Billedet kunne ikke gemmes.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="grid gap-3 rounded-xl border border-white/10 bg-[#11191e] p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-red-400">Hurtigt billede</p><strong className="text-sm text-white">{props.label}</strong></div>
+        {file ? <button className="rounded-lg border border-white/10 px-3 py-2 text-xs font-black text-white" onClick={() => setRotation((value) => (value + 90) % 360)} type="button">↻ Rotér</button> : null}
+      </div>
+      {file && previewUrl ? (
+        <div className="grid min-h-44 place-items-center overflow-hidden rounded-lg bg-black">
+          <img alt="Forhåndsvisning" className="max-h-72 max-w-full object-contain transition-transform" src={previewUrl} style={{ transform: `rotate(${rotation}deg)` }} />
+        </div>
+      ) : null}
+      <div className="grid gap-2 sm:grid-cols-2">
+        <label className="flex min-h-12 cursor-pointer items-center justify-center rounded-lg bg-red-600 px-3 text-center text-xs font-black text-white hover:bg-red-700">
+          📷 Tag foto
+          <input accept="image/jpeg,image/png,image/webp" capture="environment" className="sr-only" onChange={(event) => select(event.target.files?.[0])} type="file" />
+        </label>
+        <label className="flex min-h-12 cursor-pointer items-center justify-center rounded-lg border border-white/10 bg-white/5 px-3 text-center text-xs font-black text-white hover:bg-white/10">
+          ▧ Vælg billede
+          <input accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => select(event.target.files?.[0])} type="file" />
+        </label>
+      </div>
+      {file ? <button className="app-button-primary min-h-11" disabled={busy} onClick={upload} type="button">{busy ? "Gemmer…" : "Brug billedet her"}</button> : null}
+      {message ? <p className="text-xs font-bold text-slate-300" role="status">{message}</p> : null}
+      <p className="text-[10px] font-semibold leading-4 text-slate-500">JPEG, PNG eller WebP · maks. 12 MB. Kameraet åbnes direkte på mobil, når browseren understøtter det.</p>
+    </div>
+  );
+}
