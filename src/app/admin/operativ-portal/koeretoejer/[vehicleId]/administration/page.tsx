@@ -18,6 +18,7 @@ export default async function OperationalVehicleAdministrationPage({ params }: P
   const { vehicleId } = await params;
   const vehicle = await getOperationalAdminVehicle(vehicleId);
   if (!vehicle) notFound();
+  const organizerKey = vehicle.rooms.map((room) => `${room.id}:${room.items.map((item) => item.id).join(",")}`).join("|");
 
   return (
     <OperationalPageFrame>
@@ -36,7 +37,7 @@ export default async function OperationalVehicleAdministrationPage({ params }: P
         </div>
       </section>
 
-      <OperationalAdminOrganizer initialRooms={vehicle.rooms} vehicleId={vehicle.id} vehicleName={vehicle.name} />
+      <OperationalAdminOrganizer key={organizerKey} initialRooms={vehicle.rooms} vehicleId={vehicle.id} vehicleName={vehicle.name} />
     </OperationalPageFrame>
   );
 }
