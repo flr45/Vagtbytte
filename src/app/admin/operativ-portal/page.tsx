@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AppIcon, type AppIconName } from "@/components/AppIcon";
 import {
   OperationalPageFrame,
   OperationalPortalNav
@@ -14,29 +15,29 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const modules = [
+const modules: Array<{ href: string; icon: AppIconName; title: string; text: string; primary?: boolean }> = [
   {
     href: "/admin/operativ-portal/dokumenter",
-    icon: "▤",
+    icon: "document",
     title: "LOMMEKORT",
     text: "Operative kort og lommekort",
     primary: true
   },
   {
     href: "/admin/operativ-portal/koeretoejer",
-    icon: "🚒",
+    icon: "truck",
     title: "KØRETØJER",
     text: "Oversigt over køretøjer"
   },
   {
     href: "/admin/operativ-portal/videoer",
-    icon: "▶",
+    icon: "video",
     title: "VIDEOAKADEMI",
     text: "Undervisningsvideoer og instruktioner"
   },
   {
     href: "/admin/operativ-portal/dokumenter",
-    icon: "▥",
+    icon: "book",
     title: "VIDENSBANK",
     text: "SOP’er, instrukser og vigtige dokumenter"
   }
@@ -50,8 +51,8 @@ export default async function OperationalPortalPage() {
   return (
     <OperationalPageFrame>
       <div className="flex items-center justify-between px-1 py-1 md:hidden">
-        <Link aria-label="Tilbage til SBR Portal" className="grid size-11 place-items-center text-2xl text-slate-200" href="/">☰</Link>
-        <span className="text-xl text-slate-300" aria-hidden="true">♧</span>
+        <Link aria-label="Tilbage til SBR Fire App" className="grid size-11 place-items-center rounded-lg text-slate-200 transition hover:bg-white/5" href="/app"><AppIcon className="size-6" name="menu" /></Link>
+        <AppIcon className="size-5 text-slate-400" name="truck" />
       </div>
 
       <section className="grid justify-items-center py-5 text-center sm:py-8">
@@ -69,20 +70,20 @@ export default async function OperationalPortalPage() {
       <section className="grid grid-cols-2 gap-3">
         {modules.map((module) => (
           <Link className={`${module.primary ? "bg-gradient-to-br from-[#c21720] to-[#8f0d14]" : "bg-[#11171b]"} group grid min-h-40 content-center justify-items-center rounded-xl border border-white/10 p-4 text-center shadow-lg transition hover:border-red-500/50`} href={module.href} key={module.title}>
-            <span aria-hidden="true" className={`text-4xl ${module.primary ? "text-white" : "text-red-500"}`}>{module.icon}</span>
+            <span className={`grid size-12 place-items-center rounded-xl ${module.primary ? "bg-white/10 text-white" : "bg-red-500/10 text-red-500"}`}><AppIcon className="size-7" name={module.icon} /></span>
             <h2 className="mt-4 text-sm font-black tracking-wide text-white sm:text-base">{module.title}</h2>
             <p className={`mt-1 max-w-44 text-xs font-medium leading-5 ${module.primary ? "text-red-50/90" : "text-slate-400"}`}>{module.text}</p>
           </Link>
         ))}
       </section>
 
-      <Link className="grid grid-cols-[56px_minmax(0,1fr)_24px] items-center gap-3 rounded-xl border border-white/10 bg-[#11171b] p-4 shadow-lg hover:border-red-500/50" href="/admin/operativ-portal/scan">
-        <span className="grid size-12 place-items-center rounded-lg text-3xl text-red-500">⌗</span>
+      <Link className="grid grid-cols-[56px_minmax(0,1fr)_24px] items-center gap-3 rounded-xl border border-white/10 bg-[#11171b] p-4 shadow-lg transition hover:border-red-500/50" href="/admin/operativ-portal/scan">
+        <span className="grid size-12 place-items-center rounded-lg bg-red-500/10 text-red-500"><AppIcon className="size-7" name="qr" /></span>
         <span>
           <strong className="block text-sm font-black">SCAN QR-KODE</strong>
           <small className="mt-1 block text-xs font-medium leading-5 text-slate-400">Scan en QR-kode og få hurtig adgang til information</small>
         </span>
-        <span className="text-xl text-slate-500">›</span>
+        <AppIcon className="size-5 text-slate-500" name="chevronRight" />
       </Link>
 
       {vehicles.length > 0 ? (
@@ -95,10 +96,10 @@ export default async function OperationalPortalPage() {
             {vehicles.slice(0, 4).map((vehicle) => {
               const code = vehicle.code || vehicleCode(vehicle.name);
               return (
-                <Link className="grid grid-cols-[74px_minmax(0,1fr)_18px] items-center gap-3 rounded-lg bg-[#12191e] p-2 hover:bg-[#172026]" href={`/admin/operativ-portal/koeretoejer/${vehicle.id}`} key={vehicle.id}>
+                <Link className="grid grid-cols-[74px_minmax(0,1fr)_18px] items-center gap-3 rounded-lg bg-[#12191e] p-2 transition hover:bg-[#172026]" href={`/admin/operativ-portal/koeretoejer/${vehicle.id}`} key={vehicle.id}>
                   {vehicle.coverImageId ? <img alt={vehicle.name} className="h-14 w-[74px] rounded-md object-cover" src={operationalImageUrl(vehicle.coverImageId)} /> : <div className="grid h-14 w-[74px] place-items-center rounded-md bg-[#20272c] text-xs font-black text-slate-500">{code}</div>}
                   <span className="min-w-0"><strong className="block truncate text-sm">{vehicle.name}</strong><small className="mt-1 block truncate text-xs text-slate-500">{vehicle.model || `${vehicle.placeCount} rum · ${vehicle.itemCount} udstyr`}</small><span className="mt-1 inline-flex rounded bg-red-600 px-1.5 py-0.5 text-[8px] font-black text-white">{code}</span></span>
-                  <span className="text-xl text-slate-500">›</span>
+                  <AppIcon className="size-4 text-slate-500" name="chevronRight" />
                 </Link>
               );
             })}

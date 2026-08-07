@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { AppIcon, type AppIconName } from "@/components/AppIcon";
 import { canAccessOperationalPortal, getCurrentUser } from "@/lib/auth";
 
 export type SbrFireModule = "home" | "alarm" | "vagt" | "operativ" | "more";
@@ -8,7 +9,7 @@ type NavItem = {
   key: SbrFireModule;
   href: string;
   label: string;
-  icon: string;
+  icon: AppIconName;
 };
 
 function vagtHref(role: string) {
@@ -19,25 +20,25 @@ function vagtHref(role: string) {
 
 function navigationFor(user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>) {
   const items: NavItem[] = [
-    { key: "home", href: "/app", label: "Hjem", icon: "⌂" }
+    { key: "home", href: "/app", label: "Hjem", icon: "home" }
   ];
 
   if (user.role === "BRANDFIGHTER") {
-    items.push({ key: "alarm", href: "/brandmand/alarmer", label: "Alarmer", icon: "🚨" });
+    items.push({ key: "alarm", href: "/brandmand/alarmer", label: "Alarmer", icon: "alarm" });
   }
 
   items.push({
     key: "vagt",
     href: vagtHref(user.role),
     label: user.role === "VC" ? "Vagtcentral" : user.role === "ADMIN" ? "Admin" : "Vagt",
-    icon: user.role === "VC" ? "◉" : user.role === "ADMIN" ? "⚙" : "↔"
+    icon: user.role === "ADMIN" ? "settings" : "swap"
   });
 
   if (canAccessOperationalPortal(user)) {
-    items.push({ key: "operativ", href: "/admin/operativ-portal", label: "Operativ", icon: "🚒" });
+    items.push({ key: "operativ", href: "/admin/operativ-portal", label: "Operativ", icon: "truck" });
   }
 
-  items.push({ key: "more", href: "/app/mere", label: "Mere", icon: "•••" });
+  items.push({ key: "more", href: "/app/mere", label: "Mere", icon: "more" });
   return items;
 }
 
@@ -52,11 +53,12 @@ export async function SbrFireNavigation({ active, desktop = true }: { active: Sb
         <nav aria-label="SBR Fire App" className="hidden items-center gap-1 rounded-xl border border-white/10 bg-[#0d1317] p-1.5 md:flex">
           {items.map((item) => (
             <Link
+              aria-current={active === item.key ? "page" : undefined}
               className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm font-black transition ${active === item.key ? "bg-red-600 text-white" : "text-slate-400 hover:bg-white/10 hover:text-white"}`}
               href={item.href}
               key={item.key}
             >
-              <span aria-hidden="true">{item.icon}</span>
+              <AppIcon className="size-4 shrink-0" name={item.icon} />
               {item.label}
             </Link>
           ))}
@@ -76,7 +78,7 @@ export async function SbrFireNavigation({ active, desktop = true }: { active: Sb
             href={item.href}
             key={item.key}
           >
-            <span aria-hidden="true" className="text-xl leading-none">{item.icon}</span>
+            <AppIcon className="size-5" name={item.icon} />
             <span className="truncate">{item.label}</span>
           </Link>
         ))}
@@ -101,9 +103,13 @@ export function SbrFireHeader({
       <div className="grid min-h-12 grid-cols-[48px_minmax(0,1fr)_48px] items-center">
         <div>
           {backHref ? (
-            <Link aria-label="Tilbage" className="grid size-11 place-items-center text-3xl font-light" href={backHref}>‹</Link>
+            <Link aria-label="Tilbage" className="grid size-11 place-items-center rounded-lg transition hover:bg-white/10" href={backHref}>
+              <AppIcon className="size-6" name="back" />
+            </Link>
           ) : (
-            <Link aria-label="SBR Fire App hjem" className="grid size-11 place-items-center text-xl" href="/app">☰</Link>
+            <Link aria-label="Åbn SBR Fire App hjem" className="grid size-11 place-items-center rounded-lg transition hover:bg-white/10" href="/app">
+              <AppIcon className="size-6" name="menu" />
+            </Link>
           )}
         </div>
         <div className="min-w-0 text-center">
