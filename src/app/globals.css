@@ -96,6 +96,113 @@ textarea:disabled {
   @apply focus-ring inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-5 text-base font-bold text-red-800 shadow-sm transition duration-150 hover:bg-red-50 active:scale-[0.98] disabled:cursor-wait disabled:opacity-70;
 }
 
+/* Unified SBR Fire App skin. Existing Vagtbytte/VC components keep their logic,
+   while their surfaces and typography inherit the Operativ Portal look. */
+.sbr-fire-skin {
+  color-scheme: dark;
+}
+
+.sbr-fire-skin .app-card,
+.sbr-fire-skin .app-card-interactive {
+  border-color: rgba(255, 255, 255, 0.10);
+  background: #0d1317;
+  color: #fff;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
+}
+
+.sbr-fire-skin .app-button-secondary {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: #151b1f;
+  color: #fff;
+  box-shadow: none;
+}
+
+.sbr-fire-skin .app-button-secondary:hover {
+  border-color: rgba(248, 113, 113, 0.35);
+  background: #1b242a;
+}
+
+.sbr-fire-skin .app-button-danger {
+  border-color: rgba(248, 113, 113, 0.30);
+  background: rgba(239, 68, 68, 0.08);
+  color: #fca5a5;
+}
+
+.sbr-fire-skin .bg-white {
+  background-color: #0d1317;
+}
+
+.sbr-fire-skin .bg-zinc-50,
+.sbr-fire-skin .bg-zinc-100 {
+  background-color: #11191e;
+}
+
+.sbr-fire-skin .bg-zinc-200 {
+  background-color: #202a31;
+}
+
+.sbr-fire-skin .border-zinc-100,
+.sbr-fire-skin .border-zinc-200,
+.sbr-fire-skin .border-zinc-300,
+.sbr-fire-skin .border-white\/70 {
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
+.sbr-fire-skin .text-zinc-950,
+.sbr-fire-skin .text-zinc-900,
+.sbr-fire-skin .text-zinc-800 {
+  color: #f8fafc;
+}
+
+.sbr-fire-skin .text-zinc-700,
+.sbr-fire-skin .text-zinc-600,
+.sbr-fire-skin .text-zinc-500 {
+  color: #94a3b8;
+}
+
+.sbr-fire-skin .bg-amber-50 {
+  background-color: rgba(245, 158, 11, 0.08);
+}
+
+.sbr-fire-skin .bg-emerald-50 {
+  background-color: rgba(16, 185, 129, 0.08);
+}
+
+.sbr-fire-skin .bg-sky-50 {
+  background-color: rgba(14, 165, 233, 0.08);
+}
+
+.sbr-fire-skin .bg-red-50 {
+  background-color: rgba(239, 68, 68, 0.08);
+}
+
+.sbr-fire-skin .text-amber-950,
+.sbr-fire-skin .text-amber-900,
+.sbr-fire-skin .text-amber-800 {
+  color: #fde68a;
+}
+
+.sbr-fire-skin .text-emerald-950,
+.sbr-fire-skin .text-emerald-900,
+.sbr-fire-skin .text-emerald-800,
+.sbr-fire-skin .text-emerald-700 {
+  color: #a7f3d0;
+}
+
+.sbr-fire-skin .text-sky-950,
+.sbr-fire-skin .text-sky-900 {
+  color: #bae6fd;
+}
+
+.sbr-fire-skin input:not(.dark-input),
+.sbr-fire-skin select:not(.dark-input),
+.sbr-fire-skin textarea:not(.dark-input) {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: #0b1115;
+  color: #f8fafc;
+  color-scheme: dark;
+}
+
 .fade-in {
   animation: app-fade-in 180ms ease-out both;
 }
