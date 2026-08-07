@@ -4,6 +4,7 @@ import {
   MAX_PACKING_LIST_PDF_BYTES,
   extractTextFromPackingListPdf,
   normalizeKey,
+  normalizePlaceKey,
   parsePackingListText,
   type PackingListPreviewRow
 } from "@/lib/operativ-packing-list";
@@ -76,13 +77,13 @@ export async function POST(request: Request) {
   const placeByKey = new Map<string, { id: string; name: string }>();
   const itemByKey = new Map<string, { id: string; name: string }>();
   for (const row of existing) {
-    const placeKey = normalizeKey(row.placeName);
+    const placeKey = normalizePlaceKey(row.placeName);
     if (!placeByKey.has(placeKey)) placeByKey.set(placeKey, { id: row.placeId, name: row.placeName });
     if (row.itemId && row.itemName) itemByKey.set(`${row.placeId}:${normalizeKey(row.itemName)}`, { id: row.itemId, name: row.itemName });
   }
 
   const rows: PackingListPreviewRow[] = parsedRows.map((row) => {
-    const place = placeByKey.get(normalizeKey(row.placeName)) ?? null;
+    const place = placeByKey.get(normalizePlaceKey(row.placeName)) ?? null;
     const item = place ? itemByKey.get(`${place.id}:${normalizeKey(row.itemName)}`) ?? null : null;
     let action: PackingListPreviewRow["action"] = "create-place-and-item";
     if (row.confidence < 0.75) action = "review";
@@ -101,7 +102,7 @@ export async function POST(request: Request) {
   const stats = {
     total: rows.length,
     existingPlaces: new Set(rows.filter((row) => row.placeId).map((row) => row.placeId)).size,
-    newPlaces: new Set(rows.filter((row) => !row.placeId && row.action !== "review").map((row) => normalizeKey(row.placeName))).size,
+    newPlaces: new Set(rows.filter((row) => !row.placeId && row.action !== "review").map((row) => normalizePlaceKey(row.placeName))).size,
     newItems: rows.filter((row) => row.action === "create-item" || row.action === "create-place-and-item").length,
     updates: rows.filter((row) => row.action === "update-item").length,
     review: rows.filter((row) => row.action === "review").length
