@@ -16,6 +16,16 @@ import {
 import { prisma } from "./prisma";
 
 const nameSchema = z.string().trim().min(1).max(180);
+const textSchema = (max: number) => z.string().trim().max(max).default("");
+const sortSchema = z.coerce.number().int().min(0).max(9999).default(0);
+
+function optionalYear(value: FormDataEntryValue | null) {
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  const number = Number(text);
+  if (!Number.isInteger(number) || number < 1900 || number > 2200) return undefined;
+  return number;
+}
 
 async function audit(action: string, description: string) {
   const admin = await requireRole(UserRole.ADMIN);
@@ -30,17 +40,38 @@ async function audit(action: string, description: string) {
   return admin;
 }
 
+function revalidateVehicle(vehicleId: string) {
+  revalidatePath("/admin/operativ-portal");
+  revalidatePath("/admin/operativ-portal/koeretoejer");
+  revalidatePath(`/admin/operativ-portal/koeretoejer/${vehicleId}`);
+  revalidatePath("/admin/operativ-portal/soeg");
+}
+
 export async function createOperationalVehicleAction(formData: FormData) {
   await requireRole(UserRole.ADMIN);
-  const parsed = z
-    .object({
-      name: nameSchema,
-      description: z.string().trim().max(3000).default("")
-    })
-    .safeParse({
-      name: formData.get("name"),
-      description: String(formData.get("description") ?? "")
-    });
+  const year = optionalYear(formData.get("year"));
+  if (year === undefined) {
+    redirect("/admin/operativ-portal/koeretoejer?fejl=Årgang+er+ugyldig");
+  }
+  const parsed = z.object({
+    name: nameSchema,
+    description: textSchema(3000),
+    code: textSchema(30),
+    model: textSchema(180),
+    fuel: textSchema(80),
+    crew: textSchema(80),
+    functionText: textSchema(3000),
+    sortOrder: sortSchema
+  }).safeParse({
+    name: formData.get("name"),
+    description: String(formData.get("description") ?? ""),
+    code: String(formData.get("code") ?? ""),
+    model: String(formData.get("model") ?? ""),
+    fuel: String(formData.get("fuel") ?? ""),
+    crew: String(formData.get("crew") ?? ""),
+    functionText: String(formData.get("functionText") ?? ""),
+    sortOrder: formData.get("sortOrder") ?? 0
+  });
 
   if (!parsed.success) {
     redirect("/admin/operativ-portal/koeretoejer?fejl=Udfyld+navnet+korrekt");
@@ -49,86 +80,115 @@ export async function createOperationalVehicleAction(formData: FormData) {
   const id = randomUUID();
   try {
     await prisma.$executeRaw`
-      INSERT INTO operational_vehicle (id, name, description)
-      VALUES (${id}, ${parsed.data.name}, ${parsed.data.description})
+      INSERT INTO operational_vehicle
+        (id, name, description, code, model, year, fuel, crew, function_text, sort_order)
+      VALUES
+        (${id}, ${parsed.data.name}, ${parsed.data.description}, ${parsed.data.code},
+         ${parsed.data.model}, ${year}, ${parsed.data.fuel}, ${parsed.data.crew},
+         ${parsed.data.functionText}, ${parsed.data.sortOrder})
     `;
   } catch {
     redirect("/admin/operativ-portal/koeretoejer?fejl=Køretøjet+findes+allerede");
   }
 
   await audit("OPERATIONAL_VEHICLE_CREATED", `Køretøjet ${parsed.data.name} blev oprettet i Operativ Portal`);
-  revalidatePath("/admin/operativ-portal");
-  revalidatePath("/admin/operativ-portal/koeretoejer");
+  revalidateVehicle(id);
   redirect(`/admin/operativ-portal/koeretoejer/${id}`);
 }
 
 export async function updateOperationalVehicleAction(formData: FormData) {
   await requireRole(UserRole.ADMIN);
-  const parsed = z
-    .object({
-      vehicleId: z.string().uuid(),
-      name: nameSchema,
-      description: z.string().trim().max(3000).default("")
-    })
-    .safeParse({
-      vehicleId: formData.get("vehicleId"),
-      name: formData.get("name"),
-      description: String(formData.get("description") ?? "")
-    });
+  const year = optionalYear(formData.get("year"));
+  if (year === undefined) return;
+  const parsed = z.object({
+    vehicleId: z.string().uuid(),
+    name: nameSchema,
+    description: textSchema(3000),
+    code: textSchema(30),
+    model: textSchema(180),
+    fuel: textSchema(80),
+    crew: textSchema(80),
+    functionText: textSchema(3000),
+    sortOrder: sortSchema
+  }).safeParse({
+    vehicleId: formData.get("vehicleId"),
+    name: formData.get("name"),
+    description: String(formData.get("description") ?? ""),
+    code: String(formData.get("code") ?? ""),
+    model: String(formData.get("model") ?? ""),
+    fuel: String(formData.get("fuel") ?? ""),
+    crew: String(formData.get("crew") ?? ""),
+    functionText: String(formData.get("functionText") ?? ""),
+    sortOrder: formData.get("sortOrder") ?? 0
+  });
 
   if (!parsed.success) return;
   await prisma.$executeRaw`
     UPDATE operational_vehicle
-    SET name = ${parsed.data.name}, description = ${parsed.data.description}, updated_at = CURRENT_TIMESTAMP
+    SET name = ${parsed.data.name}, description = ${parsed.data.description},
+        code = ${parsed.data.code}, model = ${parsed.data.model}, year = ${year},
+        fuel = ${parsed.data.fuel}, crew = ${parsed.data.crew},
+        function_text = ${parsed.data.functionText}, sort_order = ${parsed.data.sortOrder},
+        updated_at = CURRENT_TIMESTAMP
     WHERE id = ${parsed.data.vehicleId}
   `;
   await audit("OPERATIONAL_VEHICLE_UPDATED", `Køretøjet ${parsed.data.name} blev opdateret`);
-  revalidatePath("/admin/operativ-portal");
-  revalidatePath("/admin/operativ-portal/koeretoejer");
-  revalidatePath(`/admin/operativ-portal/koeretoejer/${parsed.data.vehicleId}`);
+  revalidateVehicle(parsed.data.vehicleId);
 }
 
 export async function createOperationalPlaceAction(formData: FormData) {
   await requireRole(UserRole.ADMIN);
-  const parsed = z
-    .object({ vehicleId: z.string().uuid(), name: nameSchema })
-    .safeParse({ vehicleId: formData.get("vehicleId"), name: formData.get("name") });
+  const parsed = z.object({
+    vehicleId: z.string().uuid(),
+    name: nameSchema,
+    description: textSchema(2000),
+    sortOrder: sortSchema
+  }).safeParse({
+    vehicleId: formData.get("vehicleId"),
+    name: formData.get("name"),
+    description: String(formData.get("description") ?? ""),
+    sortOrder: formData.get("sortOrder") ?? 0
+  });
   if (!parsed.success) return;
 
   const id = randomUUID();
   await prisma.$executeRaw`
-    INSERT INTO operational_place (id, vehicle_id, name)
-    VALUES (${id}, ${parsed.data.vehicleId}, ${parsed.data.name})
+    INSERT INTO operational_place (id, vehicle_id, name, description, sort_order)
+    VALUES (${id}, ${parsed.data.vehicleId}, ${parsed.data.name}, ${parsed.data.description}, ${parsed.data.sortOrder})
   `;
   await audit("OPERATIONAL_PLACE_CREATED", `Rummet ${parsed.data.name} blev oprettet`);
-  revalidatePath(`/admin/operativ-portal/koeretoejer/${parsed.data.vehicleId}`);
+  revalidateVehicle(parsed.data.vehicleId);
   redirect(`/admin/operativ-portal/rum/${id}`);
 }
 
 export async function createOperationalItemAction(formData: FormData) {
   await requireRole(UserRole.ADMIN);
-  const parsed = z
-    .object({
-      placeId: z.string().uuid(),
-      name: nameSchema,
-      quantity: z.coerce.number().int().min(1).max(999),
-      note: z.string().trim().max(1000).default("")
-    })
-    .safeParse({
-      placeId: formData.get("placeId"),
-      name: formData.get("name"),
-      quantity: formData.get("quantity"),
-      note: String(formData.get("note") ?? "")
-    });
+  const parsed = z.object({
+    placeId: z.string().uuid(),
+    name: nameSchema,
+    quantity: z.coerce.number().int().min(1).max(999),
+    note: textSchema(1000),
+    specifications: textSchema(3000),
+    sortOrder: sortSchema
+  }).safeParse({
+    placeId: formData.get("placeId"),
+    name: formData.get("name"),
+    quantity: formData.get("quantity"),
+    note: String(formData.get("note") ?? ""),
+    specifications: String(formData.get("specifications") ?? ""),
+    sortOrder: formData.get("sortOrder") ?? 0
+  });
   if (!parsed.success) return;
 
   const id = randomUUID();
   await prisma.$executeRaw`
-    INSERT INTO operational_item (id, place_id, name, quantity, note)
-    VALUES (${id}, ${parsed.data.placeId}, ${parsed.data.name}, ${parsed.data.quantity}, ${parsed.data.note})
+    INSERT INTO operational_item (id, place_id, name, quantity, note, specifications, sort_order)
+    VALUES (${id}, ${parsed.data.placeId}, ${parsed.data.name}, ${parsed.data.quantity},
+      ${parsed.data.note}, ${parsed.data.specifications}, ${parsed.data.sortOrder})
   `;
   await audit("OPERATIONAL_ITEM_CREATED", `Udstyret ${parsed.data.name} blev oprettet`);
   revalidatePath(`/admin/operativ-portal/rum/${parsed.data.placeId}`);
+  revalidatePath("/admin/operativ-portal/soeg");
   redirect(`/admin/operativ-portal/udstyr/${id}`);
 }
 
