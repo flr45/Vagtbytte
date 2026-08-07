@@ -4,7 +4,8 @@ import { z } from "zod";
 import { canAccessOperationalPortal, getCurrentUser } from "@/lib/auth";
 import {
   isOperationalFavorite,
-  resolveOperationalTarget
+  resolveOperationalTarget,
+  type OperationalTargetType
 } from "@/lib/operativ-portal-personal";
 import { prisma } from "@/lib/prisma";
 
@@ -16,6 +17,20 @@ const bodySchema = z.object({
   id: z.string().uuid(),
   favorite: z.boolean().optional()
 });
+
+export async function GET(request: Request) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Log ind for at fortsætte." }, { status: 401 });
+  if (!canAccessOperationalPortal(user)) return NextResponse.json({ error: "Du har ikke adgang til Operativ Portal." }, { status: 403 });
+
+  const url = new URL(request.url);
+  const type = url.searchParams.get("type");
+  const id = url.searchParams.get("id") ?? "";
+  if (!isTargetType(type) || !/^[0-9a-f-]{36}$/i.test(id)) return NextResponse.json({ error: "Favoritten er ugyldig." }, { status: 400 });
+  const target = await resolveOperationalTarget(type, id);
+  if (!target) return NextResponse.json({ error: "Indholdet blev ikke fundet." }, { status: 404 });
+  return NextResponse.json({ favorite: await isOperationalFavorite(user.id, type, id), title: target.title });
+}
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -47,4 +62,8 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ ok: true, favorite: next });
+}
+
+function isTargetType(value: string | null): value is OperationalTargetType {
+  return value === "vehicle" || value === "place" || value === "item";
 }
