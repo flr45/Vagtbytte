@@ -51,7 +51,7 @@ export async function POST(request: Request) {
   if (next) {
     await prisma.$executeRaw`
       INSERT INTO operational_favorite (id, user_id, target_type, target_id)
-      VALUES (${randomUUID()}, ${user.id}, ${parsed.data.type}, ${parsed.data.id})
+      VALUES (${randomUUID()}::uuid, ${user.id}, ${parsed.data.type}, ${parsed.data.id})
       ON CONFLICT (user_id, target_type, target_id) DO NOTHING
     `;
   } else {
