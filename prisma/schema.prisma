@@ -37,225 +37,445 @@ enum ReturnRequestStatus {
   AWAITING_ORIGINAL
   ORIGINAL_ACCEPTED_AWAITING_VC
   ORIGINAL_REJECTED
-  VC_REJECTED
   VC_APPROVED_AWAITING_EXECUTION
-  COMPLETED
+  VC_APPROVED_COMPLETED
+  VC_REJECTED
+}
+
+enum NotificationType {
+  TRANSFER_CREATED
+  TRANSFER_RECEIVER_ACCEPTED
+  TRANSFER_RECEIVER_REJECTED
+  TRANSFER_VC_APPROVED
+  TRANSFER_VC_REJECTED
+  TRANSFER_STARTED
+  TRANSFER_ACTIVATION_REMINDER
+  TRANSFER_ACTIVATED
+  TRANSFER_EXPECTED_END
+  TRANSFER_CANCELLED
+  RETURN_CREATED
+  RETURN_ORIGINAL_ACCEPTED
+  RETURN_ORIGINAL_REJECTED
+  RETURN_VC_APPROVED
+  RETURN_VC_REJECTED
+  RETURN_EXECUTION_REMINDER
+  RETURN_COMPLETED
+  AVAILABILITY_ASSIGNED
+  ALARM_MESSAGE
+  TEST
+}
+
+enum PushDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  PERMANENT_FAILURE
+  NO_ACTIVE_DEVICE
+}
+
+enum AvailabilityStatus {
+  AVAILABLE
+  ASSIGNED
+  ACKNOWLEDGED
   CANCELLED
+  EXPIRED
+}
+
+enum AlarmStatus {
+  ACTIVE
+  CLOSED
+}
+
+enum BackupKind {
+  AUTOMATIC
+  MANUAL
+}
+
+enum BackupStatus {
+  READY
+  FAILED
+}
+
+enum EmailReportDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
 }
 
 model User {
-  id                    String            @id @default(uuid())
-  role                  UserRole
-  name                  String
-  employeeNumber        String?           @unique
-  login                 String?           @unique
-  passwordHash          String
-  mustChangeAccessCode  Boolean           @default(false)
-  hasAdminAccess        Boolean           @default(false)
-  isActive              Boolean           @default(true)
-  createdAt             DateTime          @default(now())
-  updatedAt             DateTime          @updatedAt
-  outgoingTransfers     Transfer[]        @relation("OutgoingTransfers")
-  incomingTransfers     Transfer[]        @relation("IncomingTransfers")
-  approvals             Transfer[]        @relation("ApprovedTransfers")
-  createdNotifications  Notification[]    @relation("CreatedNotifications")
-  notifications         UserNotification[]
-  pushSubscriptions     PushSubscription[]
-  auditLogs             AuditLog[]        @relation("ActorAuditLogs")
-  availability          FirefighterAvailability?
-  firefighterAssignments AlarmAssignment[] @relation("AlarmAssignmentFirefighter")
-  vcAssignments         AlarmAssignment[] @relation("AlarmAssignmentVc")
-  alarmFollowUps        AlarmFollowUp[]
-  sessions              Session[]
-  loginAttempts         LoginAttempt[]
+  id                     String               @id @default(cuid())
+  name                   String
+  role                   UserRole
+  employeeNumber         String?              @unique
+  loginIdentifier        String               @unique
+  email                  String?              @unique
+  passwordHash           String
+  isActive               Boolean              @default(true)
+  mustChangePassword     Boolean              @default(false)
+  stationCode            String?
+  alarmStations          String[]             @default([])
+  receiveAlarmFollowUps  Boolean              @default(false)
+  hasAdminAccess         Boolean              @default(false)
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  lastLoginAt            DateTime?
+  sessions               Session[]
+  passwordResetTokens    PasswordResetToken[]
+  auditLogs              AuditLog[]           @relation("ActorAuditLogs")
+  targetedAuditLogs      AuditLog[]           @relation("TargetAuditLogs")
+  givenTransfers         ShiftTransfer[]      @relation("GivenTransfers")
+  receivedTransfers      ShiftTransfer[]      @relation("ReceivedTransfers")
+  createdReturns         ReturnRequest[]      @relation("ReturnCreatedBy")
+  answeredReturns        ReturnRequest[]      @relation("ReturnAnsweredBy")
+  notifications          Notification[]
+  pushSubscriptions      PushSubscription[]
+  availabilities         Availability[]       @relation("AvailabilityUser")
+  assignedAvailabilities Availability[]       @relation("AvailabilityAssignedBy")
+
+  @@index([role])
+  @@index([isActive])
+  @@index([stationCode])
+  @@index([hasAdminAccess])
 }
 
-model Transfer {
-  id                  String              @id @default(uuid())
-  fromFirefighterId   String
-  toFirefighterId     String?
-  approvedById        String?
-  shiftStart          DateTime
-  shiftEnd            DateTime
-  status              TransferStatus      @default(AWAITING_RECEIVER)
-  expectedEndMode     ExpectedEndMode?
-  expectedEndAt       DateTime?
-  message             String?
-  returnStatus        ReturnRequestStatus?
-  returnRequestedAt   DateTime?
-  returnRespondedAt   DateTime?
-  returnApprovedAt    DateTime?
-  returnedAt          DateTime?
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
-  fromFirefighter     User                @relation("OutgoingTransfers", fields: [fromFirefighterId], references: [id])
-  toFirefighter       User?               @relation("IncomingTransfers", fields: [toFirefighterId], references: [id])
-  approvedBy          User?               @relation("ApprovedTransfers", fields: [approvedById], references: [id])
-  notifications       Notification[]
-  alarmAssignments    AlarmAssignment[]
+model Availability {
+  id                 String             @id @default(cuid())
+  userId             String
+  availableFrom      DateTime
+  availableUntil     DateTime
+  status             AvailabilityStatus @default(AVAILABLE)
+  assignedBy         String?
+  assignedAt         DateTime?
+  assignedShiftStart DateTime?
+  assignedShiftEnd   DateTime?
+  acknowledgedAt     DateTime?
+  cancelledAt        DateTime?
+  expiredAt          DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  user               User               @relation("AvailabilityUser", fields: [userId], references: [id], onDelete: Cascade)
+  assignedByUser     User?              @relation("AvailabilityAssignedBy", fields: [assignedBy], references: [id], onDelete: SetNull)
+  notifications      Notification[]
 
-  @@index([fromFirefighterId, status])
-  @@index([toFirefighterId, status])
-  @@index([shiftStart, shiftEnd])
+  @@index([status])
+  @@index([availableUntil])
+  @@index([assignedShiftStart, assignedShiftEnd])
+  @@index([userId])
+  @@index([assignedBy])
 }
 
-model FirefighterAvailability {
-  userId               String   @id
-  isAvailable          Boolean  @default(false)
-  availableUntil       DateTime?
-  sourceTransferId     String?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+model ShiftTransfer {
+  id                               String          @id @default(cuid())
+  transferNumber                   String          @unique
+  giverUserId                      String
+  receiverUserId                   String
+  giverEmployeeNumberSnapshot      String
+  receiverEmployeeNumberSnapshot   String
+  giverNameSnapshot                String
+  receiverNameSnapshot             String
+  requestedStartAt                 DateTime
+  expectedEndMode                  ExpectedEndMode @default(UNTIL_SHIFT_END)
+  expectedEndAt                    DateTime?
+  calculatedShiftEndAt             DateTime?
+  comment                          String?
+  status                           TransferStatus  @default(AWAITING_RECEIVER)
+  createdAt                        DateTime        @default(now())
+  updatedAt                        DateTime        @updatedAt
+  receiverRespondedAt              DateTime?
+  receiverResponseComment          String?
+  vcDecidedAt                      DateTime?
+  vcDecision                       String?
+  vcComment                        String?
+  activatedAt                      DateTime?
+  activationConfirmedAt            DateTime?
+  activationConfirmedByUserId      String?
+  returnExecutionConfirmedAt       DateTime?
+  returnExecutionConfirmedByUserId String?
+  cancelledAt                      DateTime?
+  cancelledByUserId                String?
+  cancellationReason               String?
+  completedAt                      DateTime?
+  giver                            User            @relation("GivenTransfers", fields: [giverUserId], references: [id], onDelete: Restrict)
+  receiver                         User            @relation("ReceivedTransfers", fields: [receiverUserId], references: [id], onDelete: Restrict)
+  returnRequests                   ReturnRequest[]
+  notifications                    Notification[]
 
-  @@index([isAvailable, availableUntil])
+  @@index([giverUserId])
+  @@index([receiverUserId])
+  @@index([status])
+  @@index([calculatedShiftEndAt])
+  @@index([createdAt])
+  @@index([activationConfirmedByUserId])
+  @@index([returnExecutionConfirmedByUserId])
+  @@index([cancelledByUserId])
 }
 
-model AlarmMessage {
-  id                   String            @id @default(uuid())
-  sourceAddress        String
-  body                 String
-  sourceKey            String?
-  externalMessageId    String?
-  receivedAt           DateTime          @default(now())
-  stationCode          String?
-  isPrimary            Boolean           @default(false)
-  isFollowUp           Boolean           @default(false)
-  groupedAlarmId       String?
-  groupedAlarm         AlarmMessage?     @relation("AlarmGroup", fields: [groupedAlarmId], references: [id], onDelete: SetNull)
-  followUpMessages     AlarmMessage[]    @relation("AlarmGroup")
-  assignments          AlarmAssignment[]
-  followUps            AlarmFollowUp[]
+model ReturnRequest {
+  id                                  String              @id @default(cuid())
+  returnNumber                        String              @unique
+  transferId                          String
+  createdByUserId                     String
+  originalUserId                      String
+  currentHolderUserId                 String
+  originalNameSnapshot                String
+  originalEmployeeNumberSnapshot      String
+  currentHolderNameSnapshot           String
+  currentHolderEmployeeNumberSnapshot String
+  requestedReturnAt                   DateTime
+  comment                             String?
+  status                              ReturnRequestStatus @default(AWAITING_ORIGINAL)
+  createdAt                           DateTime            @default(now())
+  updatedAt                           DateTime            @updatedAt
+  originalRespondedAt                 DateTime?
+  originalAcceptedAt                  DateTime?
+  originalResponseComment             String?
+  vcDecidedAt                         DateTime?
+  vcDecision                          String?
+  vcComment                           String?
+  completedAt                         DateTime?
+  returnExecutionConfirmedAt          DateTime?
+  returnExecutionConfirmedByUserId    String?
+  transfer                            ShiftTransfer       @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  createdBy                           User                @relation("ReturnCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  originalUser                        User                @relation("ReturnAnsweredBy", fields: [originalUserId], references: [id], onDelete: Restrict)
+  notifications                       Notification[]
 
-  @@unique([sourceAddress, externalMessageId])
-  @@index([receivedAt])
-  @@index([stationCode, receivedAt])
-  @@index([groupedAlarmId, receivedAt])
-}
-
-model AlarmAssignment {
-  id                   String       @id @default(uuid())
-  alarmMessageId       String
-  firefighterId        String
-  vcId                 String?
-  sourceTransferId     String?
-  assignedAt           DateTime     @default(now())
-  endedAt              DateTime?
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
-  alarmMessage         AlarmMessage @relation(fields: [alarmMessageId], references: [id], onDelete: Cascade)
-  firefighter          User         @relation("AlarmAssignmentFirefighter", fields: [firefighterId], references: [id])
-  vc                   User?        @relation("AlarmAssignmentVc", fields: [vcId], references: [id])
-  sourceTransfer       Transfer?    @relation(fields: [sourceTransferId], references: [id], onDelete: SetNull)
-
-  @@index([firefighterId, endedAt])
-  @@index([alarmMessageId, endedAt])
-  @@index([vcId, endedAt])
-}
-
-model AlarmFollowUp {
-  id                   String       @id @default(uuid())
-  alarmMessageId       String
-  userId               String
-  status               String
-  respondedAt          DateTime     @default(now())
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
-  alarmMessage         AlarmMessage @relation(fields: [alarmMessageId], references: [id], onDelete: Cascade)
-  user                 User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([alarmMessageId, userId])
-  @@index([userId, respondedAt])
+  @@index([transferId])
+  @@index([createdByUserId])
+  @@index([originalUserId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([returnExecutionConfirmedByUserId])
 }
 
 model Notification {
-  id                   String             @id @default(uuid())
-  type                 String
-  title                String
-  body                 String
-  link                 String?
-  transferId           String?
-  createdById          String?
-  createdAt            DateTime           @default(now())
-  transfer             Transfer?          @relation(fields: [transferId], references: [id], onDelete: Cascade)
-  createdBy            User?              @relation("CreatedNotifications", fields: [createdById], references: [id], onDelete: SetNull)
-  recipients           UserNotification[]
+  id              String           @id @default(cuid())
+  recipientUserId String
+  shiftTransferId String?
+  returnRequestId String?
+  availabilityId  String?
+  type            NotificationType
+  title           String
+  body            String
+  link            String
+  scheduledFor    DateTime?
+  publishedAt     DateTime?
+  readAt          DateTime?
+  openedAt        DateTime?
+  cancelledAt     DateTime?
+  dismissedAt     DateTime?
+  uniqueKey       String           @unique
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  recipient       User             @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
+  shiftTransfer   ShiftTransfer?   @relation(fields: [shiftTransferId], references: [id], onDelete: Cascade)
+  returnRequest   ReturnRequest?   @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  availability    Availability?    @relation(fields: [availabilityId], references: [id], onDelete: Cascade)
+  deliveries      PushDelivery[]
 
-  @@index([createdAt])
-  @@index([transferId])
-}
-
-model UserNotification {
-  id                   String       @id @default(uuid())
-  userId               String
-  notificationId       String
-  readAt               DateTime?
-  openedAt             DateTime?
-  createdAt            DateTime     @default(now())
-  user                  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  notification          Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, notificationId])
-  @@index([userId, readAt, createdAt])
+  @@index([recipientUserId, readAt])
+  @@index([recipientUserId, createdAt])
+  @@index([scheduledFor])
+  @@index([publishedAt])
+  @@index([cancelledAt])
+  @@index([dismissedAt])
+  @@index([availabilityId])
 }
 
 model PushSubscription {
-  id                   String   @id @default(uuid())
-  userId               String
-  endpoint             String   @unique
-  p256dh               String
-  auth                 String
-  userAgent            String?
-  isActive             Boolean  @default(true)
-  lastSuccessAt        DateTime?
-  lastFailureAt        DateTime?
-  lastError            String?
-  failureCount         Int      @default(0)
-  revokedAt            DateTime?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         String         @id @default(cuid())
+  userId     String
+  endpoint   String         @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  deviceName String?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries PushDelivery[]
 
-  @@index([userId, isActive])
+  @@index([userId])
+  @@index([revokedAt])
 }
 
-model AuditLog {
-  id                   String   @id @default(uuid())
-  actorUserId          String?
-  actorRole            UserRole?
-  action               String
-  description          String
-  metadata             Json?
-  createdAt            DateTime @default(now())
-  actor                User?    @relation("ActorAuditLogs", fields: [actorUserId], references: [id], onDelete: SetNull)
+model PushDelivery {
+  id                 String             @id @default(cuid())
+  notificationId     String
+  pushSubscriptionId String?
+  status             PushDeliveryStatus @default(PENDING)
+  attemptCount       Int                @default(0)
+  sentAt             DateTime?
+  failedAt           DateTime?
+  lastError          String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  notification       Notification       @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  pushSubscription   PushSubscription?  @relation(fields: [pushSubscriptionId], references: [id], onDelete: SetNull)
 
-  @@index([createdAt])
-  @@index([actorUserId, createdAt])
+  @@index([notificationId])
+  @@index([pushSubscriptionId])
+  @@index([status])
 }
 
-model Session {
-  id                   String   @id @default(uuid())
-  tokenHash            String   @unique
-  userId               String
-  expiresAt            DateTime
-  lastSeenAt           DateTime @default(now())
-  createdAt            DateTime @default(now())
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+model Alarm {
+  id           String         @id
+  status       AlarmStatus    @default(ACTIVE)
+  source       String         @default("SMS")
+  senderNumber String
+  stationCode  String?
+  openedAt     DateTime
+  closedAt     DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  messages     AlarmMessage[]
 
-  @@index([userId, expiresAt])
+  @@index([status, openedAt])
+  @@index([stationCode, openedAt])
+}
+
+model AlarmMessage {
+  id               String   @id
+  alarmId          String
+  sequenceNumber   Int
+  senderNumber     String
+  rawMessage       String
+  receivedAt       DateTime
+  sourceMessageId  String?
+  deduplicationKey String   @unique
+  createdAt        DateTime @default(now())
+  alarm            Alarm    @relation(fields: [alarmId], references: [id], onDelete: Cascade)
+
+  @@unique([alarmId, sequenceNumber])
+  @@index([alarmId, receivedAt])
+  @@index([senderNumber, receivedAt])
+}
+
+model AlarmStatistic {
+  id            String   @id @default(cuid())
+  alarmId       String   @unique
+  stationCode   String?
+  openedAt      DateTime
+  lastMessageAt DateTime
+  messageCount  Int      @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([openedAt])
+  @@index([stationCode, openedAt])
+}
+
+model BackupSnapshot {
+  id              String       @id @default(cuid())
+  kind            BackupKind
+  status          BackupStatus @default(READY)
+  fileName        String       @unique
+  sizeBytes       Int          @default(0)
+  sha256          String?
+  errorMessage    String?
+  createdByUserId String?
+  createdAt       DateTime     @default(now())
+
+  @@index([kind, createdAt])
+  @@index([status, createdAt])
+}
+
+model EmailReportSchedule {
+  id            String                @id
+  name          String                @default("Månedsoversigt")
+  enabled       Boolean               @default(false)
+  recipients    String[]              @default([])
+  daysOfMonth   Int[]                 @default([])
+  sendHour      Int                   @default(8)
+  sendMinute    Int                   @default(0)
+  timezone      String                @default("Europe/Copenhagen")
+  lastSentAt    DateTime?
+  lastAttemptAt DateTime?
+  lastError     String?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  deliveries    EmailReportDelivery[]
+}
+
+model EmailReportDelivery {
+  id             String                    @id @default(cuid())
+  scheduleId     String
+  uniqueKey      String                    @unique
+  status         EmailReportDeliveryStatus @default(PENDING)
+  periodStart    DateTime
+  periodEnd      DateTime
+  recipientCount Int                       @default(0)
+  attemptCount   Int                       @default(0)
+  lastAttemptAt  DateTime?
+  sentAt         DateTime?
+  errorMessage   String?
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  schedule       EmailReportSchedule       @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@index([scheduleId, createdAt])
+  @@index([status, createdAt])
+}
+
+model PasswordResetToken {
+  id          String   @id @default(cuid())
+  userId      String
+  tokenHash   String   @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  requestedIp String?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
   @@index([expiresAt])
 }
 
-model LoginAttempt {
-  id                   String   @id @default(uuid())
-  identifierHash       String
-  ipHash               String?
-  wasSuccessful        Boolean  @default(false)
-  createdAt            DateTime @default(now())
-  userId               String?
-  user                 User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+model Session {
+  id         String   @id @default(cuid())
+  userId     String
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([identifierHash, createdAt])
-  @@index([ipHash, createdAt])
-  @@index([userId, createdAt])
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id              String    @id @default(cuid())
+  actorUserId     String?
+  actorRole       UserRole?
+  action          String
+  targetUserId    String?
+  shiftTransferId String?
+  returnRequestId String?
+  availabilityId  String?
+  description     String
+  createdAt       DateTime  @default(now())
+  actor           User?     @relation("ActorAuditLogs", fields: [actorUserId], references: [id], onDelete: SetNull)
+  target          User?     @relation("TargetAuditLogs", fields: [targetUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId])
+  @@index([targetUserId])
+  @@index([shiftTransferId])
+  @@index([returnRequestId])
+  @@index([availabilityId])
+  @@index([createdAt])
+}
+
+model LoginAttempt {
+  id            String   @id @default(cuid())
+  identifier    String
+  ipAddress     String?
+  wasSuccessful Boolean
+  failureReason String?
+  createdAt     DateTime @default(now())
+
+  @@index([identifier, createdAt])
+  @@index([ipAddress, createdAt])
 }
