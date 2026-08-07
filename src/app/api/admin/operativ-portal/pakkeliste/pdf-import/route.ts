@@ -14,7 +14,8 @@ const rowSchema = z.object({
   itemName: z.string().trim().min(1).max(180),
   quantity: z.coerce.number().int().min(1).max(999),
   note: z.string().trim().max(1000).default(""),
-  confidence: z.coerce.number().min(0).max(1)
+  confidence: z.coerce.number().min(0).max(1),
+  confirmed: z.boolean().default(false)
 });
 
 const bodySchema = z.object({
@@ -50,12 +51,12 @@ export async function POST(request: Request) {
 
   const uniqueRows = new Map<string, z.infer<typeof rowSchema>>();
   for (const row of parsed.data.rows) {
-    if (row.confidence < 0.75) continue;
+    if (row.confidence < 0.75 && !row.confirmed) continue;
     const key = `${normalizeKey(row.placeName)}::${normalizeKey(row.itemName)}`;
     if (!uniqueRows.has(key)) uniqueRows.set(key, row);
   }
   if (uniqueRows.size === 0) {
-    return NextResponse.json({ error: "Der er ingen sikre poster at importere." }, { status: 400 });
+    return NextResponse.json({ error: "Der er ingen bekræftede poster at importere." }, { status: 400 });
   }
 
   const result = await prisma.$transaction(async (tx) => {
