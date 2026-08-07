@@ -37,7 +37,9 @@ describe("operativ pakkeliste PDF", () => {
       }]
     });
 
+    const content = Buffer.from(pdf).toString("latin1");
     expect(Buffer.from(pdf).subarray(0, 8).toString("latin1")).toBe("%PDF-1.4");
-    expect(Buffer.from(pdf).toString("latin1")).toContain("Højtryksslange (HT)");
+    expect(content).toContain("1 x Højtryksslange");
+    expect(content).toContain("Note: 60 meter");
   });
 });
