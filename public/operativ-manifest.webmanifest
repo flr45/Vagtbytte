@@ -1,0 +1,49 @@
+{
+  "name": "SBR Fire App",
+  "short_name": "SBR Fire",
+  "description": "Operativ køretøjs-, rum- og udstyrsguide for Slagelse Brand og Redning",
+  "id": "/admin/operativ-portal/",
+  "start_url": "/admin/operativ-portal/",
+  "scope": "/admin/operativ-portal/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#070b0e",
+  "theme_color": "#b70f18",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Køretøjer",
+      "short_name": "Køretøjer",
+      "url": "/admin/operativ-portal/koeretoejer"
+    },
+    {
+      "name": "Søg",
+      "short_name": "Søg",
+      "url": "/admin/operativ-portal/soeg"
+    },
+    {
+      "name": "Scan QR-kode",
+      "short_name": "Scan",
+      "url": "/admin/operativ-portal/scan"
+    },
+    {
+      "name": "Favoritter",
+      "short_name": "Favoritter",
+      "url": "/admin/operativ-portal/favoritter"
+    }
+  ]
+}
