@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OperationalDocumentUploadForm } from "@/components/OperationalDocumentUploadForm";
+import { OperationalHotspotEditor } from "@/components/OperationalHotspotEditor";
 import { OperationalImageManager } from "@/components/OperationalImageManager";
 import {
   OperationalPageFrame,
@@ -17,6 +18,7 @@ import {
   deleteOperationalDocumentAction,
   updateOperationalVehicleAction
 } from "@/lib/operativ-portal-actions";
+import { setOperationalInteractiveImageAction } from "@/lib/operativ-portal-hotspot-actions";
 import {
   getOperationalVehicle,
   operationalImageUrl,
@@ -33,6 +35,9 @@ export default async function OperationalVehiclePage({ params }: PageProps) {
   const vehicle = await getOperationalVehicle(vehicleId);
   if (!vehicle) notFound();
 
+  const code = vehicle.code || vehicleCode(vehicle.name);
+  const interactiveImageId = vehicle.interactiveImageId || vehicle.coverImageId;
+
   return (
     <OperationalPageFrame>
       <OperationalScreenHeader backHref="/admin/operativ-portal/koeretoejer" title={vehicle.name} />
@@ -42,16 +47,34 @@ export default async function OperationalVehiclePage({ params }: PageProps) {
         {vehicle.coverImageId ? (
           <img alt={vehicle.name} className="aspect-[16/10] w-full bg-[#161c20] object-cover" src={operationalImageUrl(vehicle.coverImageId)} />
         ) : (
-          <div className="grid aspect-[16/10] place-items-center bg-gradient-to-br from-[#2a3136] to-[#111518] text-5xl font-black text-slate-600">{vehicleCode(vehicle.name)}</div>
+          <div className="grid aspect-[16/10] place-items-center bg-gradient-to-br from-[#2a3136] to-[#111518] text-5xl font-black text-slate-600">{code}</div>
         )}
         <div className="p-4 sm:p-5">
-          <h1 className="text-3xl font-black tracking-tight">{vehicle.name}</h1>
-          <p className="mt-1 text-sm font-medium text-slate-400">{vehicle.description || "Ingen beskrivelse endnu."}</p>
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            <InfoChip icon="▦" label="Rum" value={vehicle.placeCount} />
-            <InfoChip icon="◉" label="Udstyr" value={vehicle.itemCount} />
-            <InfoChip icon="▶" label="Videoer" value={vehicle.videoCount} />
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="text-3xl font-black tracking-tight">{vehicle.name}</h1>
+              <p className="mt-1 text-sm font-medium text-slate-400">{vehicle.model || "Model ikke angivet"}</p>
+            </div>
+            <span className="rounded bg-[#c71019] px-2.5 py-1.5 text-xs font-black text-white">{code}</span>
           </div>
+
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <DataChip icon="▣" label="Årgang" value={vehicle.year ? String(vehicle.year) : "—"} />
+            <DataChip icon="◒" label="Drivmiddel" value={vehicle.fuel || "—"} />
+            <DataChip icon="♙" label="Mandskab" value={vehicle.crew || "—"} />
+          </div>
+
+          <div className="mt-5 grid gap-4 text-sm leading-6">
+            <div>
+              <h2 className="font-black text-white">Beskrivelse</h2>
+              <p className="mt-1 text-slate-400">{vehicle.description || "Ingen beskrivelse endnu."}</p>
+            </div>
+            <div>
+              <h2 className="font-black text-white">Funktion</h2>
+              <p className="mt-1 text-slate-400">{vehicle.functionText || "Ingen funktionsbeskrivelse endnu."}</p>
+            </div>
+          </div>
+
           <Link className="mt-5 flex min-h-12 items-center justify-center gap-2 rounded-lg bg-[#c71019] px-4 text-sm font-black text-white shadow-lg hover:bg-red-700" href="#interaktivt">
             <span aria-hidden="true">⌗</span> Se køretøjet interaktivt
           </Link>
@@ -60,14 +83,35 @@ export default async function OperationalVehiclePage({ params }: PageProps) {
 
       <section id="interaktivt" className="scroll-mt-20 overflow-hidden rounded-xl border border-white/10 bg-[#0d1317]">
         <div className="border-b border-white/10 bg-[#b70f18] px-4 py-3 text-center text-sm font-black">Interaktivt overblik</div>
-        {vehicle.coverImageId ? <img alt={`Oversigt over ${vehicle.name}`} className="aspect-[16/7] w-full bg-[#11171b] object-cover opacity-90" src={operationalImageUrl(vehicle.coverImageId)} /> : null}
+        {interactiveImageId ? (
+          <div className="relative bg-black">
+            <img alt={`Interaktiv oversigt over ${vehicle.name}`} className="block w-full" src={operationalImageUrl(interactiveImageId)} />
+            {vehicle.hotspots.map((hotspot) => (
+              <Link
+                aria-label={`Åbn ${hotspot.label || hotspot.placeName}`}
+                className="absolute grid size-8 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-white bg-[#d71920] text-xl font-black leading-none text-white shadow-[0_4px_18px_rgba(0,0,0,.65)] transition hover:scale-110"
+                href={`/admin/operativ-portal/rum/${hotspot.placeId}`}
+                key={hotspot.id}
+                style={{ left: `${hotspot.xPercent}%`, top: `${hotspot.yPercent}%` }}
+                title={hotspot.label || hotspot.placeName}
+              >
+                +
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="grid min-h-40 place-items-center bg-[#11171b] px-6 text-center text-sm font-semibold text-slate-500">
+            Der er endnu ikke valgt et interaktivt køretøjsbillede.
+          </div>
+        )}
+
         <div className="grid grid-cols-3 gap-2 p-3">
           {vehicle.places.map((place) => (
             <Link className="grid min-h-14 place-items-center rounded-lg border border-white/5 bg-[#151b1f] px-2 text-center text-xs font-bold text-slate-200 hover:border-red-500/40 hover:bg-[#1b2227]" href={`/admin/operativ-portal/rum/${place.id}`} key={place.id}>{place.name}</Link>
           ))}
           {vehicle.places.length === 0 ? <p className="col-span-3 p-5 text-center text-sm text-slate-500">Ingen rum registreret endnu.</p> : null}
         </div>
-        <div className="m-3 mt-0 flex items-center gap-3 rounded-lg bg-[#151b1f] p-4 text-sm text-slate-400"><span className="text-3xl">☝</span><span>Tryk på et område for at se indholdet</span></div>
+        <div className="m-3 mt-0 flex items-center gap-3 rounded-lg bg-[#151b1f] p-4 text-sm text-slate-400"><span className="text-3xl">☝</span><span>Tryk på et hotspot eller et rum for at se indholdet</span></div>
       </section>
 
       {isEditor ? (
@@ -76,22 +120,59 @@ export default async function OperationalVehiclePage({ params }: PageProps) {
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <form action={updateOperationalVehicleAction} className="grid gap-3 rounded-lg bg-[#0d1317] p-4">
               <input name="vehicleId" type="hidden" value={vehicle.id} />
-              <label className="grid gap-1.5 text-xs font-bold text-slate-300">Navn<input className="dark-input" defaultValue={vehicle.name} name="name" required /></label>
-              <label className="grid gap-1.5 text-xs font-bold text-slate-300">Beskrivelse<textarea className="dark-input min-h-28 p-3" defaultValue={vehicle.description} name="description" /></label>
+              <h2 className="text-sm font-black">Køretøjsoplysninger</h2>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Navn"><input className="dark-input" defaultValue={vehicle.name} name="name" required /></Field>
+                <Field label="Kaldesignal"><input className="dark-input" defaultValue={vehicle.code} name="code" placeholder="M2" /></Field>
+                <Field label="Model"><input className="dark-input" defaultValue={vehicle.model} name="model" placeholder="Scania P 360" /></Field>
+                <Field label="Årgang"><input className="dark-input" defaultValue={vehicle.year ?? ""} min="1900" max="2200" name="year" type="number" /></Field>
+                <Field label="Drivmiddel"><input className="dark-input" defaultValue={vehicle.fuel} name="fuel" placeholder="Diesel" /></Field>
+                <Field label="Mandskab"><input className="dark-input" defaultValue={vehicle.crew} name="crew" placeholder="1+5" /></Field>
+                <Field label="Rækkefølge"><input className="dark-input" defaultValue="0" min="0" name="sortOrder" type="number" /></Field>
+              </div>
+              <Field label="Beskrivelse"><textarea className="dark-input min-h-28 p-3" defaultValue={vehicle.description} name="description" /></Field>
+              <Field label="Funktion"><textarea className="dark-input min-h-28 p-3" defaultValue={vehicle.functionText} name="functionText" placeholder="Vandforsyning, røgdykning, redning..." /></Field>
               <button className="app-button-primary" type="submit">Gem køretøj</button>
             </form>
+
             <form action={createOperationalPlaceAction} className="grid content-start gap-3 rounded-lg bg-[#0d1317] p-4">
               <input name="vehicleId" type="hidden" value={vehicle.id} />
               <h2 className="text-sm font-black">Tilføj rum eller område</h2>
-              <input className="dark-input" name="name" placeholder="Fx Rum 1 – venstre forrest" required />
+              <Field label="Navn"><input className="dark-input" name="name" placeholder="Fx Rum 1 – venstre forrest" required /></Field>
+              <Field label="Beskrivelse"><textarea className="dark-input min-h-24 p-3" name="description" placeholder="Hvad findes typisk i rummet?" /></Field>
+              <Field label="Rækkefølge"><input className="dark-input" defaultValue={vehicle.places.length} min="0" name="sortOrder" type="number" /></Field>
               <button className="app-button-primary" type="submit">Tilføj rum</button>
             </form>
+          </div>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(240px,.55fr)_minmax(0,1.45fr)]">
+            <form action={setOperationalInteractiveImageAction} className="grid content-start gap-3 rounded-lg bg-[#0d1317] p-4">
+              <input name="vehicleId" type="hidden" value={vehicle.id} />
+              <h2 className="text-sm font-black">Interaktivt billede</h2>
+              <p className="text-xs font-semibold leading-5 text-slate-500">Vælg et af køretøjets egne billeder som base for hotspots.</p>
+              <select className="dark-input" defaultValue={vehicle.interactiveImageId ?? ""} name="imageId">
+                <option value="">Brug forsidebillede / intet valgt</option>
+                {vehicle.images.map((image) => <option key={image.id} value={image.id}>{image.title || image.originalName}</option>)}
+              </select>
+              <button className="app-button-primary" type="submit">Gem interaktivt billede</button>
+            </form>
+
+            {interactiveImageId ? (
+              <OperationalHotspotEditor
+                hotspots={vehicle.hotspots}
+                imageSrc={operationalImageUrl(interactiveImageId)}
+                places={vehicle.places.map((place) => ({ id: place.id, name: place.name }))}
+                vehicleId={vehicle.id}
+              />
+            ) : (
+              <div className="rounded-lg bg-[#0d1317] p-5 text-sm font-semibold text-slate-500">Upload først et køretøjsbillede og vælg det som interaktivt billede.</div>
+            )}
           </div>
         </details>
       ) : null}
 
       {isEditor ? (
-        <OperationalImageManager description="Upload oversigtsbilleder af køretøjet." images={vehicle.images} title={`Billeder af ${vehicle.name}`} vehicleId={vehicle.id} />
+        <OperationalImageManager description="Upload oversigtsbilleder af køretøjet. Et af billederne kan bruges til den interaktive hotspot-visning." images={vehicle.images} title={`Billeder af ${vehicle.name}`} vehicleId={vehicle.id} />
       ) : null}
 
       <section className="grid gap-3 lg:grid-cols-2">
@@ -124,8 +205,12 @@ export default async function OperationalVehiclePage({ params }: PageProps) {
   );
 }
 
-function InfoChip({ icon, label, value }: { icon: string; label: string; value: number }) {
-  return <div className="rounded-lg bg-[#141a1e] p-2.5 text-center"><span className="text-xl text-red-400">{icon}</span><p className="mt-1 text-[9px] text-slate-500">{label}</p><p className="text-sm font-black">{value}</p></div>;
+function DataChip({ icon, label, value }: { icon: string; label: string; value: string }) {
+  return <div className="rounded-lg bg-[#141a1e] p-2.5 text-center"><span className="text-xl text-red-400">{icon}</span><p className="mt-1 text-[9px] text-slate-500">{label}</p><p className="truncate text-sm font-black">{value}</p></div>;
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <label className="grid gap-1.5 text-xs font-bold text-slate-300">{label}{children}</label>;
 }
 
 function vehicleCode(name: string) {

@@ -23,6 +23,7 @@ import { prisma } from "./prisma";
 
 const titleSchema = z.string().trim().min(1).max(180);
 const uuidSchema = z.string().uuid();
+const sortSchema = z.coerce.number().int().min(0).max(9999);
 
 function optionalUuid(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
@@ -195,17 +196,28 @@ export async function deleteManagedOperationalDocumentAction(formData: FormData)
 
 export async function updateOperationalPlaceDetailsAction(formData: FormData) {
   await requireRole(UserRole.ADMIN);
-  const parsed = z.object({ placeId: uuidSchema, name: titleSchema }).safeParse({
+  const parsed = z.object({
+    placeId: uuidSchema,
+    name: titleSchema,
+    description: z.string().trim().max(2000),
+    sortOrder: sortSchema
+  }).safeParse({
     placeId: formData.get("placeId"),
-    name: formData.get("name")
+    name: formData.get("name"),
+    description: String(formData.get("description") ?? ""),
+    sortOrder: formData.get("sortOrder") ?? 0
   });
   if (!parsed.success) return;
-  await prisma.$executeRaw`
-    UPDATE operational_place SET name = ${parsed.data.name}, updated_at = CURRENT_TIMESTAMP
+  const rows = await prisma.$queryRaw<Array<{ vehicleId: string }>>`
+    UPDATE operational_place
+    SET name = ${parsed.data.name}, description = ${parsed.data.description},
+        sort_order = ${parsed.data.sortOrder}, updated_at = CURRENT_TIMESTAMP
     WHERE id = ${parsed.data.placeId}
+    RETURNING vehicle_id AS "vehicleId"
   `;
   await audit("OPERATIONAL_PLACE_UPDATED", `Rummet ${parsed.data.name} blev opdateret`);
   revalidatePath(`/admin/operativ-portal/rum/${parsed.data.placeId}`);
+  if (rows[0]?.vehicleId) revalidatePath(`/admin/operativ-portal/koeretoejer/${rows[0].vehicleId}`);
   revalidatePath("/admin/operativ-portal/koeretoejer");
   revalidatePath("/admin/operativ-portal/soeg");
 }
@@ -216,22 +228,29 @@ export async function updateOperationalItemDetailsAction(formData: FormData) {
     itemId: uuidSchema,
     name: titleSchema,
     quantity: z.coerce.number().int().min(1).max(999),
-    note: z.string().trim().max(1000)
+    note: z.string().trim().max(1000),
+    specifications: z.string().trim().max(3000),
+    sortOrder: sortSchema
   }).safeParse({
     itemId: formData.get("itemId"),
     name: formData.get("name"),
     quantity: formData.get("quantity"),
-    note: String(formData.get("note") ?? "")
+    note: String(formData.get("note") ?? ""),
+    specifications: String(formData.get("specifications") ?? ""),
+    sortOrder: formData.get("sortOrder") ?? 0
   });
   if (!parsed.success) return;
-  await prisma.$executeRaw`
+  const rows = await prisma.$queryRaw<Array<{ placeId: string }>>`
     UPDATE operational_item
     SET name = ${parsed.data.name}, quantity = ${parsed.data.quantity}, note = ${parsed.data.note},
+        specifications = ${parsed.data.specifications}, sort_order = ${parsed.data.sortOrder},
         updated_at = CURRENT_TIMESTAMP
     WHERE id = ${parsed.data.itemId}
+    RETURNING place_id AS "placeId"
   `;
   await audit("OPERATIONAL_ITEM_UPDATED", `Udstyret ${parsed.data.name} blev opdateret`);
   revalidatePath(`/admin/operativ-portal/udstyr/${parsed.data.itemId}`);
+  if (rows[0]?.placeId) revalidatePath(`/admin/operativ-portal/rum/${rows[0].placeId}`);
   revalidatePath("/admin/operativ-portal/koeretoejer");
   revalidatePath("/admin/operativ-portal/soeg");
 }

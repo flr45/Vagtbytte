@@ -40,6 +40,7 @@ export default async function OperationalItemPage({ params }: PageProps) {
 
   const documents = allDocuments.filter((document) => document.itemId === item.id);
   const videos = allVideos.filter((video) => video.itemId === item.id);
+  const specificationLines = item.specifications.split("\n").map((line) => line.trim()).filter(Boolean);
 
   return (
     <OperationalPageFrame>
@@ -59,9 +60,22 @@ export default async function OperationalItemPage({ params }: PageProps) {
         ]} />
         <div id="overblik" className="p-4">
           <p className="text-[10px] font-black uppercase tracking-[0.14em] text-red-500">{item.vehicleName} · {item.placeName}</p>
-          <h1 className="mt-1 text-2xl font-black">{item.name}</h1>
+          <div className="mt-1 flex items-start justify-between gap-3">
+            <h1 className="text-2xl font-black">{item.name}</h1>
+            <span className="rounded bg-red-600 px-2 py-1 text-[10px] font-black text-white">×{item.quantity}</span>
+          </div>
           <p className="mt-4 text-xs font-black uppercase tracking-[0.12em] text-slate-300">Beskrivelse</p>
           <p className="mt-2 text-sm font-medium leading-6 text-slate-400">{item.note || "Der er endnu ikke tilføjet en beskrivelse til udstyret."}</p>
+
+          {specificationLines.length > 0 ? (
+            <div className="mt-5 border-t border-white/10 pt-4">
+              <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-300">Specifikationer</p>
+              <ul className="mt-3 grid gap-2 text-sm text-slate-400">
+                {specificationLines.map((line, index) => <li className="flex gap-2" key={`${line}-${index}`}><span className="text-red-500">•</span><span>{line}</span></li>)}
+              </ul>
+            </div>
+          ) : null}
+
           <div className="mt-5 border-t border-white/10 pt-4">
             <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-300">Registrerede oplysninger</p>
             <dl className="mt-3 grid gap-2 text-sm">
@@ -108,11 +122,13 @@ export default async function OperationalItemPage({ params }: PageProps) {
       {isEditor ? (
         <details className="rounded-lg border border-red-500/20 bg-red-500/5 p-4">
           <summary className="cursor-pointer text-sm font-black text-red-400">Administration af udstyr</summary>
-          <form action={updateOperationalItemDetailsAction} className="mt-4 grid gap-3 rounded-lg bg-[#0d1317] p-4 md:grid-cols-[minmax(0,1fr)_120px]">
+          <form action={updateOperationalItemDetailsAction} className="mt-4 grid gap-3 rounded-lg bg-[#0d1317] p-4 md:grid-cols-[minmax(0,1fr)_120px_120px]">
             <input name="itemId" type="hidden" value={item.id} />
-            <label className="grid gap-1.5 text-xs font-bold text-slate-300">Navn<input className="dark-input" defaultValue={item.name} name="name" required /></label>
-            <label className="grid gap-1.5 text-xs font-bold text-slate-300">Antal<input className="dark-input" defaultValue={item.quantity} min="1" name="quantity" required type="number" /></label>
-            <label className="grid gap-1.5 text-xs font-bold text-slate-300 md:col-span-2">Beskrivelse / note<textarea className="dark-input min-h-28 p-3" defaultValue={item.note} name="note" /></label>
+            <Field label="Navn"><input className="dark-input" defaultValue={item.name} name="name" required /></Field>
+            <Field label="Antal"><input className="dark-input" defaultValue={item.quantity} min="1" name="quantity" required type="number" /></Field>
+            <Field label="Rækkefølge"><input className="dark-input" defaultValue={item.sortOrder} min="0" name="sortOrder" required type="number" /></Field>
+            <Field className="md:col-span-3" label="Beskrivelse / note"><textarea className="dark-input min-h-28 p-3" defaultValue={item.note} name="note" /></Field>
+            <Field className="md:col-span-3" label="Specifikationer – én linje pr. punkt"><textarea className="dark-input min-h-32 p-3" defaultValue={item.specifications} name="specifications" placeholder={'Længde: 60 m\nDimension: 1/2”\nMaks. tryk: 200 bar'} /></Field>
             <button className="app-button-primary md:w-fit" type="submit">Gem udstyr</button>
           </form>
         </details>
@@ -121,6 +137,10 @@ export default async function OperationalItemPage({ params }: PageProps) {
       {isEditor ? <OperationalImageManager description="Upload genkendelige billeder af udstyret." images={item.images} itemId={item.id} placeId={item.placeId} title={`Billeder af ${item.name}`} vehicleId={item.vehicleId} /> : null}
     </OperationalPageFrame>
   );
+}
+
+function Field({ label, children, className = "" }: { label: string; children: React.ReactNode; className?: string }) {
+  return <label className={`grid gap-1.5 text-xs font-bold text-slate-300 ${className}`}>{label}{children}</label>;
 }
 
 function Fact({ label, value }: { label: string; value: string }) {

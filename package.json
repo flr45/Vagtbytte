@@ -13,6 +13,7 @@
     "prisma:seed": "prisma db seed",
     "production:bootstrap": "node scripts/production-bootstrap.mjs",
     "production:normalize-logins": "node scripts/production-normalize-logins.mjs",
+    "operativ:import-legacy": "node scripts/import-operational-legacy.mjs",
     "notifications:generate-keys": "node scripts/generate-vapid-keys.mjs",
     "notifications:process": "node scripts/process-notifications.mjs",
     "availabilities:expire": "node scripts/process-notifications.mjs",
