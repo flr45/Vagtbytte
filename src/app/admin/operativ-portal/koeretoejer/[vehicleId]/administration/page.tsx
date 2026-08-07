@@ -48,6 +48,7 @@ export default async function OperationalVehicleAdministrationPage({ params }: P
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <Link className="rounded-lg border border-white/10 bg-[#151b1f] px-3 py-2 text-xs font-black text-white" href={`/admin/operativ-portal/koeretoejer/${vehicle.id}`}>← Køretøjsside</Link>
+          <Link className="rounded-lg bg-red-600 px-3 py-2 text-xs font-black text-white hover:bg-red-700" href={`/admin/operativ-portal/koeretoejer/${vehicle.id}/foto`}>📷 Start fototur</Link>
           <Link className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-black text-red-300" href={`/admin/operativ-portal/koeretoejer/${vehicle.id}/interaktiv`}>Interaktiv visning</Link>
         </div>
       </section>
