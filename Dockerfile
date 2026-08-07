@@ -23,7 +23,7 @@ RUN npm ci --omit=dev && npx prisma generate
 
 FROM node:22-alpine AS runner
 WORKDIR /app
-RUN apk add --no-cache openssl curl && \
+RUN apk add --no-cache openssl curl poppler-utils && \
     addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs && \
     mkdir -p /data/backups /data/operativ-portal/documents && \
