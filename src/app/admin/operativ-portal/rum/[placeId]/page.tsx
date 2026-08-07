@@ -60,7 +60,9 @@ export default async function OperationalPlacePage({ params }: PageProps) {
         ]} />
         <div id="overblik" className="p-4">
           <h1 className="text-lg font-black">{place.name} · {place.vehicleName}</h1>
-          <p className="mt-2 text-sm font-medium leading-6 text-slate-400">Indeholder {place.items.length} registrerede udstyrsposter med billeder, placering og instruktion.</p>
+          <p className="mt-2 text-sm font-medium leading-6 text-slate-400">
+            {place.description || `Indeholder ${place.items.length} registrerede udstyrsposter med billeder, placering og instruktion.`}
+          </p>
           <a className="mt-5 flex min-h-12 items-center justify-center gap-2 rounded-lg border border-red-600 px-4 text-sm font-black text-red-500 hover:bg-red-600/10" href="#indhold">⌗ Se indhold i rummet</a>
         </div>
       </section>
@@ -71,7 +73,10 @@ export default async function OperationalPlacePage({ params }: PageProps) {
           {place.items.map((item) => (
             <Link className="grid min-h-[72px] grid-cols-[68px_minmax(0,1fr)_22px] items-center gap-3 rounded-lg border border-white/5 bg-[#11171b] p-2 hover:bg-[#161e23]" href={`/admin/operativ-portal/udstyr/${item.id}`} key={item.id}>
               {item.coverImageId ? <img alt={item.name} className="h-14 w-[68px] rounded-md bg-[#20272c] object-cover" src={operationalImageUrl(item.coverImageId)} /> : <div className="grid h-14 w-[68px] place-items-center rounded-md bg-[#20272c] text-xs font-black text-slate-600">UD</div>}
-              <span className="min-w-0"><strong className="block truncate text-sm">{item.name}</strong><small className="mt-1 block truncate text-xs text-slate-500">{item.note || `Antal: ${item.quantity}`}</small></span>
+              <span className="min-w-0">
+                <span className="flex items-center gap-2"><strong className="block truncate text-sm">{item.name}</strong>{item.quantity > 1 ? <small className="rounded bg-red-600 px-1.5 py-0.5 text-[9px] font-black text-white">×{item.quantity}</small> : null}</span>
+                <small className="mt-1 block truncate text-xs text-slate-500">{item.note || item.specifications.split("\n")[0] || `Antal: ${item.quantity}`}</small>
+              </span>
               <span className="text-xl text-slate-500">›</span>
             </Link>
           ))}
@@ -87,7 +92,7 @@ export default async function OperationalPlacePage({ params }: PageProps) {
         </div>
       </section>
 
-      <OperationalPanel className="scroll-mt-20" >
+      <OperationalPanel className="scroll-mt-20">
         <div id="dokumenter" className="flex items-center justify-between"><h2 className="text-sm font-black">Dokumenter</h2>{isEditor ? <Link className="text-xs font-bold text-red-500" href={`/admin/operativ-portal/dokumenter?vehicleId=${place.vehicleId}&placeId=${place.id}`}>Tilføj</Link> : null}</div>
         <div className="mt-3 grid gap-2">
           {documents.map((document) => <a className="grid grid-cols-[38px_minmax(0,1fr)_20px] items-center gap-2 rounded-lg bg-[#151b1f] p-2.5" href={`/api/admin/operativ-portal/dokumenter/${document.id}`} key={document.id} target="_blank"><span className="grid size-9 place-items-center rounded bg-[#c71019] text-[9px] font-black">FIL</span><span className="min-w-0"><strong className="block truncate text-xs">{document.title}</strong><small className="block truncate text-[10px] text-slate-500">{document.category} · {contentLocationLabel(document)}</small></span><span className="text-slate-500">›</span></a>)}
@@ -99,8 +104,26 @@ export default async function OperationalPlacePage({ params }: PageProps) {
         <details className="rounded-lg border border-red-500/20 bg-red-500/5 p-4">
           <summary className="cursor-pointer text-sm font-black text-red-400">Administration af rum</summary>
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <form action={updateOperationalPlaceDetailsAction} className="grid gap-3 rounded-lg bg-[#0d1317] p-4"><input name="placeId" type="hidden" value={place.id} /><label className="grid gap-1.5 text-xs font-bold text-slate-300">Navn<input className="dark-input" defaultValue={place.name} name="name" required /></label><button className="app-button-primary" type="submit">Gem rumnavn</button></form>
-            <form action={createOperationalItemAction} className="grid gap-3 rounded-lg bg-[#0d1317] p-4"><input name="placeId" type="hidden" value={place.id} /><input className="dark-input" name="name" placeholder="Udstyr" required /><input className="dark-input" defaultValue="1" min="1" name="quantity" required type="number" /><input className="dark-input" name="note" placeholder="Note / specifikation" /><button className="app-button-primary" type="submit">Tilføj udstyr</button></form>
+            <form action={updateOperationalPlaceDetailsAction} className="grid gap-3 rounded-lg bg-[#0d1317] p-4">
+              <input name="placeId" type="hidden" value={place.id} />
+              <Field label="Navn"><input className="dark-input" defaultValue={place.name} name="name" required /></Field>
+              <Field label="Beskrivelse"><textarea className="dark-input min-h-24 p-3" defaultValue={place.description} name="description" /></Field>
+              <Field label="Rækkefølge"><input className="dark-input" defaultValue={place.sortOrder} min="0" name="sortOrder" type="number" /></Field>
+              <button className="app-button-primary" type="submit">Gem rum</button>
+            </form>
+
+            <form action={createOperationalItemAction} className="grid gap-3 rounded-lg bg-[#0d1317] p-4">
+              <input name="placeId" type="hidden" value={place.id} />
+              <h2 className="text-sm font-black">Tilføj udstyr</h2>
+              <Field label="Navn"><input className="dark-input" name="name" placeholder="Fx Højtryksslange (HT)" required /></Field>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Antal"><input className="dark-input" defaultValue="1" min="1" name="quantity" required type="number" /></Field>
+                <Field label="Rækkefølge"><input className="dark-input" defaultValue={place.items.length} min="0" name="sortOrder" type="number" /></Field>
+              </div>
+              <Field label="Kort beskrivelse / note"><textarea className="dark-input min-h-20 p-3" name="note" /></Field>
+              <Field label="Specifikationer"><textarea className="dark-input min-h-24 p-3" name="specifications" placeholder={'Fx:\nLængde: 60 m\nMaks. tryk: 200 bar'} /></Field>
+              <button className="app-button-primary" type="submit">Tilføj udstyr</button>
+            </form>
           </div>
         </details>
       ) : null}
@@ -108,4 +131,8 @@ export default async function OperationalPlacePage({ params }: PageProps) {
       {isEditor ? <OperationalImageManager description="Upload et oversigtsbillede af det åbne rum." images={place.images} placeId={place.id} title={`Billeder af ${place.name}`} vehicleId={place.vehicleId} /> : null}
     </OperationalPageFrame>
   );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <label className="grid gap-1.5 text-xs font-bold text-slate-300">{label}{children}</label>;
 }
