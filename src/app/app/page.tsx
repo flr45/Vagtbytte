@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AvailabilityStatus } from "@prisma/client";
+import { AppIcon, type AppIconName } from "@/components/AppIcon";
 import { SbrFirePageFrame } from "@/components/SbrFireApp";
 import { canAccessOperationalPortal, requireUser } from "@/lib/auth";
 import { listRecentAlarmsForStations } from "@/lib/alarm-feed";
@@ -36,7 +37,7 @@ export default async function SbrFireHomePage() {
   const hasAdminAccess = user.role === "ADMIN" || user.hasAdminAccess;
 
   return (
-    <SbrFirePageFrame active="home" right={<span aria-hidden="true">●</span>} title="Hjem">
+    <SbrFirePageFrame active="home" right={<AppIcon className="size-4 text-red-100" name="status" />} title="Hjem">
       <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#0d1317] shadow-xl">
         <div className="bg-gradient-to-br from-[#b70f18] via-[#8f0d16] to-[#39070b] p-5 sm:p-6">
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-100/70">Slagelse Brand og Redning</p>
@@ -58,7 +59,9 @@ export default async function SbrFireHomePage() {
           href={`/brandmand/alarmer#alarm-${firefighterData.latestAlarm.id}`}
         >
           <div className="flex items-center justify-between bg-[#b70f18] px-4 py-2.5">
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-100/75">🚨 Seneste alarm</p>
+            <p className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-red-100/75">
+              <AppIcon className="size-4" name="alarm" /> Seneste alarm
+            </p>
             <span className="text-xs font-black text-white">{formatTime(firefighterData.latestAlarm.openedAt)}</span>
           </div>
           <div className="grid gap-2 p-4">
@@ -71,12 +74,12 @@ export default async function SbrFireHomePage() {
             <p className="line-clamp-3 whitespace-pre-wrap text-sm font-semibold leading-6 text-slate-300">
               {firefighterData.latestMessage}
             </p>
-            <p className="mt-1 text-xs font-black text-red-400 group-hover:text-red-300">Åbn alarm →</p>
+            <p className="mt-1 inline-flex items-center gap-1 text-xs font-black text-red-400 group-hover:text-red-300">Åbn alarm <AppIcon className="size-4" name="chevronRight" /></p>
           </div>
         </Link>
       ) : user.role === "BRANDFIGHTER" ? (
         <section className="rounded-2xl border border-white/10 bg-[#0d1317] p-4">
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">🚨 Alarm</p>
+          <p className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500"><AppIcon className="size-4" name="alarm" /> Alarm</p>
           <h3 className="mt-1 text-lg font-black">Ingen alarmer i feedet</h3>
           <p className="mt-1 text-sm font-semibold text-slate-500">Nye meldinger fra dine valgte stationer vises her automatisk.</p>
         </section>
@@ -101,7 +104,7 @@ export default async function SbrFireHomePage() {
               badge={firefighterData?.latestAlarm?.status === "ACTIVE" ? "AKTIV" : undefined}
               description="Meldinger fra dine stationer"
               href="/brandmand/alarmer"
-              icon="🚨"
+              icon="alarm"
               title="Alarmer"
             />
           ) : null}
@@ -110,19 +113,19 @@ export default async function SbrFireHomePage() {
             badge={user.role === "BRANDFIGHTER" && firefighterData?.requiresResponse ? String(firefighterData.requiresResponse) : user.role === "VC" && vcPending ? String(vcPending) : undefined}
             description={user.role === "VC" ? "Godkendelser og tildelinger" : user.role === "ADMIN" ? "Brugere og system" : firefighterData?.activeTransfers ? `${firefighterData.activeTransfers} aktive sager` : "Overdrag og administrér vagter"}
             href={vagtHref(user.role)}
-            icon={user.role === "ADMIN" ? "⚙" : "↔"}
+            icon={user.role === "ADMIN" ? "settings" : "swap"}
             title={user.role === "VC" ? "Vagtcentral" : user.role === "ADMIN" ? "Administration" : "Vagtbytte"}
           />
 
           {operationalAccess ? (
-            <ModuleCard description="Køretøjer, udstyr og QR" href="/admin/operativ-portal" icon="🚒" title="Operativ" />
+            <ModuleCard description="Køretøjer, udstyr og QR" href="/admin/operativ-portal" icon="truck" title="Operativ" />
           ) : null}
 
           {hasAdminAccess && user.role !== "ADMIN" ? (
-            <ModuleCard description="Brugere, alarmer og system" href="/admin" icon="⚙" title="Administration" />
+            <ModuleCard description="Brugere, alarmer og system" href="/admin" icon="settings" title="Administration" />
           ) : null}
 
-          <ModuleCard description="Notifikationer, profil og app" href="/app/mere" icon="•••" title="Mere" />
+          <ModuleCard description="Notifikationer, profil og app" href="/app/mere" icon="more" title="Mere" />
         </div>
       </section>
 
@@ -136,7 +139,7 @@ export default async function SbrFireHomePage() {
                 {formatDateTime(firefighterData.assignment.assignedShiftStart)} → {formatDateTime(firefighterData.assignment.assignedShiftEnd)}
               </p>
             </div>
-            <Link className="rounded-lg bg-white px-4 py-2.5 text-xs font-black text-black" href={`/brandmand/til-raadighed/${firefighterData.assignment.id}`}>Åbn →</Link>
+            <Link className="inline-flex items-center gap-1 rounded-lg bg-white px-4 py-2.5 text-xs font-black text-black" href={`/brandmand/til-raadighed/${firefighterData.assignment.id}`}>Åbn <AppIcon className="size-4" name="chevronRight" /></Link>
           </div>
         </section>
       ) : null}
@@ -178,23 +181,11 @@ async function getFirefighterHomeData(userId: string) {
   return { latestAlarm, latestMessage, requiresResponse, activeTransfers, assignment };
 }
 
-function ModuleCard({
-  title,
-  description,
-  href,
-  icon,
-  badge
-}: {
-  title: string;
-  description: string;
-  href: string;
-  icon: string;
-  badge?: string;
-}) {
+function ModuleCard({ title, description, href, icon, badge }: { title: string; description: string; href: string; icon: AppIconName; badge?: string }) {
   return (
     <Link className="group relative grid min-h-36 content-between overflow-hidden rounded-2xl border border-white/10 bg-[#0d1317] p-4 shadow-lg transition hover:-translate-y-0.5 hover:border-red-500/40" href={href}>
       <div className="flex items-start justify-between gap-2">
-        <span aria-hidden="true" className="text-3xl">{icon}</span>
+        <span className="grid size-11 place-items-center rounded-xl bg-white/5 text-slate-200 transition group-hover:bg-red-500/10 group-hover:text-red-300"><AppIcon className="size-6" name={icon} /></span>
         {badge ? <span className="rounded-full bg-red-600 px-2 py-1 text-[9px] font-black text-white">{badge}</span> : null}
       </div>
       <div>
