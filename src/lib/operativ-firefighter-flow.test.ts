@@ -20,6 +20,17 @@ describe("Operativ Portal brandmandsflow", () => {
     expect(viewer).not.toContain(">›<");
   });
 
+  it("åbner køretøjets hovedvisning på højre side og bruger semantiske sidepile", () => {
+    const viewer = read("src/components/OperationalVehicleViewer.tsx");
+    expect(viewer).toContain('configuredViews.find((view) => view.viewKey === "right")');
+    expect(viewer).toContain('aria-label="Vis venstre side af køretøjet"');
+    expect(viewer).toContain('onClick={() => setActiveKey("left")}');
+    expect(viewer).toContain('aria-label="Vis højre side af køretøjet"');
+    expect(viewer).toContain('onClick={() => setActiveKey("right")}');
+    expect(viewer).not.toContain("function move(");
+    expect(viewer).not.toContain('aria-label="Næste side af køretøjet"');
+  });
+
   it("holder den fulde rumliste som fallback i stedet for primært flow", () => {
     const page = read("src/app/admin/operativ-portal/koeretoejer/[vehicleId]/interaktiv/page.tsx");
     expect(page).toContain("Kan du ikke finde rummet? Vis alle rum som liste");
