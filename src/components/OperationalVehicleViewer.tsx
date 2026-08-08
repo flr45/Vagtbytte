@@ -28,14 +28,18 @@ export function OperationalVehicleViewer({
     }),
     [views]
   );
-  const initialKey = configuredViews.find((view) => view.viewKey === "front")?.viewKey ?? configuredViews[0]?.viewKey ?? "front";
+  const initialKey = configuredViews.find((view) => view.viewKey === "right")?.viewKey
+    ?? configuredViews.find((view) => view.viewKey === "front")?.viewKey
+    ?? configuredViews[0]?.viewKey
+    ?? "right";
   const [activeKey, setActiveKey] = useState<OperationalVehicleViewKey>(initialKey);
-  const activeIndex = configuredViews.findIndex((view) => view.viewKey === activeKey);
-  const activeView = configuredViews[activeIndex] ?? configuredViews[0] ?? null;
+  const activeView = configuredViews.find((view) => view.viewKey === activeKey) ?? configuredViews[0] ?? null;
   const activeHotspots = useMemo(
     () => hotspots.filter((hotspot) => hotspot.viewKey === activeView?.viewKey),
     [activeView?.viewKey, hotspots]
   );
+  const hasLeftSide = configuredViews.some((view) => view.viewKey === "left");
+  const hasRightSide = configuredViews.some((view) => view.viewKey === "right");
 
   if (!activeView) {
     return (
@@ -43,12 +47,6 @@ export function OperationalVehicleViewer({
         Der er endnu ikke valgt billeder til Front, Højre, Bagende, Venstre eller Tag.
       </div>
     );
-  }
-
-  function move(direction: -1 | 1) {
-    if (configuredViews.length < 2) return;
-    const nextIndex = (activeIndex + direction + configuredViews.length) % configuredViews.length;
-    setActiveKey(configuredViews[nextIndex].viewKey);
   }
 
   return (
@@ -79,25 +77,28 @@ export function OperationalVehicleViewer({
           src={operationalImageUrl(activeView.imageId)}
         />
 
-        {configuredViews.length > 1 ? (
-          <>
-            <button
-              aria-label="Forrige side af køretøjet"
-              className="absolute left-2 top-1/2 z-30 grid size-11 -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-black/65 text-white shadow-lg backdrop-blur hover:bg-black/80"
-              onClick={() => move(-1)}
-              type="button"
-            >
-              <AppIcon className="size-5" name="back" />
-            </button>
-            <button
-              aria-label="Næste side af køretøjet"
-              className="absolute right-2 top-1/2 z-30 grid size-11 -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-black/65 text-white shadow-lg backdrop-blur hover:bg-black/80"
-              onClick={() => move(1)}
-              type="button"
-            >
-              <AppIcon className="size-5" name="chevronRight" />
-            </button>
-          </>
+        {hasLeftSide && activeView.viewKey !== "left" ? (
+          <button
+            aria-label="Vis venstre side af køretøjet"
+            className="absolute left-2 top-1/2 z-30 grid size-11 -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-black/65 text-white shadow-lg backdrop-blur hover:bg-black/80"
+            onClick={() => setActiveKey("left")}
+            title="Venstre side"
+            type="button"
+          >
+            <AppIcon className="size-5" name="back" />
+          </button>
+        ) : null}
+
+        {hasRightSide && activeView.viewKey !== "right" ? (
+          <button
+            aria-label="Vis højre side af køretøjet"
+            className="absolute right-2 top-1/2 z-30 grid size-11 -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-black/65 text-white shadow-lg backdrop-blur hover:bg-black/80"
+            onClick={() => setActiveKey("right")}
+            title="Højre side"
+            type="button"
+          >
+            <AppIcon className="size-5" name="chevronRight" />
+          </button>
         ) : null}
 
         {activeHotspots.map((hotspot) => (
