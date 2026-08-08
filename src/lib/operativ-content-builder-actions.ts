@@ -13,8 +13,10 @@ const percentSchema = z.coerce.number().min(0).max(100);
 const sizeSchema = z.coerce.number().int().min(24).max(96);
 const sortSchema = z.coerce.number().int().min(0).max(9999).default(0);
 
-async function audit(action: string, description: string) {
-  const admin = await requireRole(UserRole.ADMIN);
+type AdminActor = { id: string; role: UserRole };
+type ExistingTarget = { targetNodeId: string | null; itemId: string | null; targetName: string };
+
+async function audit(admin: AdminActor, action: string, description: string) {
   await prisma.auditLog.create({
     data: { actorUserId: admin.id, actorRole: admin.role, action, description }
   });
@@ -52,15 +54,12 @@ async function validItem(placeId: string, itemId: string) {
   return rows[0] ?? null;
 }
 
-type Target = { targetNodeId: string | null; itemId: string | null; targetName: string };
-
-async function resolveTarget(
+async function resolveExistingTarget(
   placeId: string,
   sourceNodeId: string | null,
-  targetType: "item" | "node" | "new-node",
-  targetId: string,
-  newNodeName: string
-): Promise<Target | null> {
+  targetType: "item" | "node",
+  targetId: string
+): Promise<ExistingTarget | null> {
   if (targetType === "item") {
     const item = uuidSchema.safeParse(targetId);
     if (!item.success) return null;
@@ -68,31 +67,20 @@ async function resolveTarget(
     return found ? { targetNodeId: null, itemId: found.id, targetName: found.name } : null;
   }
 
-  if (targetType === "node") {
-    const nodeId = uuidSchema.safeParse(targetId);
-    if (!nodeId.success || nodeId.data === sourceNodeId) return null;
-    const rows = await prisma.$queryRaw<Array<{ id: string; name: string }>>`
-      SELECT id, name FROM operational_interactive_node
-      WHERE id = ${nodeId.data}
-        AND place_id = ${placeId}
-        AND parent_node_id IS NOT DISTINCT FROM ${sourceNodeId}
-      LIMIT 1
-    `;
-    return rows[0] ? { targetNodeId: rows[0].id, itemId: null, targetName: rows[0].name } : null;
-  }
-
-  const name = newNodeName.trim().slice(0, 120);
-  if (!name) return null;
-  const id = randomUUID();
-  await prisma.$executeRaw`
-    INSERT INTO operational_interactive_node (id, place_id, parent_node_id, name, description, sort_order)
-    VALUES (${id}, ${placeId}, ${sourceNodeId}, ${name}, '', 0)
+  const nodeId = uuidSchema.safeParse(targetId);
+  if (!nodeId.success || nodeId.data === sourceNodeId) return null;
+  const rows = await prisma.$queryRaw<Array<{ id: string; name: string }>>`
+    SELECT id, name FROM operational_interactive_node
+    WHERE id = ${nodeId.data}
+      AND place_id = ${placeId}
+      AND parent_node_id IS NOT DISTINCT FROM ${sourceNodeId}
+    LIMIT 1
   `;
-  return { targetNodeId: id, itemId: null, targetName: name };
+  return rows[0] ? { targetNodeId: rows[0].id, itemId: null, targetName: rows[0].name } : null;
 }
 
 export async function setOperationalInteractiveContextImageAction(formData: FormData) {
-  await requireRole(UserRole.ADMIN);
+  const admin = await requireRole(UserRole.ADMIN);
   const parsed = z.object({
     placeId: uuidSchema,
     nodeId: optionalUuidSchema,
@@ -103,6 +91,7 @@ export async function setOperationalInteractiveContextImageAction(formData: Form
     imageId: String(formData.get("imageId") ?? "")
   });
   if (!parsed.success) return { ok: false as const, error: "Ugyldig placering." };
+
   const place = await getPlaceVehicle(parsed.data.placeId);
   if (!place || !(await validNode(parsed.data.placeId, parsed.data.nodeId))) {
     return { ok: false as const, error: "Placeringen findes ikke." };
@@ -117,27 +106,27 @@ export async function setOperationalInteractiveContextImageAction(formData: Form
     if (!images[0]) return { ok: false as const, error: "Billedet hører ikke til rummet." };
   }
 
-  if (parsed.data.nodeId) {
-    await prisma.$executeRaw`
-      UPDATE operational_interactive_node
-      SET image_id = ${parsed.data.imageId}, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ${parsed.data.nodeId} AND place_id = ${parsed.data.placeId}
-    `;
-  } else {
-    await prisma.$executeRaw`
-      UPDATE operational_place
-      SET interactive_image_id = ${parsed.data.imageId}, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ${parsed.data.placeId}
-    `;
-  }
+  const updated = parsed.data.nodeId
+    ? await prisma.$executeRaw`
+        UPDATE operational_interactive_node
+        SET image_id = ${parsed.data.imageId}, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ${parsed.data.nodeId} AND place_id = ${parsed.data.placeId}
+      `
+    : await prisma.$executeRaw`
+        UPDATE operational_place
+        SET interactive_image_id = ${parsed.data.imageId}, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ${parsed.data.placeId}
+      `;
 
-  await audit("OPERATIONAL_INTERACTIVE_IMAGE_SET", `Interaktivt billede blev opdateret i ${place.placeName}`);
+  if (updated !== 1) return { ok: false as const, error: "Billedet kunne ikke tilknyttes." };
+
+  await audit(admin, "OPERATIONAL_INTERACTIVE_IMAGE_SET", `Interaktivt billede blev opdateret i ${place.placeName}`);
   revalidateBuilder(parsed.data.placeId, place.vehicleId);
   return { ok: true as const };
 }
 
 export async function createOperationalInteractiveNodeAction(formData: FormData) {
-  await requireRole(UserRole.ADMIN);
+  const admin = await requireRole(UserRole.ADMIN);
   const parsed = z.object({
     placeId: uuidSchema,
     parentNodeId: optionalUuidSchema,
@@ -152,25 +141,28 @@ export async function createOperationalInteractiveNodeAction(formData: FormData)
     sortOrder: formData.get("sortOrder") ?? 0
   });
   if (!parsed.success) return { ok: false as const, error: "Kontrollér navn og placering." };
+
   const place = await getPlaceVehicle(parsed.data.placeId);
   if (!place || !(await validNode(parsed.data.placeId, parsed.data.parentNodeId))) {
     return { ok: false as const, error: "Placeringen findes ikke." };
   }
 
   const id = randomUUID();
-  await prisma.$executeRaw`
+  const created = await prisma.$executeRaw`
     INSERT INTO operational_interactive_node
       (id, place_id, parent_node_id, name, description, sort_order)
     VALUES
       (${id}, ${parsed.data.placeId}, ${parsed.data.parentNodeId}, ${parsed.data.name}, ${parsed.data.description}, ${parsed.data.sortOrder})
   `;
-  await audit("OPERATIONAL_INTERACTIVE_NODE_CREATED", `Underområdet ${parsed.data.name} blev oprettet i ${place.placeName}`);
+  if (created !== 1) return { ok: false as const, error: "Underområdet kunne ikke oprettes." };
+
+  await audit(admin, "OPERATIONAL_INTERACTIVE_NODE_CREATED", `Underområdet ${parsed.data.name} blev oprettet i ${place.placeName}`);
   revalidateBuilder(parsed.data.placeId, place.vehicleId);
   return { ok: true as const, id };
 }
 
 export async function updateOperationalInteractiveNodeAction(formData: FormData) {
-  await requireRole(UserRole.ADMIN);
+  const admin = await requireRole(UserRole.ADMIN);
   const parsed = z.object({
     placeId: uuidSchema,
     nodeId: uuidSchema,
@@ -185,24 +177,25 @@ export async function updateOperationalInteractiveNodeAction(formData: FormData)
     sortOrder: formData.get("sortOrder") ?? 0
   });
   if (!parsed.success) return { ok: false as const, error: "Kontrollér felterne." };
-  const place = await getPlaceVehicle(parsed.data.placeId);
-  if (!place || !(await validNode(parsed.data.placeId, parsed.data.nodeId))) {
-    return { ok: false as const, error: "Underområdet findes ikke." };
-  }
 
-  await prisma.$executeRaw`
+  const place = await getPlaceVehicle(parsed.data.placeId);
+  if (!place) return { ok: false as const, error: "Rummet findes ikke." };
+
+  const updated = await prisma.$executeRaw`
     UPDATE operational_interactive_node
     SET name = ${parsed.data.name}, description = ${parsed.data.description},
       sort_order = ${parsed.data.sortOrder}, updated_at = CURRENT_TIMESTAMP
     WHERE id = ${parsed.data.nodeId} AND place_id = ${parsed.data.placeId}
   `;
-  await audit("OPERATIONAL_INTERACTIVE_NODE_UPDATED", `Underområdet ${parsed.data.name} blev opdateret`);
+  if (updated !== 1) return { ok: false as const, error: "Underområdet findes ikke længere." };
+
+  await audit(admin, "OPERATIONAL_INTERACTIVE_NODE_UPDATED", `Underområdet ${parsed.data.name} blev opdateret`);
   revalidateBuilder(parsed.data.placeId, place.vehicleId);
   return { ok: true as const };
 }
 
 export async function createOperationalInteractiveLinkAction(formData: FormData) {
-  await requireRole(UserRole.ADMIN);
+  const admin = await requireRole(UserRole.ADMIN);
   const parsed = z.object({
     placeId: uuidSchema,
     sourceNodeId: optionalUuidSchema,
@@ -227,35 +220,75 @@ export async function createOperationalInteractiveLinkAction(formData: FormData)
     sortOrder: formData.get("sortOrder") ?? 0
   });
   if (!parsed.success) return { ok: false as const, error: "Kontrollér pluspunktets felter." };
+
   const place = await getPlaceVehicle(parsed.data.placeId);
   if (!place || !(await validNode(parsed.data.placeId, parsed.data.sourceNodeId))) {
     return { ok: false as const, error: "Placeringen findes ikke." };
   }
 
-  const target = await resolveTarget(
+  const linkId = randomUUID();
+
+  if (parsed.data.targetType === "new-node") {
+    const nodeName = parsed.data.newNodeName.trim().slice(0, 120);
+    if (!nodeName) return { ok: false as const, error: "Angiv et navn til underområdet." };
+
+    const nodeId = randomUUID();
+    const [createdNode, createdLink] = await prisma.$transaction([
+      prisma.$executeRaw`
+        INSERT INTO operational_interactive_node
+          (id, place_id, parent_node_id, name, description, sort_order)
+        VALUES (
+          ${nodeId}, ${parsed.data.placeId}, ${parsed.data.sourceNodeId}, ${nodeName}, '',
+          COALESCE((
+            SELECT MAX(sort_order) + 1
+            FROM operational_interactive_node
+            WHERE place_id = ${parsed.data.placeId}
+              AND parent_node_id IS NOT DISTINCT FROM ${parsed.data.sourceNodeId}
+          ), 0)
+        )
+      `,
+      prisma.$executeRaw`
+        INSERT INTO operational_interactive_link
+          (id, place_id, source_node_id, target_node_id, item_id, label, x_percent, y_percent, size_px, sort_order)
+        VALUES
+          (${linkId}, ${parsed.data.placeId}, ${parsed.data.sourceNodeId}, ${nodeId}, NULL,
+           ${parsed.data.label}, ${parsed.data.xPercent}, ${parsed.data.yPercent}, ${parsed.data.sizePx}, ${parsed.data.sortOrder})
+      `
+    ]);
+
+    if (createdNode !== 1 || createdLink !== 1) {
+      return { ok: false as const, error: "Underområdet og pluspunktet kunne ikke oprettes samlet." };
+    }
+
+    await audit(admin, "OPERATIONAL_INTERACTIVE_LINK_CREATED", `Underområdet ${nodeName} og dets pluspunkt blev oprettet i ${place.placeName}`);
+    revalidateBuilder(parsed.data.placeId, place.vehicleId);
+    return { ok: true as const, id: linkId, targetNodeId: nodeId };
+  }
+
+  const target = await resolveExistingTarget(
     parsed.data.placeId,
     parsed.data.sourceNodeId,
     parsed.data.targetType,
-    parsed.data.targetId,
-    parsed.data.newNodeName
+    parsed.data.targetId
   );
-  if (!target) return { ok: false as const, error: "Vælg et gyldigt mål." };
+  if (!target) return { ok: false as const, error: "Vælg et gyldigt mål på det aktuelle niveau." };
 
-  const id = randomUUID();
-  await prisma.$executeRaw`
+  const created = await prisma.$executeRaw`
     INSERT INTO operational_interactive_link
       (id, place_id, source_node_id, target_node_id, item_id, label, x_percent, y_percent, size_px, sort_order)
     VALUES
-      (${id}, ${parsed.data.placeId}, ${parsed.data.sourceNodeId}, ${target.targetNodeId}, ${target.itemId},
+      (${linkId}, ${parsed.data.placeId}, ${parsed.data.sourceNodeId}, ${target.targetNodeId}, ${target.itemId},
        ${parsed.data.label}, ${parsed.data.xPercent}, ${parsed.data.yPercent}, ${parsed.data.sizePx}, ${parsed.data.sortOrder})
   `;
-  await audit("OPERATIONAL_INTERACTIVE_LINK_CREATED", `Pluspunkt til ${target.targetName} blev oprettet i ${place.placeName}`);
+  if (created !== 1) return { ok: false as const, error: "Pluspunktet kunne ikke oprettes." };
+
+  await audit(admin, "OPERATIONAL_INTERACTIVE_LINK_CREATED", `Pluspunkt til ${target.targetName} blev oprettet i ${place.placeName}`);
   revalidateBuilder(parsed.data.placeId, place.vehicleId);
-  return { ok: true as const, id, targetNodeId: target.targetNodeId };
+  return { ok: true as const, id: linkId, targetNodeId: target.targetNodeId };
 }
 
 export async function updateOperationalInteractiveLinkAction(formData: FormData) {
-  await requireRole(UserRole.ADMIN);
+  const admin = await requireRole(UserRole.ADMIN);
   const parsed = z.object({
     linkId: uuidSchema,
     placeId: uuidSchema,
@@ -278,6 +311,7 @@ export async function updateOperationalInteractiveLinkAction(formData: FormData)
     sortOrder: formData.get("sortOrder") ?? 0
   });
   if (!parsed.success) return { ok: false as const, error: "Kontrollér pluspunktets felter." };
+
   const place = await getPlaceVehicle(parsed.data.placeId);
   if (!place) return { ok: false as const, error: "Rummet findes ikke." };
 
@@ -290,23 +324,24 @@ export async function updateOperationalInteractiveLinkAction(formData: FormData)
   const link = linkRows[0];
   if (!link) return { ok: false as const, error: "Pluspunktet findes ikke længere." };
 
-  const target = await resolveTarget(
+  const target = await resolveExistingTarget(
     parsed.data.placeId,
     link.sourceNodeId,
     parsed.data.targetType,
-    parsed.data.targetId,
-    ""
+    parsed.data.targetId
   );
   if (!target) return { ok: false as const, error: "Vælg et mål på det aktuelle niveau." };
 
-  await prisma.$executeRaw`
+  const updated = await prisma.$executeRaw`
     UPDATE operational_interactive_link
     SET target_node_id = ${target.targetNodeId}, item_id = ${target.itemId},
       label = ${parsed.data.label}, x_percent = ${parsed.data.xPercent}, y_percent = ${parsed.data.yPercent},
       size_px = ${parsed.data.sizePx}, sort_order = ${parsed.data.sortOrder}, updated_at = CURRENT_TIMESTAMP
     WHERE id = ${parsed.data.linkId} AND place_id = ${parsed.data.placeId} AND deleted_at IS NULL
   `;
-  await audit("OPERATIONAL_INTERACTIVE_LINK_UPDATED", `Et pluspunkt blev opdateret til ${target.targetName} i ${place.placeName}`);
+  if (updated !== 1) return { ok: false as const, error: "Pluspunktet findes ikke længere." };
+
+  await audit(admin, "OPERATIONAL_INTERACTIVE_LINK_UPDATED", `Et pluspunkt blev opdateret til ${target.targetName} i ${place.placeName}`);
   revalidateBuilder(parsed.data.placeId, place.vehicleId);
   return { ok: true as const };
 }
@@ -325,61 +360,75 @@ export async function moveOperationalInteractiveLinkAction(formData: FormData) {
     yPercent: formData.get("yPercent")
   });
   if (!parsed.success) return { ok: false as const, error: "Ugyldig placering." };
+
   const place = await getPlaceVehicle(parsed.data.placeId);
   if (!place) return { ok: false as const, error: "Rummet findes ikke." };
 
-  await prisma.$executeRaw`
+  const updated = await prisma.$executeRaw`
     UPDATE operational_interactive_link
     SET x_percent = ${parsed.data.xPercent}, y_percent = ${parsed.data.yPercent}, updated_at = CURRENT_TIMESTAMP
     WHERE id = ${parsed.data.linkId} AND place_id = ${parsed.data.placeId} AND deleted_at IS NULL
   `;
+  if (updated !== 1) return { ok: false as const, error: "Pluspunktet findes ikke længere." };
+
   revalidateBuilder(parsed.data.placeId, place.vehicleId);
   return { ok: true as const, xPercent: parsed.data.xPercent, yPercent: parsed.data.yPercent };
 }
 
 export async function deleteOperationalInteractiveLinkAction(formData: FormData) {
-  await requireRole(UserRole.ADMIN);
+  const admin = await requireRole(UserRole.ADMIN);
   const parsed = z.object({ linkId: uuidSchema, placeId: uuidSchema }).safeParse({
     linkId: formData.get("linkId"),
     placeId: formData.get("placeId")
   });
-  if (!parsed.success) return { ok: false as const };
+  if (!parsed.success) return { ok: false as const, error: "Ugyldigt pluspunkt." };
+
   const place = await getPlaceVehicle(parsed.data.placeId);
-  if (!place) return { ok: false as const };
-  await prisma.$executeRaw`
-    UPDATE operational_interactive_link SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ${parsed.data.linkId} AND place_id = ${parsed.data.placeId}
+  if (!place) return { ok: false as const, error: "Rummet findes ikke." };
+
+  const updated = await prisma.$executeRaw`
+    UPDATE operational_interactive_link
+    SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ${parsed.data.linkId} AND place_id = ${parsed.data.placeId} AND deleted_at IS NULL
   `;
-  await audit("OPERATIONAL_INTERACTIVE_LINK_DELETED", `Et pluspunkt blev fjernet fra ${place.placeName}`);
+  if (updated !== 1) return { ok: false as const, error: "Pluspunktet findes ikke længere." };
+
+  await audit(admin, "OPERATIONAL_INTERACTIVE_LINK_DELETED", `Et pluspunkt blev fjernet fra ${place.placeName}`);
   revalidateBuilder(parsed.data.placeId, place.vehicleId);
   return { ok: true as const };
 }
 
 export async function restoreOperationalInteractiveLinkAction(formData: FormData) {
-  await requireRole(UserRole.ADMIN);
+  const admin = await requireRole(UserRole.ADMIN);
   const parsed = z.object({ linkId: uuidSchema, placeId: uuidSchema }).safeParse({
     linkId: formData.get("linkId"),
     placeId: formData.get("placeId")
   });
-  if (!parsed.success) return { ok: false as const };
+  if (!parsed.success) return { ok: false as const, error: "Ugyldigt pluspunkt." };
+
   const place = await getPlaceVehicle(parsed.data.placeId);
-  if (!place) return { ok: false as const };
-  await prisma.$executeRaw`
-    UPDATE operational_interactive_link SET deleted_at = NULL, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ${parsed.data.linkId} AND place_id = ${parsed.data.placeId}
+  if (!place) return { ok: false as const, error: "Rummet findes ikke." };
+
+  const updated = await prisma.$executeRaw`
+    UPDATE operational_interactive_link
+    SET deleted_at = NULL, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ${parsed.data.linkId} AND place_id = ${parsed.data.placeId} AND deleted_at IS NOT NULL
   `;
-  await audit("OPERATIONAL_INTERACTIVE_LINK_RESTORED", `Et pluspunkt blev gendannet i ${place.placeName}`);
+  if (updated !== 1) return { ok: false as const, error: "Pluspunktet kunne ikke gendannes." };
+
+  await audit(admin, "OPERATIONAL_INTERACTIVE_LINK_RESTORED", `Et pluspunkt blev gendannet i ${place.placeName}`);
   revalidateBuilder(parsed.data.placeId, place.vehicleId);
   return { ok: true as const };
 }
 
 export async function cloneOperationalInteractiveNodeAction(formData: FormData) {
-  await requireRole(UserRole.ADMIN);
+  const admin = await requireRole(UserRole.ADMIN);
   const parsed = z.object({ placeId: uuidSchema, nodeId: uuidSchema }).safeParse({
     placeId: formData.get("placeId"),
     nodeId: formData.get("nodeId")
   });
   if (!parsed.success) return { ok: false as const, error: "Ugyldigt underområde." };
+
   const place = await getPlaceVehicle(parsed.data.placeId);
   if (!place) return { ok: false as const, error: "Rummet findes ikke." };
 
@@ -469,7 +518,7 @@ export async function cloneOperationalInteractiveNodeAction(formData: FormData) 
   });
 
   const newRootId = ids.get(sourceRoot.id)!;
-  await audit("OPERATIONAL_INTERACTIVE_NODE_CLONED", `Underområdet ${sourceRoot.name} og dets interaktive struktur blev klonet`);
+  await audit(admin, "OPERATIONAL_INTERACTIVE_NODE_CLONED", `Underområdet ${sourceRoot.name} og dets interaktive struktur blev klonet`);
   revalidateBuilder(parsed.data.placeId, place.vehicleId);
   return { ok: true as const, id: newRootId };
 }
