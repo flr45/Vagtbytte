@@ -46,6 +46,14 @@ describe("Operativ Portal interaktiv indholdsbygger", () => {
     expect(page).not.toContain("OperationalContentBuilderGuard");
   });
 
+  it("kan starte placering af et plus direkte fra underområde-sektionen", () => {
+    const builder = read("src/components/OperationalContentBuilder.tsx");
+    expect(builder).toContain("function startPlacementAndScroll()");
+    expect(builder).toContain('scrollIntoView({ behavior: "smooth", block: "center" })');
+    expect(builder).toContain("onClick={startPlacementAndScroll}");
+    expect(builder).toContain("Tilføj +");
+  });
+
   it("gemmer nyt underområde og dets pluspunkt atomisk og afviser falsk succes", () => {
     const actions = read("src/lib/operativ-content-builder-actions.ts");
     expect(actions).toContain("prisma.$transaction([");
