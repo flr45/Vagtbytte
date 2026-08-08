@@ -29,9 +29,10 @@ export default async function OperationalPlaceInteractivePage({ params, searchPa
   if (!context) notFound();
 
   const base = `/admin/operativ-portal/rum/${placeId}/interaktiv`;
+  const vehicleHref = `/admin/operativ-portal/koeretoejer/${context.vehicleId}/interaktiv`;
   const backHref = context.nodeId
     ? context.parentNodeId ? `${base}?node=${context.parentNodeId}` : base
-    : `/admin/operativ-portal/koeretoejer/${context.vehicleId}/interaktiv`;
+    : vehicleHref;
   const title = context.nodeName || context.placeName;
 
   return (
@@ -39,10 +40,26 @@ export default async function OperationalPlaceInteractivePage({ params, searchPa
       <OperationalScreenHeader backHref={backHref} title={title} />
       <OperationalPortalNav isEditor={isEditor} />
 
+      <nav aria-label="Din placering" className="flex min-h-11 items-center gap-1 overflow-x-auto rounded-lg border border-white/10 bg-[#0d1317] px-3 py-2 text-xs font-bold text-slate-400">
+        <Link className="shrink-0 hover:text-white" href={vehicleHref}>{context.vehicleName}</Link>
+        <AppIcon className="size-3 shrink-0 text-slate-600" name="chevronRight" />
+        <Link className={`shrink-0 hover:text-white ${!context.nodeId ? "text-white" : ""}`} href={base}>{context.placeName}</Link>
+        {context.breadcrumbs.map((crumb) => (
+          <span className="contents" key={crumb.id}>
+            <AppIcon className="size-3 shrink-0 text-slate-600" name="chevronRight" />
+            {crumb.id === context.nodeId ? (
+              <span className="shrink-0 text-white">{crumb.name}</span>
+            ) : (
+              <Link className="shrink-0 hover:text-white" href={`${base}?node=${crumb.id}`}>{crumb.name}</Link>
+            )}
+          </span>
+        ))}
+      </nav>
+
       <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#080c0f] shadow-2xl">
         <div className="border-b border-white/10 bg-[#b70f18] px-4 py-3 text-center">
-          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-100/70">Interaktiv placering</p>
-          <h1 className="mt-0.5 text-base font-black text-white">Tryk på et + for at gå videre</h1>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-100/70">{context.nodeId ? "Underområde" : "Rum"}</p>
+          <h1 className="mt-0.5 text-base font-black text-white">Tryk på et + for at gå videre til næste niveau eller udstyret</h1>
         </div>
 
         {context.imageId ? (
@@ -51,22 +68,33 @@ export default async function OperationalPlaceInteractivePage({ params, searchPa
             {context.links.map((hotspot) => {
               const href = hotspot.targetType === "node" && hotspot.targetNodeId
                 ? `${base}?node=${hotspot.targetNodeId}`
-                : hotspot.itemId ? `/admin/operativ-portal/udstyr/${hotspot.itemId}` : base;
+                : hotspot.itemId
+                  ? `/admin/operativ-portal/udstyr/${hotspot.itemId}${context.nodeId ? `?sourceNode=${encodeURIComponent(context.nodeId)}` : ""}`
+                  : base;
+              const hitSize = Math.max(48, hotspot.sizePx);
               return (
                 <Link
                   aria-label={`Åbn ${hotspot.label || hotspot.targetName}`}
-                  className="absolute grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-white bg-[#d71920] font-black leading-none text-white shadow-[0_5px_22px_rgba(0,0,0,.75)] transition hover:scale-110 focus:scale-110"
+                  className="group absolute grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full focus:outline-none focus-visible:ring-4 focus-visible:ring-yellow-300/60"
                   href={href}
                   key={hotspot.id}
                   style={{
                     left: `${hotspot.xPercent}%`,
                     top: `${hotspot.yPercent}%`,
-                    width: hotspot.sizePx,
-                    height: hotspot.sizePx,
-                    fontSize: Math.max(18, Math.round(hotspot.sizePx * 0.55))
+                    width: hitSize,
+                    height: hitSize
                   }}
                   title={hotspot.label || hotspot.targetName}
-                >+</Link>
+                >
+                  <span
+                    className="grid place-items-center rounded-full border-2 border-white bg-[#d71920] font-black leading-none text-white shadow-[0_5px_22px_rgba(0,0,0,.75)] transition group-hover:scale-110 group-focus-visible:scale-110"
+                    style={{
+                      width: hotspot.sizePx,
+                      height: hotspot.sizePx,
+                      fontSize: Math.max(18, Math.round(hotspot.sizePx * 0.55))
+                    }}
+                  >+</span>
+                </Link>
               );
             })}
           </div>
@@ -77,25 +105,11 @@ export default async function OperationalPlaceInteractivePage({ params, searchPa
               : "Der er endnu ikke valgt et interaktivt billede til rummet."}
           </div>
         )}
-
-        <div className="border-t border-white/10 bg-[#0d1317] p-3">
-          <div className="flex flex-wrap items-center justify-center gap-1.5 text-center text-xs font-bold text-slate-400">
-            <span>{context.vehicleName}</span>
-            <AppIcon className="size-3 text-slate-600" name="chevronRight" />
-            <span>{context.placeName}</span>
-            {context.breadcrumbs.map((crumb) => (
-              <span className="contents" key={crumb.id}>
-                <AppIcon className="size-3 text-slate-600" name="chevronRight" />
-                <span className={crumb.id === context.nodeId ? "text-white" : ""}>{crumb.name}</span>
-              </span>
-            ))}
-          </div>
-        </div>
       </section>
 
       {context.children.length > 0 ? (
         <section>
-          <div className="mb-2 flex items-center justify-between px-1"><h2 className="text-sm font-black">Underområder</h2><span className="text-xs font-bold text-slate-500">{context.children.length}</span></div>
+          <div className="mb-2 flex items-center justify-between px-1"><h2 className="text-sm font-black">Underområder på dette niveau</h2><span className="text-xs font-bold text-slate-500">{context.children.length}</span></div>
           <div className="grid gap-2 sm:grid-cols-2">
             {context.children.map((node) => (
               <Link className="grid min-h-[68px] grid-cols-[minmax(0,1fr)_22px] items-center gap-3 rounded-lg border border-white/5 bg-[#11171b] p-3 hover:border-red-500/30 hover:bg-[#161e23]" href={`${base}?node=${node.id}`} key={node.id}>
