@@ -41,17 +41,18 @@ export default async function OperationalSearchPage({ searchParams }: PageProps)
   const videos = q.trim() ? allVideos.filter((video) => matchesTokenGroups([video.title, video.description, video.category, video.vehicleName, video.placeName, video.itemName].filter(Boolean).join(" "), tokenGroups)).slice(0, 25) : [];
   const documents = q.trim() ? allDocuments.filter((document) => matchesTokenGroups([document.title, document.description, document.category, document.originalName, document.vehicleName, document.placeName, document.itemName].filter(Boolean).join(" "), tokenGroups)).slice(0, 25) : [];
   const count = baseResults.vehicles.length + baseResults.places.length + baseResults.items.length + videos.length + documents.length;
+  const searchReturnHref = q.trim() ? `/admin/operativ-portal/soeg?q=${encodeURIComponent(q)}` : "/admin/operativ-portal/soeg";
 
   return (
     <OperationalPageFrame>
       <OperationalScreenHeader backHref="/admin/operativ-portal" right="" title="Søg" />
       <OperationalPortalNav isEditor={isEditor} />
-      <form className="flex gap-2 rounded-lg bg-[#11171b] p-3" method="get"><input autoFocus className="dark-input min-w-0 flex-1" defaultValue={q} name="q" placeholder="Fx M2 H1, HT slange eller brandhanenøgle" type="search" /><button className="grid min-w-12 place-items-center rounded-lg bg-[#c71019] px-3 text-xl font-black" type="submit">⌕</button></form>
+      <form className="flex gap-2 rounded-lg bg-[#11171b] p-3" method="get"><input autoFocus className="dark-input min-w-0 flex-1" defaultValue={q} name="q" placeholder="Fx M2 H1, HT slange eller brandhanenøgle" type="search" /><button aria-label="Søg" className="grid min-w-12 place-items-center rounded-lg bg-[#c71019] px-3 text-xl font-black" title="Søg" type="submit">⌕</button></form>
       {q ? <p className="px-1 text-xs font-bold text-slate-500">{count} resultater for “{q}” · flere ord kan kombineres</p> : null}
       {q ? <div className="grid gap-4">
         <ResultGroup title="Køretøjer">{baseResults.vehicles.map((item) => <ResultLink href={`/admin/operativ-portal/koeretoejer/${item.id}`} key={item.id} label={item.name} meta={item.description || "Køretøj"} />)}</ResultGroup>
         <ResultGroup title="Rum">{baseResults.places.map((item) => <ResultLink href={`/admin/operativ-portal/rum/${item.id}`} key={item.id} label={item.name} meta={item.vehicleName} />)}</ResultGroup>
-        <ResultGroup title="Udstyr">{baseResults.items.map((item) => <ResultLink href={`/admin/operativ-portal/udstyr/${item.id}`} key={item.id} label={item.name} meta={`${item.vehicleName} → ${item.placeName}${item.note ? ` · ${item.note}` : ""}`} />)}</ResultGroup>
+        <ResultGroup title="Udstyr">{baseResults.items.map((item) => <ResultLink href={`/admin/operativ-portal/udstyr/${item.id}?returnTo=${encodeURIComponent(searchReturnHref)}`} key={item.id} label={item.name} meta={`${item.vehicleName} → ${item.placeName}${item.note ? ` · ${item.note}` : ""}`} />)}</ResultGroup>
         <ResultGroup title="Videoer">{videos.map((item) => <ResultLink href={`/admin/operativ-portal/videoer#video-${item.id}`} key={item.id} label={item.title} meta={`${item.category} · ${contentLocationLabel(item)}`} />)}</ResultGroup>
         <ResultGroup title="Dokumenter">{documents.map((item) => <ResultLink href={`/api/admin/operativ-portal/dokumenter/${item.id}`} key={item.id} label={item.title} meta={`${item.category} · ${contentLocationLabel(item)}`} />)}</ResultGroup>
       </div> : <div className="grid gap-2"><Suggestion query="M2 H1" text="Kombinér køretøj og rum" /><Suggestion query="HT slange" text="Forkortelser og udstyr" /><Suggestion query="brandhanenøgle" text="Find konkret materiel" /></div>}
