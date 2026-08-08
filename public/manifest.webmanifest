@@ -33,17 +33,17 @@
     {
       "name": "Alarmer",
       "short_name": "Alarmer",
-      "url": "/brandmand/alarmer"
+      "url": "/app/alarmer"
     },
     {
       "name": "Vagtbytte",
       "short_name": "Vagt",
-      "url": "/brandmand"
+      "url": "/app/vagt"
     },
     {
       "name": "Operativ",
       "short_name": "Operativ",
-      "url": "/admin/operativ-portal"
+      "url": "/app/operativ"
     }
   ]
 }
