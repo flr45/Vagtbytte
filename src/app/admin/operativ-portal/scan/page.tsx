@@ -1,3 +1,4 @@
+import { AppIcon } from "@/components/AppIcon";
 import {
   OperationalPageFrame,
   OperationalPortalNav,
@@ -17,7 +18,7 @@ export default async function OperationalScannerPage() {
 
   return (
     <OperationalPageFrame>
-      <OperationalScreenHeader backHref="/admin/operativ-portal" right="ϟ" title="Scan QR-kode" />
+      <OperationalScreenHeader backHref="/admin/operativ-portal" right={<AppIcon className="size-5" name="qr" />} title="Scan QR-kode" />
       <OperationalPortalNav isEditor={isEditor} />
       <OperationalQrScanner />
     </OperationalPageFrame>
