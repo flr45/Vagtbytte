@@ -76,6 +76,14 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
     setMessage("Placering er aktiv. Klik på billedet dér, hvor det nye plus skal ligge.");
   }
 
+  function startPlacementAndScroll() {
+    if (!context.imageId || busy) return;
+    startPlacement();
+    window.requestAnimationFrame(() => {
+      canvasRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }
+
   function cancelInteraction() {
     if (interaction.kind === "dragging") {
       setLinks((current) => current.map((link) => link.id === interaction.id
@@ -529,9 +537,19 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
       </section>
 
       <section className="grid gap-3 rounded-xl border border-white/10 bg-[#0d1317] p-4">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-red-400">Næste niveau</p><h2 className="text-lg font-black">Underområder i {currentName}</h2></div>
-          <span className="rounded-full bg-white/5 px-2.5 py-1 text-xs font-black text-slate-400">{context.children.length}</span>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-white/5 px-2.5 py-1 text-xs font-black text-slate-400">{context.children.length}</span>
+            <button
+              className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-red-600 px-3 text-xs font-black text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={!context.imageId || busy}
+              onClick={startPlacementAndScroll}
+              type="button"
+            >
+              <AppIcon className="size-4" name="edit" /> Tilføj +
+            </button>
+          </div>
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
           {context.children.map((node) => (
@@ -550,7 +568,7 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
           <input aria-label="Rækkefølge" className="dark-input" defaultValue={context.children.length} min="0" name="sortOrder" type="number" />
           <button className="rounded-lg bg-white px-4 py-2 text-xs font-black text-black disabled:opacity-40" disabled={busy} type="submit">Opret og redigér</button>
         </form>
-        <p className="text-[10px] font-semibold leading-4 text-slate-500">Opretter du et underområde her, åbnes det bagefter til redigering. Pluspunktet på det foregående niveau placerer du separat, når du er klar.</p>
+        <p className="text-[10px] font-semibold leading-4 text-slate-500">Brug “Tilføj +” for at placere et plus på dette niveau. Opretter du et underområde her, åbnes det bagefter til redigering.</p>
       </section>
     </div>
   );
