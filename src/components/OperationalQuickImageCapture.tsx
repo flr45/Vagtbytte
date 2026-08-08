@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { AppIcon } from "./AppIcon";
 import { setOperationalInteractiveContextImageAction } from "@/lib/operativ-content-builder-actions";
@@ -27,6 +28,8 @@ type VehicleViewTarget = SharedTarget & {
 type Props = ContextTarget | VehicleViewTarget;
 type CropMode = "original" | "4:3" | "1:1";
 
+const MAX_IMAGE_EDGE = 2048;
+
 function cropRect(width: number, height: number, mode: CropMode) {
   if (mode === "original") return { sx: 0, sy: 0, sw: width, sh: height };
   const ratio = mode === "4:3" ? 4 / 3 : 1;
@@ -41,8 +44,6 @@ function cropRect(width: number, height: number, mode: CropMode) {
 
 async function preparedFile(file: File, rotation: number, cropMode: CropMode): Promise<File> {
   const normalized = ((rotation % 360) + 360) % 360;
-  if (!normalized && cropMode === "original") return file;
-
   const url = URL.createObjectURL(file);
   try {
     const image = new Image();
@@ -50,16 +51,26 @@ async function preparedFile(file: File, rotation: number, cropMode: CropMode): P
     await image.decode();
     const { sx, sy, sw, sh } = cropRect(image.naturalWidth, image.naturalHeight, cropMode);
     const swap = normalized === 90 || normalized === 270;
+    const outputWidth = swap ? sh : sw;
+    const outputHeight = swap ? sw : sh;
+    const scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(outputWidth, outputHeight));
+
+    if (!normalized && cropMode === "original" && scale >= 0.999) return file;
+
     const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(swap ? sh : sw));
-    canvas.height = Math.max(1, Math.round(swap ? sw : sh));
+    canvas.width = Math.max(1, Math.round(outputWidth * scale));
+    canvas.height = Math.max(1, Math.round(outputHeight * scale));
     const ctx = canvas.getContext("2d");
     if (!ctx) return file;
+
+    const drawWidth = sw * scale;
+    const drawHeight = sh * scale;
     ctx.translate(canvas.width / 2, canvas.height / 2);
     ctx.rotate((normalized * Math.PI) / 180);
-    ctx.drawImage(image, sx, sy, sw, sh, -sw / 2, -sh / 2, sw, sh);
+    ctx.drawImage(image, sx, sy, sw, sh, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+
     const mime = file.type === "image/png" || file.type === "image/webp" ? file.type : "image/jpeg";
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, mime, 0.94));
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, mime, 0.88));
     return blob ? new File([blob], file.name, { type: mime, lastModified: Date.now() }) : file;
   } finally {
     URL.revokeObjectURL(url);
@@ -67,6 +78,7 @@ async function preparedFile(file: File, rotation: number, cropMode: CropMode): P
 }
 
 export function OperationalQuickImageCapture(props: Props) {
+  const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [rotation, setRotation] = useState(0);
   const [cropMode, setCropMode] = useState<CropMode>("original");
@@ -86,7 +98,7 @@ export function OperationalQuickImageCapture(props: Props) {
   async function upload() {
     if (!file || busy) return;
     setBusy(true);
-    setMessage("");
+    setMessage("Optimerer og gemmer billedet…");
     try {
       const prepared = await preparedFile(file, rotation, cropMode);
       const form = new FormData();
@@ -113,11 +125,13 @@ export function OperationalQuickImageCapture(props: Props) {
         await setOperationalVehicleViewAction(assign);
       }
 
-      setMessage(props.successHref ? "Billedet er gemt · åbner næste…" : "Billedet er gemt.");
-      window.setTimeout(() => {
-        if (props.successHref) window.location.assign(props.successHref);
-        else window.location.reload();
-      }, 250);
+      setFile(null);
+      setRotation(0);
+      setCropMode("original");
+      setBusy(false);
+      setMessage("Billedet er gemt.");
+      if (props.successHref) router.push(props.successHref);
+      else router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Billedet kunne ikke gemmes.");
       setBusy(false);
@@ -164,7 +178,7 @@ export function OperationalQuickImageCapture(props: Props) {
       </div>
       {file ? <button className="app-button-primary min-h-11" disabled={busy} onClick={upload} type="button">{busy ? "Gemmer…" : props.successHref ? "Gem og fortsæt" : "Brug billedet her"}</button> : null}
       {message ? <p className="text-xs font-bold text-slate-300" role="status">{message}</p> : null}
-      <p className="text-[10px] font-semibold leading-4 text-slate-500">JPEG, PNG eller WebP · maks. 12 MB. Rotation og beskæring sker lokalt på enheden før upload.</p>
+      <p className="text-[10px] font-semibold leading-4 text-slate-500">JPEG, PNG eller WebP · maks. 12 MB. Store billeder nedskaleres automatisk til højst {MAX_IMAGE_EDGE}px før upload.</p>
     </div>
   );
 }
