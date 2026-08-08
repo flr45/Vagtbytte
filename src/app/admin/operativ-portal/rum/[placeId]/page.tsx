@@ -15,11 +15,11 @@ import {
 } from "@/lib/auth";
 import { createOperationalItemAction } from "@/lib/operativ-portal-actions";
 import { updateOperationalPlaceDetailsAction } from "@/lib/operativ-portal-content-actions";
+import { contentLocationLabel } from "@/lib/operativ-portal-content";
 import {
-  contentLocationLabel,
-  listManagedOperationalDocuments,
-  listManagedOperationalVideos
-} from "@/lib/operativ-portal-content";
+  listOperationalPlaceDocuments,
+  listOperationalPlaceVideos
+} from "@/lib/operativ-place-content";
 import {
   getOperationalPlace,
   operationalImageUrl,
@@ -33,14 +33,12 @@ export default async function OperationalPlacePage({ params }: PageProps) {
   const user = await requireOperationalPortalAccess();
   const isEditor = canManageOperationalPortal(user);
   const { placeId } = await params;
-  const [place, allDocuments, allVideos] = await Promise.all([
+  const [place, documents, videos] = await Promise.all([
     getOperationalPlace(placeId),
-    listManagedOperationalDocuments(),
-    listManagedOperationalVideos()
+    listOperationalPlaceDocuments(placeId),
+    listOperationalPlaceVideos(placeId)
   ]);
   if (!place) notFound();
-  const documents = allDocuments.filter((document) => document.placeId === place.id);
-  const videos = allVideos.filter((video) => video.placeId === place.id);
 
   return (
     <OperationalPageFrame>
