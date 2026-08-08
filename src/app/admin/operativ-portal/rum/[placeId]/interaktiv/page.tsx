@@ -29,6 +29,7 @@ export default async function OperationalPlaceInteractivePage({ params, searchPa
   if (!context) notFound();
 
   const base = `/admin/operativ-portal/rum/${placeId}/interaktiv`;
+  const currentHref = context.nodeId ? `${base}?node=${encodeURIComponent(context.nodeId)}` : base;
   const vehicleHref = `/admin/operativ-portal/koeretoejer/${context.vehicleId}/interaktiv`;
   const backHref = context.nodeId
     ? context.parentNodeId ? `${base}?node=${context.parentNodeId}` : base
@@ -69,7 +70,7 @@ export default async function OperationalPlaceInteractivePage({ params, searchPa
               const href = hotspot.targetType === "node" && hotspot.targetNodeId
                 ? `${base}?node=${hotspot.targetNodeId}`
                 : hotspot.itemId
-                  ? `/admin/operativ-portal/udstyr/${hotspot.itemId}${context.nodeId ? `?sourceNode=${encodeURIComponent(context.nodeId)}` : ""}`
+                  ? `/admin/operativ-portal/udstyr/${hotspot.itemId}?returnTo=${encodeURIComponent(currentHref)}`
                   : base;
               const hitSize = Math.max(48, hotspot.sizePx);
               return (
