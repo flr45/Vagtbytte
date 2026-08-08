@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AppIcon } from "@/components/AppIcon";
 import {
   OperationalPageFrame,
   OperationalPortalNav,
@@ -22,7 +23,11 @@ export default async function OperationalVehiclesPage({ searchParams }: PageProp
 
   return (
     <OperationalPageFrame>
-      <OperationalScreenHeader backHref="/admin/operativ-portal" right="☆" title="Køretøjer" />
+      <OperationalScreenHeader
+        backHref="/admin/operativ-portal"
+        right={<Link aria-label="Åbn favoritter" className="grid size-11 place-items-center rounded-lg transition hover:bg-white/10" href="/admin/operativ-portal/favoritter"><AppIcon className="size-5" name="star" /></Link>}
+        title="Køretøjer"
+      />
       <OperationalPortalNav isEditor={isEditor} />
 
       {error ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm font-bold text-red-100">{error}</p> : null}
@@ -42,7 +47,7 @@ export default async function OperationalVehiclesPage({ searchParams }: PageProp
                 <small className="mt-0.5 block truncate text-xs text-slate-400">{vehicle.model || vehicle.description || `${vehicle.placeCount} rum · ${vehicle.itemCount} udstyr`}</small>
                 <span className="mt-1.5 inline-flex rounded bg-[#c61019] px-1.5 py-0.5 text-[9px] font-black text-white">{code}</span>
               </span>
-              <span className="text-2xl font-light text-slate-400">›</span>
+              <AppIcon className="size-5 text-slate-400" name="chevronRight" />
             </Link>
           );
         })}
