@@ -23,7 +23,7 @@ export default async function AvailabilityAssignmentPage({
 
   return (
     <>
-      <TopBar title="Vagttildeling" />
+      <TopBar backHref="/brandmand" backLabel="Tilbage til vagtoversigten" title="Vagttildeling" />
       <main className="mx-auto grid w-full max-w-xl gap-5 px-4 py-6">
         <section className="app-card grid gap-5">
           <div>
