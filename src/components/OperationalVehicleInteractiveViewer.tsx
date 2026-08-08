@@ -81,7 +81,7 @@ export function OperationalVehicleInteractiveViewer({
           return (
             <Link
               aria-label={`Åbn ${hotspot.label || hotspot.placeName}`}
-              className="absolute z-20 grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full focus:outline-none focus-visible:ring-4 focus-visible:ring-yellow-300/60"
+              className="group absolute z-20 grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full focus:outline-none focus-visible:ring-4 focus-visible:ring-yellow-300/60"
               href={`/admin/operativ-portal/rum/${hotspot.placeId}/interaktiv`}
               key={hotspot.id}
               style={{
@@ -93,7 +93,7 @@ export function OperationalVehicleInteractiveViewer({
               title={hotspot.label || hotspot.placeName}
             >
               <span
-                className="grid place-items-center rounded-full border-2 border-white bg-[#d71920] font-black leading-none text-white shadow-[0_5px_22px_rgba(0,0,0,.75)] transition group-hover:scale-110"
+                className="grid place-items-center rounded-full border-2 border-white bg-[#d71920] font-black leading-none text-white shadow-[0_5px_22px_rgba(0,0,0,.75)] transition group-hover:scale-110 group-focus-visible:scale-110"
                 style={{
                   width: hotspot.sizePx,
                   height: hotspot.sizePx,
