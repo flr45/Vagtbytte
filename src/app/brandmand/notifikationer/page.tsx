@@ -26,7 +26,7 @@ export default async function FirefighterNotificationsPage() {
 
   return (
     <>
-      <TopBar title="Notifikationer" />
+      <TopBar backHref="/app/mere" backLabel="Tilbage til Mere" title="Notifikationer" />
       <NotificationsView
         devices={devices}
         latestDelivery={
