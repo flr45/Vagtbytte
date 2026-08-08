@@ -9,9 +9,11 @@ type TopBarProps = {
   title: string;
   variant?: "default" | "operational";
   activeModule?: SbrFireModule;
+  backHref?: string;
+  backLabel?: string;
 };
 
-export async function TopBar({ title, activeModule }: TopBarProps) {
+export async function TopBar({ title, activeModule, backHref, backLabel = "Tilbage" }: TopBarProps) {
   const user = await getCurrentUser();
   const resolvedModule: SbrFireModule = activeModule ?? (title.toLocaleLowerCase("da-DK").includes("alarm") ? "alarm" : "vagt");
   const unreadCount = user && user.role !== "ADMIN"
@@ -32,11 +34,18 @@ export async function TopBar({ title, activeModule }: TopBarProps) {
     <>
       <header className="border-b border-red-950 bg-[#b70f18] pt-[env(safe-area-inset-top)] text-white shadow-lg">
         <div className="mx-auto grid min-h-16 w-full max-w-6xl grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-[max(1rem,env(safe-area-inset-left))] py-3 pr-[max(1rem,env(safe-area-inset-right))]">
-          <Link className="min-w-0" href="/app">
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-100/70">SBR Fire App</p>
-            <p className="mt-0.5 truncate text-lg font-black text-white">{title}</p>
-            {user ? <p className="mt-0.5 hidden truncate text-xs font-semibold text-red-100/70 sm:block">{user.name}</p> : null}
-          </Link>
+          <div className="flex min-w-0 items-center gap-2">
+            {backHref ? (
+              <Link aria-label={backLabel} className="grid size-11 shrink-0 place-items-center rounded-lg border border-white/15 bg-white/10 text-white transition hover:bg-white/15" href={backHref}>
+                <AppIcon className="size-5" name="back" />
+              </Link>
+            ) : null}
+            <Link className="min-w-0" href="/app">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-100/70">SBR Fire App</p>
+              <p className="mt-0.5 truncate text-lg font-black text-white">{title}</p>
+              {user ? <p className="mt-0.5 hidden truncate text-xs font-semibold text-red-100/70 sm:block">{user.name}</p> : null}
+            </Link>
+          </div>
 
           <nav aria-label="Hovednavigation" className="hidden min-w-0 flex-wrap items-center justify-end gap-2 sm:flex">
             {user ? <Link className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm font-black text-white hover:bg-white/15" href="/app"><AppIcon className="size-4" name="home" /> Hjem</Link> : null}

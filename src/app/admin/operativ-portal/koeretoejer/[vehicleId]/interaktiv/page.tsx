@@ -41,7 +41,7 @@ export default async function OperationalVehicleInteractivePage({ params }: Page
         <OperationalVehicleInteractiveViewer hotspots={vehicle.viewHotspots} vehicleName={vehicle.name} views={vehicle.views} />
 
         <div className="border-t border-white/10 bg-[#0d1317] p-3">
-          <p className="text-center text-xs font-bold leading-5 text-slate-400">Du kan skifte direkte mellem Front, Højre side, Bagende, Venstre side og Tag under billedet.</p>
+          <p className="text-center text-xs font-bold leading-5 text-slate-400">Venstre pil åbner venstre side, og højre pil åbner højre side. Front, bagende og tag kan altid vælges direkte under billedet.</p>
         </div>
       </section>
 

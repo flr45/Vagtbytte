@@ -51,7 +51,7 @@ export default async function OperationalPortalPage() {
   return (
     <OperationalPageFrame>
       <div className="flex items-center justify-between px-1 py-1 md:hidden">
-        <Link aria-label="Tilbage til SBR Fire App" className="grid size-11 place-items-center rounded-lg text-slate-200 transition hover:bg-white/5" href="/app"><AppIcon className="size-6" name="menu" /></Link>
+        <Link aria-label="Tilbage til SBR Fire App" className="grid size-11 place-items-center rounded-lg text-slate-200 transition hover:bg-white/5" href="/app"><AppIcon className="size-6" name="back" /></Link>
         <AppIcon className="size-5 text-slate-400" name="truck" />
       </div>
 
