@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { UserRole } from "@prisma/client";
-import { OperationalContentBuilder } from "@/components/OperationalContentBuilder";
+import { AppIcon } from "@/components/AppIcon";
+import { OperationalContentBuilderGuard } from "@/components/OperationalContentBuilderGuard";
 import {
   OperationalPageFrame,
   OperationalPortalNav,
@@ -26,9 +27,13 @@ export default async function OperationalContentBuilderPage({ params, searchPara
 
   return (
     <OperationalPageFrame>
-      <OperationalScreenHeader backHref={`/admin/operativ-portal/rum/${placeId}`} right="✚" title={`Byg · ${context.nodeName || context.placeName}`} />
+      <OperationalScreenHeader
+        backHref={`/admin/operativ-portal/rum/${placeId}`}
+        right={<AppIcon className="size-5" name="edit" />}
+        title={`${context.nodeId ? "Redigér" : "Byg"} · ${context.nodeName || context.placeName}`}
+      />
       <OperationalPortalNav isEditor />
-      <OperationalContentBuilder context={context} />
+      <OperationalContentBuilderGuard context={context} />
     </OperationalPageFrame>
   );
 }
