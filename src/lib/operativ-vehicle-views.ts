@@ -15,13 +15,13 @@ export async function listOperationalVehicleViews(vehicleId: string): Promise<Op
 export async function listOperationalVehicleViewHotspots(vehicleId: string): Promise<OperationalVehicleViewHotspot[]> {
   return prisma.$queryRaw<OperationalVehicleViewHotspot[]>`
     SELECT h.id, h.vehicle_id AS "vehicleId", h.place_id AS "placeId", p.name AS "placeName",
-      h.view_key AS "viewKey", COALESCE(h.label, '') AS label,
+      COALESCE(h.view_key, 'front') AS "viewKey", COALESCE(h.label, '') AS label,
       h.x_percent::float8 AS "xPercent", h.y_percent::float8 AS "yPercent",
       h.size_px AS "sizePx", h.sort_order AS "sortOrder"
     FROM operational_hotspot h
     INNER JOIN operational_place p ON p.id = h.place_id
     WHERE h.vehicle_id = ${vehicleId}
-    ORDER BY h.view_key, h.sort_order, h.created_at
+    ORDER BY COALESCE(h.view_key, 'front'), h.sort_order, h.created_at
   `;
 }
 

@@ -5,6 +5,7 @@ import { OperationalDocumentUploadForm } from "@/components/OperationalDocumentU
 import { OperationalImageManager } from "@/components/OperationalImageManager";
 import { OperationalPackingListPdfManager } from "@/components/OperationalPackingListPdfManager";
 import { OperationalVehicleAdminEditor } from "@/components/OperationalVehicleAdminEditor";
+import { OperationalVehicleViewer } from "@/components/OperationalVehicleViewer";
 import {
   OperationalPageFrame,
   OperationalPanel,
@@ -19,12 +20,15 @@ import {
   createOperationalPlaceAction,
   deleteOperationalDocumentAction
 } from "@/lib/operativ-portal-actions";
-import { groupRooms, listVehicleInteractiveHotspots } from "@/lib/operativ-interactive";
+import { groupRooms } from "@/lib/operativ-interactive";
 import {
   getOperationalVehicle,
-  operationalImageUrl,
   youtubeEmbedUrl
 } from "@/lib/operativ-portal";
+import {
+  listOperationalVehicleViewHotspots,
+  listOperationalVehicleViews
+} from "@/lib/operativ-vehicle-views";
 
 export const dynamic = "force-dynamic";
 type PageProps = { params: Promise<{ vehicleId: string }> };
@@ -36,9 +40,11 @@ export default async function OperationalVehiclePage({ params }: PageProps) {
   const vehicle = await getOperationalVehicle(vehicleId);
   if (!vehicle) notFound();
 
+  const [vehicleViews, vehicleViewHotspots] = await Promise.all([
+    listOperationalVehicleViews(vehicle.id),
+    listOperationalVehicleViewHotspots(vehicle.id)
+  ]);
   const code = vehicle.code || vehicleCode(vehicle.name);
-  const interactiveImageId = vehicle.interactiveImageId || vehicle.coverImageId;
-  const interactiveHotspots = await listVehicleInteractiveHotspots(vehicle.id);
   const roomGroups = groupRooms(vehicle.places);
 
   return (
@@ -47,11 +53,7 @@ export default async function OperationalVehiclePage({ params }: PageProps) {
       <OperationalPortalNav isEditor={isEditor} />
 
       <section className="overflow-hidden rounded-xl border border-white/10 bg-[#0b1013] shadow-xl">
-        {vehicle.coverImageId ? (
-          <img alt={vehicle.name} className="aspect-[16/10] w-full bg-[#161c20] object-cover" src={operationalImageUrl(vehicle.coverImageId)} />
-        ) : (
-          <div className="grid aspect-[16/10] place-items-center bg-gradient-to-br from-[#2a3136] to-[#111518] text-5xl font-black text-slate-600">{code}</div>
-        )}
+        <OperationalVehicleViewer hotspots={vehicleViewHotspots} vehicleName={vehicle.name} views={vehicleViews} />
         <div className="p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -62,8 +64,8 @@ export default async function OperationalVehiclePage({ params }: PageProps) {
           </div>
 
           <div className="mt-4 grid grid-cols-3 gap-2">
-            <DataChip icon="clock" label="Årgang" value={vehicle.year ? String(vehicle.year) : "—"} />
-            <DataChip icon="activity" label="Drivmiddel" value={vehicle.fuel || "—"} />
+            <DataChip icon="calendar" label="Årgang" value={vehicle.year ? String(vehicle.year) : "—"} />
+            <DataChip icon="fuel" label="Drivmiddel" value={vehicle.fuel || "—"} />
             <DataChip icon="users" label="Mandskab" value={vehicle.crew || "—"} />
           </div>
 
@@ -83,25 +85,8 @@ export default async function OperationalVehiclePage({ params }: PageProps) {
         </div>
       </section>
 
-      <section id="interaktivt" className="overflow-hidden rounded-xl border border-white/10 bg-[#0d1317]">
-        <div className="border-b border-white/10 bg-[#b70f18] px-4 py-3 text-center text-sm font-black">Interaktivt overblik</div>
-        {interactiveImageId ? (
-          <div className="relative bg-black">
-            <img alt={`Interaktiv oversigt over ${vehicle.name}`} className="block w-full" src={operationalImageUrl(interactiveImageId)} />
-            {interactiveHotspots.map((hotspot) => (
-              <Link
-                aria-label={`Åbn ${hotspot.label || hotspot.placeName}`}
-                className="absolute grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-white bg-[#d71920] font-black leading-none text-white shadow-[0_4px_18px_rgba(0,0,0,.65)] transition hover:scale-110"
-                href={`/admin/operativ-portal/rum/${hotspot.placeId}/interaktiv`}
-                key={hotspot.id}
-                style={{ left: `${hotspot.xPercent}%`, top: `${hotspot.yPercent}%`, width: hotspot.sizePx, height: hotspot.sizePx, fontSize: Math.max(18, Math.round(hotspot.sizePx * 0.55)) }}
-                title={hotspot.label || hotspot.placeName}
-              >+</Link>
-            ))}
-          </div>
-        ) : (
-          <div className="grid min-h-40 place-items-center bg-[#11171b] px-6 text-center text-sm font-semibold text-slate-500">Der er endnu ikke valgt et interaktivt køretøjsbillede.</div>
-        )}
+      <section className="overflow-hidden rounded-xl border border-white/10 bg-[#0d1317]">
+        <div className="border-b border-white/10 bg-[#b70f18] px-4 py-3 text-center text-sm font-black">Rum og udstyr</div>
         <div className="grid gap-3 p-3">
           {roomGroups.map((group) => (
             <div className="overflow-hidden rounded-lg border border-white/10" key={group.section}>
@@ -119,8 +104,8 @@ export default async function OperationalVehiclePage({ params }: PageProps) {
       </section>
 
       {isEditor ? (
-        <details className="relative z-10 min-w-0 overflow-hidden rounded-lg border border-red-500/20 bg-red-500/5 p-4" open>
-          <summary className="cursor-pointer text-sm font-black text-red-400">Administration af {vehicle.name}</summary>
+        <details className="relative z-10 min-w-0 overflow-hidden rounded-lg border border-red-500/20 bg-red-500/5 p-4">
+          <summary className="cursor-pointer text-sm font-black text-red-400">Grundoplysninger og nyt rum</summary>
 
           <div className="mt-4 grid min-w-0 gap-4 xl:grid-cols-2">
             <OperationalVehicleAdminEditor
@@ -147,17 +132,19 @@ export default async function OperationalVehiclePage({ params }: PageProps) {
               <button className="app-button-primary w-full" type="submit">Tilføj rum</button>
             </form>
           </div>
-
-          <section className="mt-4 rounded-xl border border-red-500/20 bg-[#0d1317] p-4">
-            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-red-400">Interaktive køretøjsbilleder</p>
-            <h2 className="mt-1 text-lg font-black text-white">Redigér Front, Højre, Bagende, Venstre og Tag ét sted</h2>
-            <p className="mt-2 max-w-3xl text-xs font-semibold leading-5 text-slate-400">Den tidligere separate hotspot-editor er samlet i køretøjets administrationsværktøj. Her vælger du billedside, uploader eller skifter billede og opretter, flytter eller sletter pluspunkter.</p>
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              <Link className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 text-sm font-black text-white hover:bg-red-700" href={`/admin/operativ-portal/koeretoejer/${vehicle.id}/administration`}><AppIcon className="size-5" name="settings" /> Åbn interaktiv redigering</Link>
-              <Link className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 text-sm font-black text-white hover:bg-white/10" href={`/admin/operativ-portal/koeretoejer/${vehicle.id}/foto`}><AppIcon className="size-5" name="camera" /> Start fototur</Link>
-            </div>
-          </section>
         </details>
+      ) : null}
+
+      {isEditor ? (
+        <section className="rounded-xl border border-red-500/20 bg-[#0d1317] p-4">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-red-400">Administration</p>
+          <h2 className="mt-1 text-lg font-black text-white">Billeder, sider og pluspunkter</h2>
+          <p className="mt-2 max-w-3xl text-xs font-semibold leading-5 text-slate-400">Brug det samlede administrationsværktøj til Front, Højre side, Bagende, Venstre side og Tag. Pluspunkter er adskilt pr. visning.</p>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            <Link className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 text-sm font-black text-white hover:bg-red-700" href={`/admin/operativ-portal/koeretoejer/${vehicle.id}/administration`}><AppIcon className="size-5" name="settings" /> Administrér køretøjet</Link>
+            <Link className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 text-sm font-black text-white hover:bg-white/10" href={`/admin/operativ-portal/koeretoejer/${vehicle.id}/foto`}><AppIcon className="size-5" name="camera" /> Start fototur</Link>
+          </div>
+        </section>
       ) : null}
 
       {isEditor ? <OperationalPackingListPdfManager vehicleId={vehicle.id} vehicleName={vehicle.name} /> : null}
