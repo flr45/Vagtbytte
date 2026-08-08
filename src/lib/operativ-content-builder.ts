@@ -52,6 +52,7 @@ export type OperationalInteractiveContext = {
   nodeId: string | null;
   nodeName: string | null;
   nodeDescription: string;
+  nodeSortOrder: number;
   parentNodeId: string | null;
   imageId: string | null;
   breadcrumbs: OperationalInteractiveBreadcrumb[];
@@ -171,8 +172,12 @@ export async function getOperationalInteractiveContext(
     nodeId: node?.id ?? null,
     nodeName: node?.name ?? null,
     nodeDescription: node?.description ?? "",
+    nodeSortOrder: node?.sortOrder ?? 0,
     parentNodeId: node?.parentNodeId ?? null,
-    imageId: node?.imageId ?? place.rootImageId,
+    // Rootniveauet må gerne falde tilbage til rummets coverbillede. Et underområde
+    // skal derimod have et eksplicit valgt billede, så hotspots aldrig havner oven
+    // på et billede fra et andet niveau ved en fejl.
+    imageId: node ? node.imageId : place.rootImageId,
     breadcrumbs,
     children,
     links,

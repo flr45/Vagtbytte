@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AppIcon } from "@/components/AppIcon";
 import {
   OperationalPageFrame,
   OperationalPortalNav,
@@ -70,13 +71,24 @@ export default async function OperationalPlaceInteractivePage({ params, searchPa
             })}
           </div>
         ) : (
-          <div className="grid min-h-56 place-items-center px-6 text-center text-sm font-semibold text-slate-500">Der er endnu ikke valgt et interaktivt billede til dette niveau.</div>
+          <div className="grid min-h-56 place-items-center px-6 text-center text-sm font-semibold text-slate-500">
+            {context.nodeId
+              ? "Dette underområde mangler sit eget interaktive billede."
+              : "Der er endnu ikke valgt et interaktivt billede til rummet."}
+          </div>
         )}
 
         <div className="border-t border-white/10 bg-[#0d1317] p-3">
-          <div className="flex flex-wrap items-center justify-center gap-1 text-center text-xs font-bold text-slate-400">
-            <span>{context.vehicleName}</span><span>→</span><span>{context.placeName}</span>
-            {context.breadcrumbs.map((crumb) => <span className="contents" key={crumb.id}><span>→</span><span className={crumb.id === context.nodeId ? "text-white" : ""}>{crumb.name}</span></span>)}
+          <div className="flex flex-wrap items-center justify-center gap-1.5 text-center text-xs font-bold text-slate-400">
+            <span>{context.vehicleName}</span>
+            <AppIcon className="size-3 text-slate-600" name="chevronRight" />
+            <span>{context.placeName}</span>
+            {context.breadcrumbs.map((crumb) => (
+              <span className="contents" key={crumb.id}>
+                <AppIcon className="size-3 text-slate-600" name="chevronRight" />
+                <span className={crumb.id === context.nodeId ? "text-white" : ""}>{crumb.name}</span>
+              </span>
+            ))}
           </div>
         </div>
       </section>
@@ -88,7 +100,7 @@ export default async function OperationalPlaceInteractivePage({ params, searchPa
             {context.children.map((node) => (
               <Link className="grid min-h-[68px] grid-cols-[minmax(0,1fr)_22px] items-center gap-3 rounded-lg border border-white/5 bg-[#11171b] p-3 hover:border-red-500/30 hover:bg-[#161e23]" href={`${base}?node=${node.id}`} key={node.id}>
                 <span className="min-w-0"><strong className="block truncate text-sm">{node.name}</strong><small className="mt-1 block truncate text-xs text-slate-500">{node.description || "Åbn næste niveau"}</small></span>
-                <span className="text-xl text-red-500">›</span>
+                <AppIcon className="size-5 text-red-500" name="chevronRight" />
               </Link>
             ))}
           </div>
@@ -96,7 +108,9 @@ export default async function OperationalPlaceInteractivePage({ params, searchPa
       ) : null}
 
       {isEditor ? (
-        <Link className="flex min-h-12 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 px-4 text-sm font-black text-red-300" href={`/admin/operativ-portal/rum/${placeId}/byg${context.nodeId ? `?node=${context.nodeId}` : ""}`}>✚ Redigér dette interaktive niveau</Link>
+        <Link className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 text-sm font-black text-red-300" href={`/admin/operativ-portal/rum/${placeId}/byg${context.nodeId ? `?node=${context.nodeId}` : ""}`}>
+          <AppIcon className="size-5" name="edit" /> Redigér dette interaktive niveau
+        </Link>
       ) : null}
     </OperationalPageFrame>
   );

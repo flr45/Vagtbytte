@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { AppIcon } from "./AppIcon";
 import { setOperationalInteractiveContextImageAction } from "@/lib/operativ-content-builder-actions";
 import { setOperationalVehicleViewAction } from "@/lib/operativ-vehicle-view-actions";
 import type { OperationalVehicleViewKey } from "@/lib/operativ-vehicle-view-model";
@@ -129,7 +130,11 @@ export function OperationalQuickImageCapture(props: Props) {
     <div className="grid gap-3 rounded-xl border border-white/10 bg-[#11191e] p-3">
       <div className="flex items-center justify-between gap-2">
         <div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-red-400">Hurtigt billede</p><strong className="text-sm text-white">{props.label}</strong></div>
-        {file ? <button className="rounded-lg border border-white/10 px-3 py-2 text-xs font-black text-white" onClick={() => setRotation((value) => (value + 90) % 360)} type="button">↻ Rotér</button> : null}
+        {file ? (
+          <button className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-black text-white" onClick={() => setRotation((value) => (value + 90) % 360)} type="button">
+            <AppIcon className="size-4" name="rotate" /> Rotér
+          </button>
+        ) : null}
       </div>
 
       {file && previewUrl ? (
@@ -148,12 +153,12 @@ export function OperationalQuickImageCapture(props: Props) {
       ) : null}
 
       <div className="grid gap-2 sm:grid-cols-2">
-        <label className="flex min-h-12 cursor-pointer items-center justify-center rounded-lg bg-red-600 px-3 text-center text-xs font-black text-white hover:bg-red-700">
-          📷 Tag foto
+        <label className="flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-lg bg-red-600 px-3 text-center text-xs font-black text-white hover:bg-red-700">
+          <AppIcon className="size-4" name="camera" /> Tag foto
           <input accept="image/jpeg,image/png,image/webp" capture="environment" className="sr-only" onChange={(event) => select(event.target.files?.[0])} type="file" />
         </label>
-        <label className="flex min-h-12 cursor-pointer items-center justify-center rounded-lg border border-white/10 bg-white/5 px-3 text-center text-xs font-black text-white hover:bg-white/10">
-          ▧ Vælg billede
+        <label className="flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 text-center text-xs font-black text-white hover:bg-white/10">
+          <AppIcon className="size-4" name="image" /> Vælg billede
           <input accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => select(event.target.files?.[0])} type="file" />
         </label>
       </div>

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { UserRole } from "@prisma/client";
 import { AppIcon } from "@/components/AppIcon";
-import { OperationalContentBuilderGuard } from "@/components/OperationalContentBuilderGuard";
+import { OperationalContentBuilder } from "@/components/OperationalContentBuilder";
 import {
   OperationalPageFrame,
   OperationalPortalNav,
@@ -33,7 +33,7 @@ export default async function OperationalContentBuilderPage({ params, searchPara
         title={`${context.nodeId ? "Redigér" : "Byg"} · ${context.nodeName || context.placeName}`}
       />
       <OperationalPortalNav isEditor />
-      <OperationalContentBuilderGuard context={context} />
+      <OperationalContentBuilder context={context} />
     </OperationalPageFrame>
   );
 }

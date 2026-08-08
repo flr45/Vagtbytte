@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AppIcon } from "@/components/AppIcon";
 import { OperationalImageManager } from "@/components/OperationalImageManager";
 import {
   OperationalPageFrame,
@@ -64,8 +65,16 @@ export default async function OperationalPlacePage({ params }: PageProps) {
             {place.description || `Indeholder ${place.items.length} registrerede udstyrsposter med billeder, placering og instruktion.`}
           </p>
           <div className="mt-5 grid gap-2 sm:grid-cols-2">
-            <Link className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 text-sm font-black text-white hover:bg-red-700" href={`/admin/operativ-portal/rum/${place.id}/interaktiv`}>⌗ Interaktivt overblik</Link>
-            {isEditor ? <Link className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-red-600 bg-red-600/10 px-4 text-sm font-black text-red-400 hover:bg-red-600/20" href={`/admin/operativ-portal/rum/${place.id}/byg`}>✚ Åbn Indholdsbygger</Link> : <a className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-red-600 px-4 text-sm font-black text-red-500 hover:bg-red-600/10" href="#indhold">Se liste over indhold</a>}
+            <Link className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 text-sm font-black text-white hover:bg-red-700" href={`/admin/operativ-portal/rum/${place.id}/interaktiv`}>
+              <AppIcon className="size-5" name="activity" /> Interaktivt overblik
+            </Link>
+            {isEditor ? (
+              <Link className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-red-600 bg-red-600/10 px-4 text-sm font-black text-red-400 hover:bg-red-600/20" href={`/admin/operativ-portal/rum/${place.id}/byg`}>
+                <AppIcon className="size-5" name="edit" /> Redigér interaktiv struktur
+              </Link>
+            ) : (
+              <a className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-red-600 px-4 text-sm font-black text-red-500 hover:bg-red-600/10" href="#indhold">Se liste over indhold</a>
+            )}
           </div>
         </div>
       </section>
@@ -80,7 +89,7 @@ export default async function OperationalPlacePage({ params }: PageProps) {
                 <span className="flex items-center gap-2"><strong className="block truncate text-sm">{item.name}</strong>{item.quantity > 1 ? <small className="rounded bg-red-600 px-1.5 py-0.5 text-[9px] font-black text-white">×{item.quantity}</small> : null}</span>
                 <small className="mt-1 block truncate text-xs text-slate-500">{item.note || item.specifications.split("\n")[0] || `Antal: ${item.quantity}`}</small>
               </span>
-              <span className="text-xl text-slate-500">›</span>
+              <AppIcon className="size-5 text-slate-500" name="chevronRight" />
             </Link>
           ))}
           {place.items.length === 0 ? <p className="rounded-lg border border-dashed border-white/15 bg-white/5 p-7 text-center text-sm text-slate-500">Ingen udstyrsposter i rummet.</p> : null}
@@ -98,7 +107,7 @@ export default async function OperationalPlacePage({ params }: PageProps) {
       <OperationalPanel className="scroll-mt-20">
         <div id="dokumenter" className="flex items-center justify-between"><h2 className="text-sm font-black">Dokumenter</h2>{isEditor ? <Link className="text-xs font-bold text-red-500" href={`/admin/operativ-portal/dokumenter?vehicleId=${place.vehicleId}&placeId=${place.id}`}>Tilføj</Link> : null}</div>
         <div className="mt-3 grid gap-2">
-          {documents.map((document) => <a className="grid grid-cols-[38px_minmax(0,1fr)_20px] items-center gap-2 rounded-lg bg-[#151b1f] p-2.5" href={`/api/admin/operativ-portal/dokumenter/${document.id}`} key={document.id} target="_blank"><span className="grid size-9 place-items-center rounded bg-[#c71019] text-[9px] font-black">FIL</span><span className="min-w-0"><strong className="block truncate text-xs">{document.title}</strong><small className="block truncate text-[10px] text-slate-500">{document.category} · {contentLocationLabel(document)}</small></span><span className="text-slate-500">›</span></a>)}
+          {documents.map((document) => <a className="grid grid-cols-[38px_minmax(0,1fr)_20px] items-center gap-2 rounded-lg bg-[#151b1f] p-2.5" href={`/api/admin/operativ-portal/dokumenter/${document.id}`} key={document.id} target="_blank"><span className="grid size-9 place-items-center rounded bg-[#c71019] text-white"><AppIcon className="size-4" name="document" /></span><span className="min-w-0"><strong className="block truncate text-xs">{document.title}</strong><small className="block truncate text-[10px] text-slate-500">{document.category} · {contentLocationLabel(document)}</small></span><AppIcon className="size-4 text-slate-500" name="chevronRight" /></a>)}
           {documents.length === 0 ? <p className="text-sm text-slate-500">Ingen dokumenter tilknyttet.</p> : null}
         </div>
       </OperationalPanel>
@@ -131,14 +140,16 @@ export default async function OperationalPlacePage({ params }: PageProps) {
 
           <div className="mt-4 rounded-xl border border-red-500/20 bg-[#0d1317] p-4">
             <p className="text-[10px] font-black uppercase tracking-[0.16em] text-red-400">Interaktiv opbygning</p>
-            <h2 className="mt-1 text-lg font-black">Byg rum → hylde → kasse → værktøj visuelt</h2>
-            <p className="mt-2 max-w-3xl text-xs font-semibold leading-5 text-slate-500">Indholdsbyggeren er nu det eneste sted til interaktive pluspunkter. Her kan du tage billeder direkte, oprette underområder, trække plusser og fortryde fejl.</p>
-            <Link className="mt-4 flex min-h-12 items-center justify-center rounded-lg bg-red-600 px-4 text-sm font-black text-white hover:bg-red-700" href={`/admin/operativ-portal/rum/${place.id}/byg`}>✚ Åbn Indholdsbygger</Link>
+            <h2 className="mt-1 text-lg font-black">Rum → underområde → værktøj</h2>
+            <p className="mt-2 max-w-3xl text-xs font-semibold leading-5 text-slate-500">Den interaktive editor er det eneste sted, hvor pluspunkter og underområder kobles sammen på billeder. Hvert underområde kan have sit eget billede.</p>
+            <Link className="mt-4 flex min-h-12 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 text-sm font-black text-white hover:bg-red-700" href={`/admin/operativ-portal/rum/${place.id}/byg`}>
+              <AppIcon className="size-5" name="edit" /> Redigér interaktiv struktur
+            </Link>
           </div>
         </details>
       ) : null}
 
-      {isEditor ? <OperationalImageManager description="Upload billeder af rummet, hylder og kasser. De kan genbruges direkte i Indholdsbyggeren." images={place.images} placeId={place.id} title={`Billeder af ${place.name}`} vehicleId={place.vehicleId} /> : null}
+      {isEditor ? <OperationalImageManager description="Upload billeder af rummet, hylder og kasser. De kan genbruges direkte i den interaktive editor." images={place.images} placeId={place.id} title={`Billeder af ${place.name}`} vehicleId={place.vehicleId} /> : null}
     </OperationalPageFrame>
   );
 }

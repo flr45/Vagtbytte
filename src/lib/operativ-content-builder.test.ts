@@ -6,7 +6,7 @@ function read(relativePath: string) {
   return fs.readFileSync(path.join(process.cwd(), relativePath), "utf8");
 }
 
-describe("Operativ Portal v0.12 indholdsbygger", () => {
+describe("Operativ Portal interaktiv indholdsbygger", () => {
   it("opretter et rekursivt node/link-hierarki og migrerer gamle rum-hotspots", () => {
     const migration = read("prisma/migrations/20260807201000_operational_interactive_hierarchy/migration.sql");
     expect(migration).toContain('CREATE TABLE "operational_interactive_node"');
@@ -32,12 +32,39 @@ describe("Operativ Portal v0.12 indholdsbygger", () => {
     expect(adminActions).toContain("/byg`");
   });
 
-  it("har direkte flytning og fortryd i både rum- og køretøjseditor", () => {
+  it("har én eksplicit interaktionstilstand i rum-editoren", () => {
     const builder = read("src/components/OperationalContentBuilder.tsx");
+    const page = read("src/app/admin/operativ-portal/rum/[placeId]/byg/page.tsx");
+    expect(builder).toContain("type Interaction =");
+    expect(builder).toContain('{ kind: "placing" }');
+    expect(builder).toContain("interaction.kind !== \"placing\"");
+    expect(builder).toContain("Placér nyt +");
+    expect(builder).toContain("onPointerCancel={cancelDrag}");
+    expect(builder).toContain("context.nodeSortOrder");
+    expect(builder).toContain("Fortryd");
+    expect(page).toContain('import { OperationalContentBuilder }');
+    expect(page).not.toContain("OperationalContentBuilderGuard");
+  });
+
+  it("gemmer nyt underområde og dets pluspunkt atomisk og afviser falsk succes", () => {
+    const actions = read("src/lib/operativ-content-builder-actions.ts");
+    expect(actions).toContain("prisma.$transaction([");
+    expect(actions).toContain("createdNode !== 1 || createdLink !== 1");
+    expect(actions).toContain("updated !== 1");
+    expect(actions).toContain("Underområdet og pluspunktet kunne ikke oprettes samlet");
+  });
+
+  it("kræver eget billede på underområder og bevarer deres rigtige rækkefølge", () => {
+    const data = read("src/lib/operativ-content-builder.ts");
+    const builder = read("src/components/OperationalContentBuilder.tsx");
+    expect(data).toContain("nodeSortOrder: node?.sortOrder ?? 0");
+    expect(data).toContain("imageId: node ? node.imageId : place.rootImageId");
+    expect(builder).toContain("defaultValue={context.nodeSortOrder}");
+    expect(builder).not.toContain('defaultValue="0" min="0" name="sortOrder"');
+  });
+
+  it("bevarer direkte flytning i køretøjseditoren", () => {
     const vehicleManager = read("src/components/OperationalVehicleViewManager.tsx");
-    expect(builder).toContain("Fortryd flytning");
-    expect(builder).toContain("Fortryd sletning");
-    expect(builder).toContain("editTargetType");
     expect(vehicleManager).toContain("moveOperationalVehicleViewHotspotAction");
     expect(vehicleManager).toContain("Fortryd flytning");
   });
