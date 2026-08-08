@@ -86,21 +86,23 @@ export async function POST(request: Request) {
   await writeFile(filePath, Buffer.from(await file.arrayBuffer()), { flag: "wx" });
 
   try {
-    await prisma.$executeRaw`
-      INSERT INTO operational_document
-        (id, vehicle_id, place_id, item_id, title, description, category,
-         original_name, storage_name, mime_type, size_bytes)
-      VALUES
-        (${documentId}, ${targets.vehicleId}, ${targets.placeId}, ${targets.itemId},
-         ${title}, ${description}, ${category}, ${originalName}, ${storageName}, ${file.type}, ${file.size})
-    `;
-    await prisma.auditLog.create({
-      data: {
-        actorUserId: admin!.id,
-        actorRole: admin!.role,
-        action: "OPERATIONAL_DOCUMENT_CREATED",
-        description: `Dokumentet ${title} blev uploadet til Operativ Portal`
-      }
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`
+        INSERT INTO operational_document
+          (id, vehicle_id, place_id, item_id, title, description, category,
+           original_name, storage_name, mime_type, size_bytes)
+        VALUES
+          (${documentId}, ${targets.vehicleId}, ${targets.placeId}, ${targets.itemId},
+           ${title}, ${description}, ${category}, ${originalName}, ${storageName}, ${file.type}, ${file.size})
+      `;
+      await tx.auditLog.create({
+        data: {
+          actorUserId: admin!.id,
+          actorRole: admin!.role,
+          action: "OPERATIONAL_DOCUMENT_CREATED",
+          description: `Dokumentet ${title} blev uploadet til Operativ Portal`
+        }
+      });
     });
   } catch (error) {
     await unlink(filePath).catch(() => undefined);
