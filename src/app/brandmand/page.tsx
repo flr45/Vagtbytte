@@ -3,6 +3,7 @@ import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { availabilityStatusLabel, calculateAssignedShiftWindow } from "@/lib/availability";
 import { prisma } from "@/lib/prisma";
+import { AppIcon } from "@/components/AppIcon";
 import { AvailabilityActiveForm, AvailabilityCreateForm } from "@/components/AvailabilityForms";
 import { TopBar } from "@/components/TopBar";
 import { formatDateTime, TransferList } from "@/components/TransferSummary";
@@ -88,11 +89,12 @@ export default async function FirefighterPage() {
           >
             <div>
               <p
-                className={`text-sm font-bold uppercase ${
+                className={`inline-flex items-center gap-2 text-sm font-bold uppercase ${
                   currentAssignment.acknowledgedAt ? "text-emerald-700" : "text-amber-800"
                 }`}
               >
-                {currentAssignment.acknowledgedAt ? "● Bekræftet" : "● Afventer bekræftelse"}
+                <AppIcon className="size-4 shrink-0" name={currentAssignment.acknowledgedAt ? "checkCircle" : "clock"} />
+                {currentAssignment.acknowledgedAt ? "Bekræftet" : "Afventer bekræftelse"}
               </p>
               <h2
                 className={`mt-1 text-2xl font-black ${
