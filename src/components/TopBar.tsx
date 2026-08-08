@@ -14,7 +14,7 @@ type TopBarProps = {
 export async function TopBar({ title, activeModule }: TopBarProps) {
   const user = await getCurrentUser();
   const resolvedModule: SbrFireModule = activeModule ?? (title.toLocaleLowerCase("da-DK").includes("alarm") ? "alarm" : "vagt");
-  const unreadCount = user
+  const unreadCount = user && user.role !== "ADMIN"
     ? await prisma.notification.count({
         where: { recipientUserId: user.id, readAt: null, publishedAt: { not: null }, cancelledAt: null }
       })
