@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AppIcon } from "@/components/AppIcon";
 import { OperationalImageManager } from "@/components/OperationalImageManager";
 import {
   OperationalPageFrame,
@@ -12,12 +13,11 @@ import {
   canManageOperationalPortal,
   requireOperationalPortalAccess
 } from "@/lib/auth";
-import { updateOperationalItemDetailsAction } from "@/lib/operativ-portal-content-actions";
 import {
-  contentLocationLabel,
-  listManagedOperationalDocuments,
-  listManagedOperationalVideos
-} from "@/lib/operativ-portal-content";
+  listOperationalItemDocuments,
+  listOperationalItemVideos
+} from "@/lib/operativ-item-content";
+import { updateOperationalItemDetailsAction } from "@/lib/operativ-portal-content-actions";
 import {
   getOperationalItem,
   operationalImageUrl,
@@ -25,27 +25,39 @@ import {
 } from "@/lib/operativ-portal";
 
 export const dynamic = "force-dynamic";
-type PageProps = { params: Promise<{ itemId: string }> };
+type PageProps = {
+  params: Promise<{ itemId: string }>;
+  searchParams: Promise<{ sourceNode?: string | string[] }>;
+};
 
-export default async function OperationalItemPage({ params }: PageProps) {
+export default async function OperationalItemPage({ params, searchParams }: PageProps) {
   const user = await requireOperationalPortalAccess();
   const isEditor = canManageOperationalPortal(user);
   const { itemId } = await params;
-  const [item, allDocuments, allVideos] = await Promise.all([
+  const query = await searchParams;
+  const sourceNode = typeof query.sourceNode === "string" ? query.sourceNode : null;
+  const [item, documents, videos] = await Promise.all([
     getOperationalItem(itemId),
-    listManagedOperationalDocuments(),
-    listManagedOperationalVideos()
+    listOperationalItemDocuments(itemId),
+    listOperationalItemVideos(itemId)
   ]);
   if (!item) notFound();
 
-  const documents = allDocuments.filter((document) => document.itemId === item.id);
-  const videos = allVideos.filter((video) => video.itemId === item.id);
   const specificationLines = item.specifications.split("\n").map((line) => line.trim()).filter(Boolean);
+  const backHref = `/admin/operativ-portal/rum/${item.placeId}/interaktiv${sourceNode ? `?node=${encodeURIComponent(sourceNode)}` : ""}`;
 
   return (
     <OperationalPageFrame>
-      <OperationalScreenHeader backHref={`/admin/operativ-portal/rum/${item.placeId}`} title={item.name} />
+      <OperationalScreenHeader backHref={backHref} title={item.name} />
       <OperationalPortalNav isEditor={isEditor} />
+
+      <div className="flex min-h-11 items-center gap-1 overflow-x-auto rounded-lg border border-white/10 bg-[#0d1317] px-3 py-2 text-xs font-bold text-slate-400">
+        <span className="shrink-0">{item.vehicleName}</span>
+        <AppIcon className="size-3 shrink-0 text-slate-600" name="chevronRight" />
+        <Link className="shrink-0 hover:text-white" href={backHref}>{item.placeName}</Link>
+        <AppIcon className="size-3 shrink-0 text-slate-600" name="chevronRight" />
+        <span className="shrink-0 text-white">{item.name}</span>
+      </div>
 
       <section className="overflow-hidden rounded-xl border border-white/10 bg-[#0b1013]">
         {item.coverImageId ? (
@@ -71,16 +83,16 @@ export default async function OperationalItemPage({ params }: PageProps) {
             <div className="mt-5 border-t border-white/10 pt-4">
               <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-300">Specifikationer</p>
               <ul className="mt-3 grid gap-2 text-sm text-slate-400">
-                {specificationLines.map((line, index) => <li className="flex gap-2" key={`${line}-${index}`}><span className="text-red-500">•</span><span>{line}</span></li>)}
+                {specificationLines.map((line, index) => <li className="flex gap-2" key={`${line}-${index}`}><AppIcon className="mt-1 size-2.5 shrink-0 text-red-500" name="status" /><span>{line}</span></li>)}
               </ul>
             </div>
           ) : null}
 
           <div className="mt-5 border-t border-white/10 pt-4">
-            <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-300">Registrerede oplysninger</p>
+            <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-300">Placering</p>
             <dl className="mt-3 grid gap-2 text-sm">
               <Fact label="Køretøj" value={item.vehicleName} />
-              <Fact label="Placering" value={item.placeName} />
+              <Fact label="Rum" value={item.placeName} />
               <Fact label="Antal" value={String(item.quantity)} />
             </dl>
           </div>
@@ -100,10 +112,10 @@ export default async function OperationalItemPage({ params }: PageProps) {
             <h2 className="mb-2 text-sm font-black">Relaterede videoer</h2>
             <div className="grid gap-2">
               {videos.slice(1).map((video) => (
-                <article className="grid grid-cols-[92px_minmax(0,1fr)_20px] items-center gap-3 rounded-lg bg-[#11171b] p-2" key={video.id}>
-                  <div className="grid h-14 w-[92px] place-items-center rounded-md bg-[#20272c] text-xl text-red-500">▶</div>
+                <article className="grid min-h-16 grid-cols-[44px_minmax(0,1fr)_20px] items-center gap-3 rounded-lg bg-[#11171b] p-3" key={video.id}>
+                  <span className="grid size-11 place-items-center rounded-md bg-[#20272c] text-red-500"><AppIcon className="size-5" name="video" /></span>
                   <span className="min-w-0"><strong className="block truncate text-sm">{video.title}</strong><small className="mt-1 block truncate text-xs text-slate-500">{video.category}</small></span>
-                  <span className="text-slate-500">›</span>
+                  <AppIcon className="size-5 text-slate-500" name="chevronRight" />
                 </article>
               ))}
             </div>
@@ -114,7 +126,7 @@ export default async function OperationalItemPage({ params }: PageProps) {
       <OperationalPanel className="scroll-mt-20">
         <div id="dokumenter" className="flex items-center justify-between"><h2 className="text-sm font-black">Dokumenter</h2>{isEditor ? <Link className="text-xs font-bold text-red-500" href={`/admin/operativ-portal/dokumenter?itemId=${item.id}&placeId=${item.placeId}&vehicleId=${item.vehicleId}`}>Tilføj</Link> : null}</div>
         <div className="mt-3 grid gap-2">
-          {documents.map((document) => <a className="grid grid-cols-[38px_minmax(0,1fr)_20px] items-center gap-2 rounded-lg bg-[#151b1f] p-2.5" href={`/api/admin/operativ-portal/dokumenter/${document.id}`} key={document.id} target="_blank"><span className="grid size-9 place-items-center rounded bg-[#c71019] text-[9px] font-black">FIL</span><span className="min-w-0"><strong className="block truncate text-xs">{document.title}</strong><small className="block truncate text-[10px] text-slate-500">{document.category} · {contentLocationLabel(document)}</small></span><span className="text-slate-500">›</span></a>)}
+          {documents.map((document) => <a className="grid min-h-14 grid-cols-[40px_minmax(0,1fr)_20px] items-center gap-2 rounded-lg bg-[#151b1f] p-2.5" href={`/api/admin/operativ-portal/dokumenter/${document.id}`} key={document.id} target="_blank"><span className="grid size-10 place-items-center rounded bg-[#c71019] text-white"><AppIcon className="size-5" name="document" /></span><span className="min-w-0"><strong className="block truncate text-xs">{document.title}</strong><small className="block truncate text-[10px] text-slate-500">{document.category}</small></span><AppIcon className="size-5 text-slate-500" name="chevronRight" /></a>)}
           {documents.length === 0 ? <p className="text-sm text-slate-500">Ingen dokumenter tilknyttet.</p> : null}
         </div>
       </OperationalPanel>
