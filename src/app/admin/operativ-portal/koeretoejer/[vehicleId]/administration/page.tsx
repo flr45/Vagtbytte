@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { UserRole } from "@prisma/client";
+import { AppIcon } from "@/components/AppIcon";
 import { OperationalAdminOrganizer } from "@/components/OperationalAdminOrganizer";
 import { OperationalContentReadinessPanel } from "@/components/OperationalContentReadiness";
 import { OperationalVehicleViewManager } from "@/components/OperationalVehicleViewManager";
@@ -37,7 +38,7 @@ export default async function OperationalVehicleAdministrationPage({ params }: P
 
   return (
     <OperationalPageFrame>
-      <OperationalScreenHeader backHref={`/admin/operativ-portal/koeretoejer/${vehicle.id}`} right="⚙" title={`Organisér ${vehicle.name}`} />
+      <OperationalScreenHeader backHref={`/admin/operativ-portal/koeretoejer/${vehicle.id}`} right={<AppIcon className="size-5" name="settings" />} title={`Organisér ${vehicle.name}`} />
       <OperationalPortalNav isEditor />
 
       <section className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
@@ -47,9 +48,9 @@ export default async function OperationalVehicleAdministrationPage({ params }: P
           Sortér rum og udstyr, flyt flere udstyrsposter mellem rum, lav kopier, opbyg køretøjsnavigationen og se præcist hvor der stadig mangler visuelt indhold.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <Link className="rounded-lg border border-white/10 bg-[#151b1f] px-3 py-2 text-xs font-black text-white" href={`/admin/operativ-portal/koeretoejer/${vehicle.id}`}>← Køretøjsside</Link>
-          <Link className="rounded-lg bg-red-600 px-3 py-2 text-xs font-black text-white hover:bg-red-700" href={`/admin/operativ-portal/koeretoejer/${vehicle.id}/foto`}>📷 Start fototur</Link>
-          <Link className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-black text-red-300" href={`/admin/operativ-portal/koeretoejer/${vehicle.id}/interaktiv`}>Interaktiv visning</Link>
+          <Link className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-white/10 bg-[#151b1f] px-3 py-2 text-xs font-black text-white" href={`/admin/operativ-portal/koeretoejer/${vehicle.id}`}><AppIcon className="size-4" name="back" /> Køretøjsside</Link>
+          <Link className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-xs font-black text-white hover:bg-red-700" href={`/admin/operativ-portal/koeretoejer/${vehicle.id}/foto`}><AppIcon className="size-4" name="camera" /> Start fototur</Link>
+          <Link className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-black text-red-300" href={`/admin/operativ-portal/koeretoejer/${vehicle.id}/interaktiv`}><AppIcon className="size-4" name="activity" /> Interaktiv visning</Link>
         </div>
       </section>
 
