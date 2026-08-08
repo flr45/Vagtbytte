@@ -46,9 +46,19 @@ describe("Operativ Portal brandmandsflow", () => {
     expect(builder).toContain("backHref={backHref}");
   });
 
-  it("henter kun indhold for det valgte udstyr", () => {
+  it("henter kun indhold for det valgte rum og udstyr", () => {
+    const placePage = read("src/app/admin/operativ-portal/rum/[placeId]/page.tsx");
+    const placeContent = read("src/lib/operativ-place-content.ts");
     const itemPage = read("src/app/admin/operativ-portal/udstyr/[itemId]/page.tsx");
     const itemContent = read("src/lib/operativ-item-content.ts");
+
+    expect(placePage).toContain("listOperationalPlaceDocuments(placeId)");
+    expect(placePage).toContain("listOperationalPlaceVideos(placeId)");
+    expect(placePage).not.toContain("listManagedOperationalDocuments");
+    expect(placePage).not.toContain("listManagedOperationalVideos");
+    expect(placeContent).toContain('WHERE d.place_id = ${placeId}');
+    expect(placeContent).toContain('WHERE video.place_id = ${placeId}');
+
     expect(itemPage).toContain("listOperationalItemDocuments(itemId)");
     expect(itemPage).toContain("listOperationalItemVideos(itemId)");
     expect(itemPage).not.toContain("listManagedOperationalDocuments");
