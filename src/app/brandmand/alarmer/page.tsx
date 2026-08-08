@@ -30,7 +30,7 @@ export default async function AlarmFeedPage() {
   return (
     <>
       <AlarmFeedAutoRefresh intervalMs={3000} />
-      <TopBar title="Alarmfeed" />
+      <TopBar activeModule="alarm" backHref="/app" backLabel="Tilbage til Hjem" title="Alarmfeed" />
       <main className="mx-auto grid w-full max-w-3xl gap-5 px-4 py-6">
         <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950">
           <p className="font-black">Informationssystem</p>
