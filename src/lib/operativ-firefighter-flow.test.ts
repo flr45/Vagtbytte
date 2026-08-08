@@ -31,7 +31,7 @@ describe("Operativ Portal brandmandsflow", () => {
     expect(room).toContain("sourceNode=");
     expect(room).toContain("Math.max(48, hotspot.sizePx)");
     expect(item).toContain("sourceNode");
-    expect(item).toContain(`/interaktiv${sourceNode ?`);
+    expect(item).toContain('/interaktiv${sourceNode ?');
   });
 
   it("henter kun indhold for det valgte udstyr", () => {
@@ -41,6 +41,6 @@ describe("Operativ Portal brandmandsflow", () => {
     expect(itemPage).toContain("listOperationalItemVideos(itemId)");
     expect(itemPage).not.toContain("listManagedOperationalDocuments");
     expect(itemPage).not.toContain("listManagedOperationalVideos");
-    expect(itemContent).toContain("WHERE item_id = ${itemId}");
+    expect(itemContent).toContain('WHERE item_id = ${itemId}');
   });
 });
