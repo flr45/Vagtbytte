@@ -27,7 +27,7 @@ import {
 export const dynamic = "force-dynamic";
 type PageProps = {
   params: Promise<{ itemId: string }>;
-  searchParams: Promise<{ sourceNode?: string | string[] }>;
+  searchParams: Promise<{ sourceNode?: string | string[]; returnTo?: string | string[] }>;
 };
 
 export default async function OperationalItemPage({ params, searchParams }: PageProps) {
@@ -35,7 +35,8 @@ export default async function OperationalItemPage({ params, searchParams }: Page
   const isEditor = canManageOperationalPortal(user);
   const { itemId } = await params;
   const query = await searchParams;
-  const sourceNode = typeof query.sourceNode === "string" ? query.sourceNode : null;
+  const sourceNode = one(query.sourceNode);
+  const requestedReturnTo = one(query.returnTo);
   const [item, documents, videos] = await Promise.all([
     getOperationalItem(itemId),
     listOperationalItemDocuments(itemId),
@@ -44,20 +45,23 @@ export default async function OperationalItemPage({ params, searchParams }: Page
   if (!item) notFound();
 
   const specificationLines = item.specifications.split("\n").map((line) => line.trim()).filter(Boolean);
-  const backHref = `/admin/operativ-portal/rum/${item.placeId}/interaktiv${sourceNode ? `?node=${encodeURIComponent(sourceNode)}` : ""}`;
+  const placeHref = `/admin/operativ-portal/rum/${item.placeId}`;
+  const legacyInteractiveHref = `/admin/operativ-portal/rum/${item.placeId}/interaktiv${sourceNode ? `?node=${encodeURIComponent(sourceNode)}` : ""}`;
+  const backHref = safeOperationalReturnTo(requestedReturnTo) ?? (sourceNode ? legacyInteractiveHref : placeHref);
+  const vehicleHref = `/admin/operativ-portal/koeretoejer/${item.vehicleId}`;
 
   return (
     <OperationalPageFrame>
       <OperationalScreenHeader backHref={backHref} title={item.name} />
       <OperationalPortalNav isEditor={isEditor} />
 
-      <div className="flex min-h-11 items-center gap-1 overflow-x-auto rounded-lg border border-white/10 bg-[#0d1317] px-3 py-2 text-xs font-bold text-slate-400">
-        <span className="shrink-0">{item.vehicleName}</span>
+      <nav aria-label="Din placering" className="flex min-h-11 items-center gap-1 overflow-x-auto rounded-lg border border-white/10 bg-[#0d1317] px-3 py-2 text-xs font-bold text-slate-400">
+        <Link className="shrink-0 hover:text-white" href={vehicleHref}>{item.vehicleName}</Link>
         <AppIcon className="size-3 shrink-0 text-slate-600" name="chevronRight" />
-        <Link className="shrink-0 hover:text-white" href={backHref}>{item.placeName}</Link>
+        <Link className="shrink-0 hover:text-white" href={placeHref}>{item.placeName}</Link>
         <AppIcon className="size-3 shrink-0 text-slate-600" name="chevronRight" />
         <span className="shrink-0 text-white">{item.name}</span>
-      </div>
+      </nav>
 
       <section className="overflow-hidden rounded-xl border border-white/10 bg-[#0b1013]">
         {item.coverImageId ? (
@@ -157,4 +161,20 @@ function Field({ label, children, className = "" }: { label: string; children: R
 
 function Fact({ label, value }: { label: string; value: string }) {
   return <div className="grid grid-cols-[86px_minmax(0,1fr)] gap-3 border-t border-white/5 pt-2 first:border-t-0 first:pt-0"><dt className="text-slate-500">{label}</dt><dd className="m-0 font-bold text-slate-200">{value}</dd></div>;
+}
+
+function one(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function safeOperationalReturnTo(value: string | undefined) {
+  if (!value) return null;
+  try {
+    const origin = "https://sbr.local";
+    const parsed = new URL(value, origin);
+    if (parsed.origin !== origin || !parsed.pathname.startsWith("/admin/operativ-portal")) return null;
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return null;
+  }
 }
