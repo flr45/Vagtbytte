@@ -92,9 +92,16 @@ export function OperationalTabs({
   items: Array<{ href: string; label: string; active?: boolean }>;
 }) {
   return (
-    <nav className="flex overflow-x-auto border-b border-white/10 bg-[#0a0f12] px-1">
+    <nav aria-label="Operativ sektioner" className="flex overflow-x-auto border-b border-white/10 bg-[#0a0f12] px-1">
       {items.map((item) => (
-        <a className={`whitespace-nowrap border-b-2 px-3 py-3 text-xs font-bold ${item.active ? "border-red-500 text-red-500" : "border-transparent text-slate-400"}`} href={item.href} key={item.label}>{item.label}</a>
+        <Link
+          aria-current={item.active ? "page" : undefined}
+          className={`whitespace-nowrap border-b-2 px-3 py-3 text-xs font-bold ${item.active ? "border-red-500 text-red-500" : "border-transparent text-slate-400 hover:text-white"}`}
+          href={item.href}
+          key={item.label}
+        >
+          {item.label}
+        </Link>
       ))}
     </nav>
   );
