@@ -31,6 +31,8 @@ export type AppIconName =
   | "warning"
   | "checkCircle"
   | "clock"
+  | "calendar"
+  | "fuel"
   | "camera";
 
 export function AppIcon({ name, ...props }: { name: AppIconName } & SVGProps<SVGSVGElement>) {
@@ -75,6 +77,8 @@ export function AppIcon({ name, ...props }: { name: AppIconName } & SVGProps<SVG
     warning: <><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5M12 18h.01"/></>,
     checkCircle: <><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></>,
     clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>,
+    calendar: <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18"/></>,
+    fuel: <><path d="M5 21V4a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v17"/><path d="M3 21h14M7 7h6v5H7z"/><path d="M15 8h2l3 3v6a2 2 0 0 1-4 0v-4"/><path d="m18 9 2-2"/></>,
     camera: <><path d="M4 7h3l1.5-2h7L17 7h3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z"/><circle cx="12" cy="13" r="4"/></>
   };
 

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AppIcon, type AppIconName } from "@/components/AppIcon";
 import { OperationalDocumentUploadForm } from "@/components/OperationalDocumentUploadForm";
-import { OperationalHotspotEditor } from "@/components/OperationalHotspotEditor";
 import { OperationalImageManager } from "@/components/OperationalImageManager";
 import { OperationalPackingListPdfManager } from "@/components/OperationalPackingListPdfManager";
 import { OperationalVehicleAdminEditor } from "@/components/OperationalVehicleAdminEditor";
@@ -19,7 +19,6 @@ import {
   createOperationalPlaceAction,
   deleteOperationalDocumentAction
 } from "@/lib/operativ-portal-actions";
-import { setOperationalInteractiveImageAction } from "@/lib/operativ-portal-hotspot-actions";
 import { groupRooms, listVehicleInteractiveHotspots } from "@/lib/operativ-interactive";
 import {
   getOperationalVehicle,
@@ -63,9 +62,9 @@ export default async function OperationalVehiclePage({ params }: PageProps) {
           </div>
 
           <div className="mt-4 grid grid-cols-3 gap-2">
-            <DataChip icon="▣" label="Årgang" value={vehicle.year ? String(vehicle.year) : "—"} />
-            <DataChip icon="◒" label="Drivmiddel" value={vehicle.fuel || "—"} />
-            <DataChip icon="♙" label="Mandskab" value={vehicle.crew || "—"} />
+            <DataChip icon="clock" label="Årgang" value={vehicle.year ? String(vehicle.year) : "—"} />
+            <DataChip icon="activity" label="Drivmiddel" value={vehicle.fuel || "—"} />
+            <DataChip icon="users" label="Mandskab" value={vehicle.crew || "—"} />
           </div>
 
           <div className="mt-5 grid gap-4 text-sm leading-6">
@@ -75,10 +74,10 @@ export default async function OperationalVehiclePage({ params }: PageProps) {
 
           <div className="mt-5 grid gap-2 sm:grid-cols-2">
             <Link className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-[#c71019] px-4 text-sm font-black text-white shadow-lg hover:bg-red-700" href={`/admin/operativ-portal/koeretoejer/${vehicle.id}/interaktiv`}>
-              <span aria-hidden="true">⌗</span> Se køretøjet interaktivt
+              <AppIcon className="size-5" name="activity" /> Se køretøjet interaktivt
             </Link>
             <a className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-white/10 bg-[#151b1f] px-4 text-sm font-black text-white hover:border-red-500/40 hover:bg-[#1b2227]" href={`/api/admin/operativ-portal/pakkeliste/${vehicle.id}/pdf`}>
-              <span aria-hidden="true">PDF</span> Download pakkeliste
+              <AppIcon className="size-5" name="document" /> Download pakkeliste
             </a>
           </div>
         </div>
@@ -116,7 +115,7 @@ export default async function OperationalVehiclePage({ params }: PageProps) {
           ))}
           {vehicle.places.length === 0 ? <p className="p-5 text-center text-sm text-slate-500">Ingen rum registreret endnu.</p> : null}
         </div>
-        <Link className="m-3 mt-0 flex min-h-12 items-center justify-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 text-sm font-black text-red-300" href={`/admin/operativ-portal/koeretoejer/${vehicle.id}/interaktiv`}>Åbn fuld interaktiv visning ›</Link>
+        <Link className="m-3 mt-0 flex min-h-12 items-center justify-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 text-sm font-black text-red-300" href={`/admin/operativ-portal/koeretoejer/${vehicle.id}/interaktiv`}>Åbn fuld interaktiv visning <AppIcon className="size-4" name="chevronRight" /></Link>
       </section>
 
       {isEditor ? (
@@ -149,36 +148,22 @@ export default async function OperationalVehiclePage({ params }: PageProps) {
             </form>
           </div>
 
-          <div className="mt-4 grid min-w-0 gap-4 xl:grid-cols-[minmax(260px,.55fr)_minmax(0,1.45fr)]">
-            <form action={setOperationalInteractiveImageAction} className="relative z-20 grid min-w-0 content-start gap-3 overflow-hidden rounded-lg bg-[#0d1317] p-4 pointer-events-auto">
-              <input name="vehicleId" type="hidden" value={vehicle.id} />
-              <h2 className="text-sm font-black">Interaktivt billede</h2>
-              <p className="text-xs font-semibold leading-5 text-slate-500">Vælg oversigtsbilledet og placér derefter plusser til de enkelte rum. Størrelsen kan justeres pr. plus.</p>
-              <select className="dark-input min-w-0" defaultValue={vehicle.interactiveImageId ?? ""} name="imageId">
-                <option value="">Brug forsidebillede / intet valgt</option>
-                {vehicle.images.map((image) => <option key={image.id} value={image.id}>{image.title || image.originalName}</option>)}
-              </select>
-              <button className="app-button-primary w-full" type="submit">Gem interaktivt billede</button>
-            </form>
-
-            {interactiveImageId ? (
-              <OperationalHotspotEditor
-                hotspots={interactiveHotspots}
-                imageSrc={operationalImageUrl(interactiveImageId)}
-                places={vehicle.places.map((place) => ({ id: place.id, name: place.name }))}
-                vehicleId={vehicle.id}
-              />
-            ) : (
-              <div className="min-w-0 rounded-lg bg-[#0d1317] p-5 text-sm font-semibold text-slate-500">Upload først et køretøjsbillede og vælg det som interaktivt billede.</div>
-            )}
-          </div>
+          <section className="mt-4 rounded-xl border border-red-500/20 bg-[#0d1317] p-4">
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-red-400">Interaktive køretøjsbilleder</p>
+            <h2 className="mt-1 text-lg font-black text-white">Redigér Front, Højre, Bagende, Venstre og Tag ét sted</h2>
+            <p className="mt-2 max-w-3xl text-xs font-semibold leading-5 text-slate-400">Den tidligere separate hotspot-editor er samlet i køretøjets administrationsværktøj. Her vælger du billedside, uploader eller skifter billede og opretter, flytter eller sletter pluspunkter.</p>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <Link className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 text-sm font-black text-white hover:bg-red-700" href={`/admin/operativ-portal/koeretoejer/${vehicle.id}/administration`}><AppIcon className="size-5" name="settings" /> Åbn interaktiv redigering</Link>
+              <Link className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 text-sm font-black text-white hover:bg-white/10" href={`/admin/operativ-portal/koeretoejer/${vehicle.id}/foto`}><AppIcon className="size-5" name="camera" /> Start fototur</Link>
+            </div>
+          </section>
         </details>
       ) : null}
 
       {isEditor ? <OperationalPackingListPdfManager vehicleId={vehicle.id} vehicleName={vehicle.name} /> : null}
 
       {isEditor ? (
-        <OperationalImageManager description="Upload oversigtsbilleder af køretøjet. Et af billederne kan bruges til den interaktive hotspot-visning." images={vehicle.images} title={`Billeder af ${vehicle.name}`} vehicleId={vehicle.id} />
+        <OperationalImageManager description="Upload og administrér køretøjsbilleder. Front, Højre, Bagende, Venstre og Tag vælges i det samlede administrationsværktøj." images={vehicle.images} title={`Billeder af ${vehicle.name}`} vehicleId={vehicle.id} />
       ) : null}
 
       <section className="grid min-w-0 gap-3 lg:grid-cols-2">
@@ -187,9 +172,9 @@ export default async function OperationalVehiclePage({ params }: PageProps) {
           <div className="mt-3 grid gap-2">
             {vehicle.documents.slice(0, 5).map((document) => (
               <div className="grid min-w-0 grid-cols-[38px_minmax(0,1fr)_auto] items-center gap-2 rounded-lg bg-[#151b1f] p-2.5" key={document.id}>
-                <span className="grid size-9 place-items-center rounded bg-[#c71019] text-[9px] font-black">FIL</span>
-                <a className="min-w-0" href={`/api/admin/operativ-portal/dokumenter/${document.id}`} target="_blank"><strong className="block truncate text-xs">{document.title}</strong><small className="block truncate text-[10px] text-slate-500">{document.originalName}</small></a>
-                {isEditor ? <form action={deleteOperationalDocumentAction}><input name="documentId" type="hidden" value={document.id} /><button className="text-[10px] font-bold text-red-400" type="submit">Slet</button></form> : <span className="text-slate-500">›</span>}
+                <span className="grid size-9 place-items-center rounded bg-[#c71019] text-white"><AppIcon className="size-4" name="document" /></span>
+                <a className="min-w-0" href={`/api/admin/operativ-portal/dokumenter/${document.id}`} rel="noreferrer" target="_blank"><strong className="block truncate text-xs">{document.title}</strong><small className="block truncate text-[10px] text-slate-500">{document.originalName}</small></a>
+                {isEditor ? <form action={deleteOperationalDocumentAction}><input name="documentId" type="hidden" value={document.id} /><button className="text-[10px] font-bold text-red-400" type="submit">Slet</button></form> : <AppIcon className="size-4 text-slate-500" name="chevronRight" />}
               </div>
             ))}
             {vehicle.documents.length === 0 ? <p className="text-sm text-slate-500">Ingen dokumenter endnu.</p> : null}
@@ -211,8 +196,8 @@ export default async function OperationalVehiclePage({ params }: PageProps) {
   );
 }
 
-function DataChip({ icon, label, value }: { icon: string; label: string; value: string }) {
-  return <div className="min-w-0 rounded-lg bg-[#141a1e] p-2.5 text-center"><span className="text-xl text-red-400">{icon}</span><p className="mt-1 text-[9px] text-slate-500">{label}</p><p className="truncate text-sm font-black">{value}</p></div>;
+function DataChip({ icon, label, value }: { icon: AppIconName; label: string; value: string }) {
+  return <div className="min-w-0 rounded-lg bg-[#141a1e] p-2.5 text-center"><AppIcon className="mx-auto size-5 text-red-400" name={icon} /><p className="mt-1 text-[9px] text-slate-500">{label}</p><p className="truncate text-sm font-black">{value}</p></div>;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
