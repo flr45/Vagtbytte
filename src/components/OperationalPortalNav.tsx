@@ -46,17 +46,18 @@ export function OperationalScreenHeader({
   backHref?: string;
   right?: ReactNode;
 }) {
+  const resolvedBackHref = backHref ?? "/app";
+  const backLabel = backHref ? "Tilbage" : "Tilbage til SBR Fire App";
+
   return (
     <header className="sticky top-0 z-30 -mx-3 -mt-3 grid min-h-14 grid-cols-[52px_minmax(0,1fr)_52px] items-center border-b border-red-950 bg-[#b70f18] px-2 text-white shadow-lg sm:-mx-5 sm:-mt-5">
       <div>
-        {backHref ? (
-          <Link aria-label="Tilbage" className="grid size-11 place-items-center rounded-lg transition hover:bg-white/10" href={backHref}><AppIcon className="size-6" name="back" /></Link>
-        ) : (
-          <Link aria-label="SBR Fire App" className="grid size-11 place-items-center rounded-lg transition hover:bg-white/10" href="/app"><AppIcon className="size-6" name="menu" /></Link>
-        )}
+        <Link aria-label={backLabel} className="grid size-11 place-items-center rounded-lg transition hover:bg-white/10" href={resolvedBackHref}>
+          <AppIcon className="size-6" name="back" />
+        </Link>
       </div>
       <h1 className="truncate text-center text-base font-bold sm:text-lg">{title}</h1>
-      <span className="grid size-11 place-items-center justify-self-end text-slate-100">{right ?? <AppIcon className="size-5" name="star" />}</span>
+      <span className="grid size-11 place-items-center justify-self-end text-slate-100">{right ?? null}</span>
     </header>
   );
 }
