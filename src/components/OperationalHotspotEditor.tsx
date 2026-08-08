@@ -34,7 +34,9 @@ export function OperationalHotspotEditor({
   const [xPercent, setXPercent] = useState<number | null>(null);
   const [yPercent, setYPercent] = useState<number | null>(null);
   const [sizePx, setSizePx] = useState(40);
+  const [selectedHotspotId, setSelectedHotspotId] = useState<string | null>(null);
   const selectedPlace = useMemo(() => places.find((place) => place.id === placeId) ?? null, [placeId, places]);
+  const selectedHotspot = useMemo(() => hotspots.find((hotspot) => hotspot.id === selectedHotspotId) ?? null, [hotspots, selectedHotspotId]);
   const hasPosition = xPercent !== null && yPercent !== null;
 
   function choosePosition(event: React.PointerEvent<HTMLDivElement>) {
@@ -43,6 +45,7 @@ export function OperationalHotspotEditor({
     if (!rect.width || !rect.height) return;
     const x = ((event.clientX - rect.left) / rect.width) * 100;
     const y = ((event.clientY - rect.top) / rect.height) * 100;
+    setSelectedHotspotId(null);
     setXPercent(Number(Math.max(0, Math.min(100, x)).toFixed(2)));
     setYPercent(Number(Math.max(0, Math.min(100, y)).toFixed(2)));
   }
@@ -51,7 +54,7 @@ export function OperationalHotspotEditor({
     <section className="relative z-20 min-w-0 overflow-hidden rounded-xl border border-white/10 bg-[#0d1317] p-4 pointer-events-auto">
       <p className="text-[11px] font-black uppercase tracking-[0.16em] text-red-500">Interaktive punkter</p>
       <h3 className="mt-1 text-lg font-black text-white">Placér et plus på køretøjet</h3>
-      <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">Plusset åbner det valgte rum. Inde i rummet kan du bagefter placere nye plusser direkte på værktøjet.</p>
+      <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">Plusset åbner det valgte rum. Inde i rummet kan du bagefter placere nye plusser direkte på værktøjet. Tryk på et eksisterende plus for at vælge eller slette det.</p>
 
       {places.length === 0 ? (
         <p className="mt-4 rounded-lg border border-dashed border-white/15 p-4 text-sm font-semibold text-slate-400">Opret mindst ét rum, før du kan placere interaktive punkter.</p>
@@ -65,7 +68,7 @@ export function OperationalHotspotEditor({
 
           <label className="mt-4 grid min-w-0 gap-2 text-xs font-black text-slate-300">
             1. Vælg rum
-            <select className="dark-input min-w-0" onChange={(event) => { setPlaceId(event.target.value); setXPercent(null); setYPercent(null); }} value={placeId}>
+            <select className="dark-input min-w-0" onChange={(event) => { setPlaceId(event.target.value); setXPercent(null); setYPercent(null); setSelectedHotspotId(null); }} value={placeId}>
               {places.map((place) => <option key={place.id} value={place.id}>{place.name}</option>)}
             </select>
           </label>
@@ -81,26 +84,42 @@ export function OperationalHotspotEditor({
             <img alt="Interaktivt køretøjsbillede" className="pointer-events-none block w-full select-none" draggable={false} src={imageSrc} />
             {hotspots.map((hotspot) => {
               const pointSize = hotspot.sizePx ?? 36;
+              const selected = selectedHotspotId === hotspot.id;
               return (
-                <span
-                  className="pointer-events-none absolute grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-white bg-red-600 font-black text-white shadow-[0_4px_16px_rgba(0,0,0,.55)]"
+                <button
+                  aria-label={`Vælg ${hotspot.label || hotspot.placeName}`}
+                  className={`absolute z-20 grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 bg-red-600 font-black text-white shadow-[0_4px_16px_rgba(0,0,0,.55)] ${selected ? "border-yellow-300 ring-4 ring-yellow-300/30" : "border-white"}`}
                   key={hotspot.id}
+                  onClick={(event) => { event.preventDefault(); event.stopPropagation(); setSelectedHotspotId(hotspot.id); setXPercent(null); setYPercent(null); }}
+                  onPointerDown={(event) => event.stopPropagation()}
                   style={{ left: `${hotspot.xPercent}%`, top: `${hotspot.yPercent}%`, width: pointSize, height: pointSize, fontSize: Math.max(18, Math.round(pointSize * 0.55)) }}
-                  title={hotspot.label || hotspot.placeName}
-                >+</span>
+                  title={`${hotspot.label || hotspot.placeName} · tryk for at vælge`}
+                  type="button"
+                >+</button>
               );
             })}
             {hasPosition ? (
               <span
-                className="pointer-events-none absolute grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-white bg-red-500 font-black text-white shadow-[0_4px_20px_rgba(220,38,38,.65)]"
+                className="pointer-events-none absolute z-10 grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-white bg-red-500 font-black text-white shadow-[0_4px_20px_rgba(220,38,38,.65)]"
                 style={{ left: `${xPercent}%`, top: `${yPercent}%`, width: sizePx, height: sizePx, fontSize: Math.max(18, Math.round(sizePx * 0.55)) }}
               >+</span>
             ) : null}
           </div>
 
-          <div className={`mt-3 rounded-lg border p-3 text-sm font-bold ${hasPosition ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "border-white/10 bg-white/5 text-slate-400"}`}>
-            {hasPosition ? `✓ Punkt valgt til ${selectedPlace?.name ?? "rummet"} ved ${xPercent?.toFixed(1)}% / ${yPercent?.toFixed(1)}%.` : "Der er endnu ikke valgt en position på billedet."}
-          </div>
+          {selectedHotspot ? (
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-yellow-300/20 bg-yellow-300/5 p-3">
+              <div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-wide text-yellow-300">Valgt plus</p><strong className="block truncate text-sm text-white">{selectedHotspot.label || selectedHotspot.placeName}</strong><small className="text-xs text-slate-500">Tryk Slet plus for at fjerne punktet fra billedet.</small></div>
+              <form action={deleteOperationalHotspotAction}>
+                <input name="hotspotId" type="hidden" value={selectedHotspot.id} />
+                <input name="vehicleId" type="hidden" value={vehicleId} />
+                <button className="min-h-10 rounded-lg border border-red-500/30 bg-red-500/10 px-4 text-xs font-black text-red-300 hover:bg-red-500/20" type="submit">Slet plus</button>
+              </form>
+            </div>
+          ) : (
+            <div className={`mt-3 rounded-lg border p-3 text-sm font-bold ${hasPosition ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "border-white/10 bg-white/5 text-slate-400"}`}>
+              {hasPosition ? `Punkt valgt til ${selectedPlace?.name ?? "rummet"} ved ${xPercent?.toFixed(1)}% / ${yPercent?.toFixed(1)}%.` : "Der er endnu ikke valgt en position på billedet. Du kan også trykke på et eksisterende plus for at slette det."}
+            </div>
+          )}
 
           <form action={createOperationalHotspotAction} className="mt-4 grid min-w-0 gap-3">
             <input name="vehicleId" type="hidden" value={vehicleId} />
