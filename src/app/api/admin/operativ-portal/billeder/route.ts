@@ -91,8 +91,15 @@ export async function POST(request: Request) {
           (${imageId}, ${targets.vehicleId}, ${targets.placeId}, ${targets.itemId}, ${title}, ${altText},
            ${originalName}, ${storageName}, ${file.type}, ${file.size}, ${makeCover})
       `;
+      await tx.auditLog.create({
+        data: {
+          actorUserId: admin!.id,
+          actorRole: admin!.role,
+          action: "OPERATIONAL_IMAGE_CREATED",
+          description: `Billedet ${title} blev uploadet til Operativ Portal`
+        }
+      });
     });
-    await prisma.auditLog.create({ data: { actorUserId: admin!.id, actorRole: admin!.role, action: "OPERATIONAL_IMAGE_CREATED", description: `Billedet ${title} blev uploadet til Operativ Portal` } });
   } catch (error) {
     await unlink(filePath).catch(() => undefined);
     throw error;
