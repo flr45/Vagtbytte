@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { UserRole } from "@prisma/client";
+import { AppIcon } from "@/components/AppIcon";
 import { OperationalQuickImageCapture } from "@/components/OperationalQuickImageCapture";
 import {
   OperationalPageFrame,
@@ -49,7 +50,7 @@ export default async function OperationalVehiclePhotoPage({ params, searchParams
 
   return (
     <OperationalPageFrame>
-      <OperationalScreenHeader backHref={`/admin/operativ-portal/koeretoejer/${vehicleId}/administration`} right="📷" title={`Fototur · ${plan.vehicleName}`} />
+      <OperationalScreenHeader backHref={`/admin/operativ-portal/koeretoejer/${vehicleId}/administration`} right={<AppIcon className="size-5" name="camera" />} title={`Fototur · ${plan.vehicleName}`} />
       <OperationalPortalNav isEditor />
 
       <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#0d1317] shadow-xl">
@@ -70,10 +71,10 @@ export default async function OperationalVehiclePhotoPage({ params, searchParams
 
       {done || !firstMissing ? (
         <section className="rounded-2xl border border-emerald-500/25 bg-emerald-500/5 p-5 text-center">
-          <div className="text-4xl">✓</div>
+          <AppIcon className="mx-auto size-10 text-emerald-300" name="checkCircle" />
           <h2 className="mt-2 text-xl font-black text-white">Fototuren er færdig</h2>
           <p className="mx-auto mt-2 max-w-xl text-sm font-semibold leading-6 text-slate-400">Alle planlagte køretøjs-, rum- og underområdebilleder har nu et billede. Du kan stadig åbne et punkt nedenfor og tage det om.</p>
-          <Link className="mt-4 inline-flex min-h-11 items-center rounded-lg bg-white px-4 text-xs font-black text-black" href={`/admin/operativ-portal/koeretoejer/${vehicleId}/administration`}>Tilbage til administration</Link>
+          <Link className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-lg bg-white px-4 text-xs font-black text-black" href={`/admin/operativ-portal/koeretoejer/${vehicleId}/administration`}><AppIcon className="size-4" name="back" /> Tilbage til administration</Link>
         </section>
       ) : current ? (
         <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
@@ -113,7 +114,7 @@ export default async function OperationalVehiclePhotoPage({ params, searchParams
             <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">Fototur</p>
             <p className="text-sm font-semibold leading-6 text-slate-300">Når du trykker <strong>Gem og fortsæt</strong>, åbner næste manglende foto automatisk.</p>
             {next ? <div className="rounded-lg border border-white/10 bg-white/5 p-3"><small className="font-black uppercase tracking-wide text-slate-500">Derefter</small><strong className="mt-1 block text-sm text-white">{next.label}</strong><span className="text-xs text-slate-500">{next.section}</span></div> : <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs font-bold text-emerald-300">Dette er sidste manglende foto.</div>}
-            {next ? <Link className="flex min-h-11 items-center justify-center rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-black text-white" href={nextHref}>Spring dette over →</Link> : null}
+            {next ? <Link className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-black text-white" href={nextHref}>Spring dette over <AppIcon className="size-4" name="chevronRight" /></Link> : null}
             <Link className="flex min-h-11 items-center justify-center rounded-lg border border-white/10 px-3 text-xs font-black text-slate-300" href={`/admin/operativ-portal/koeretoejer/${vehicleId}/administration`}>Afslut fototur</Link>
           </aside>
         </section>
@@ -137,9 +138,9 @@ export default async function OperationalVehiclePhotoPage({ params, searchParams
               <div className="divide-y divide-white/5">
                 {section.tasks.map((task, index) => (
                   <Link className="grid min-h-14 grid-cols-[36px_minmax(0,1fr)_24px] items-center gap-3 px-4 py-2.5 transition hover:bg-white/5" href={taskHref(vehicleId, task)} key={task.key}>
-                    <span className={`grid h-8 w-8 place-items-center rounded-full text-sm font-black ${task.completed ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>{task.completed ? "✓" : index + 1}</span>
+                    <span className={`grid h-8 w-8 place-items-center rounded-full text-sm font-black ${task.completed ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>{task.completed ? <AppIcon className="size-4" name="checkCircle" /> : index + 1}</span>
                     <span><strong className="block text-sm text-white">{task.label}</strong><small className="text-xs font-semibold text-slate-500">{task.detail}</small></span>
-                    <span className="text-xl text-red-500">›</span>
+                    <AppIcon className="size-5 text-red-500" name="chevronRight" />
                   </Link>
                 ))}
               </div>
