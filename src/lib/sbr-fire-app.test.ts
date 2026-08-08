@@ -10,7 +10,7 @@ describe("SBR Fire App unified shell", () => {
     expect(roleHome.ADMIN).toBe("/app");
   });
 
-  it("installerer hele SBR Fire App med root-scope", () => {
+  it("installerer hele SBR Fire App med root-scope og rolle-sikre shortcuts", () => {
     const manifestPath = path.join(process.cwd(), "public", "manifest.webmanifest");
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
 
@@ -19,10 +19,27 @@ describe("SBR Fire App unified shell", () => {
     expect(manifest.scope).toBe("/");
     expect(manifest.shortcuts).toEqual(expect.arrayContaining([
       expect.objectContaining({ url: "/app" }),
+      expect.objectContaining({ url: "/app/alarmer" }),
+      expect.objectContaining({ url: "/app/vagt" }),
+      expect.objectContaining({ url: "/app/operativ" })
+    ]));
+    expect(manifest.shortcuts).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ url: "/brandmand/alarmer" }),
       expect.objectContaining({ url: "/brandmand" }),
       expect.objectContaining({ url: "/admin/operativ-portal" })
     ]));
+  });
+
+  it("sender shortcuts videre efter login, rolle og operativ adgang", () => {
+    const alarmSource = fs.readFileSync(path.join(process.cwd(), "src", "app", "app", "alarmer", "page.tsx"), "utf8");
+    const vagtSource = fs.readFileSync(path.join(process.cwd(), "src", "app", "app", "vagt", "page.tsx"), "utf8");
+    const operativSource = fs.readFileSync(path.join(process.cwd(), "src", "app", "app", "operativ", "page.tsx"), "utf8");
+
+    expect(alarmSource).toContain('user.role === "BRANDFIGHTER" ? "/brandmand/alarmer" : "/app"');
+    expect(vagtSource).toContain('redirect("/brandmand")');
+    expect(vagtSource).toContain('redirect("/vagtcentral")');
+    expect(vagtSource).toContain('redirect("/admin")');
+    expect(operativSource).toContain('canAccessOperationalPortal(user) ? "/admin/operativ-portal" : "/app"');
   });
 
   it("lader Operativ bruge det fælles manifest", () => {
