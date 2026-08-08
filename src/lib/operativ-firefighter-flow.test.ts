@@ -39,6 +39,13 @@ describe("Operativ Portal brandmandsflow", () => {
     expect(item).toContain("sourceNode");
   });
 
+  it("bevarer søgningen når udstyr åbnes fra søgeresultater", () => {
+    const search = read("src/app/admin/operativ-portal/soeg/page.tsx");
+    expect(search).toContain("searchReturnHref");
+    expect(search).toContain("returnTo=${encodeURIComponent(searchReturnHref)}");
+    expect(search).toContain('aria-label="Søg"');
+  });
+
   it("giver editoren en trinvis tilbagevej gennem underområder", () => {
     const builder = read("src/app/admin/operativ-portal/rum/[placeId]/byg/page.tsx");
     expect(builder).toContain("context.parentNodeId");
