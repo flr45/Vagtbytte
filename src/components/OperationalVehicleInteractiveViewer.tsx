@@ -35,6 +35,8 @@ export function OperationalVehicleInteractiveViewer({
     [activeView, hotspots]
   );
   const roof = views.find((view) => view.viewKey === "roof") ?? null;
+  const hasLeftSide = views.some((view) => view.viewKey === "left");
+  const hasRightSide = views.some((view) => view.viewKey === "right");
 
   function goGround(key: OperationalVehicleViewKey) {
     if (!views.some((view) => view.viewKey === key)) return;
@@ -48,21 +50,6 @@ export function OperationalVehicleInteractiveViewer({
       return;
     }
     goGround(key);
-  }
-
-  function rotate(delta: number) {
-    if (!activeView) return;
-    const currentGroundKey = activeView.viewKey === "roof" ? lastGroundKey : activeView.viewKey;
-    const currentIndex = groundOrder.indexOf(currentGroundKey);
-    if (currentIndex < 0) return;
-    for (let step = 1; step <= groundOrder.length; step += 1) {
-      const nextIndex = (currentIndex + delta * step + groundOrder.length * 4) % groundOrder.length;
-      const nextKey = groundOrder[nextIndex];
-      if (views.some((view) => view.viewKey === nextKey)) {
-        goGround(nextKey);
-        return;
-      }
-    }
   }
 
   if (!activeView) {
@@ -106,8 +93,28 @@ export function OperationalVehicleInteractiveViewer({
 
         {!onRoof ? (
           <>
-            <button aria-label="Vis forrige side af køretøjet" className="absolute left-2 top-1/2 z-30 grid size-12 -translate-y-1/2 place-items-center rounded-full border border-white/40 bg-black/65 text-white shadow-xl backdrop-blur hover:bg-black/80" onClick={() => rotate(-1)} type="button"><AppIcon className="size-7" name="back" /></button>
-            <button aria-label="Vis næste side af køretøjet" className="absolute right-2 top-1/2 z-30 grid size-12 -translate-y-1/2 place-items-center rounded-full border border-white/40 bg-black/65 text-white shadow-xl backdrop-blur hover:bg-black/80" onClick={() => rotate(1)} type="button"><AppIcon className="size-7" name="chevronRight" /></button>
+            {hasLeftSide && activeView.viewKey !== "left" ? (
+              <button
+                aria-label="Vis venstre side af køretøjet"
+                className="absolute left-2 top-1/2 z-30 grid size-12 -translate-y-1/2 place-items-center rounded-full border border-white/40 bg-black/65 text-white shadow-xl backdrop-blur hover:bg-black/80"
+                onClick={() => goGround("left")}
+                title="Venstre side"
+                type="button"
+              >
+                <AppIcon className="size-7" name="back" />
+              </button>
+            ) : null}
+            {hasRightSide && activeView.viewKey !== "right" ? (
+              <button
+                aria-label="Vis højre side af køretøjet"
+                className="absolute right-2 top-1/2 z-30 grid size-12 -translate-y-1/2 place-items-center rounded-full border border-white/40 bg-black/65 text-white shadow-xl backdrop-blur hover:bg-black/80"
+                onClick={() => goGround("right")}
+                title="Højre side"
+                type="button"
+              >
+                <AppIcon className="size-7" name="chevronRight" />
+              </button>
+            ) : null}
             {roof ? <button aria-label="Vis taget" className="absolute left-1/2 top-2 z-30 flex min-h-11 -translate-x-1/2 items-center gap-2 rounded-full border border-white/40 bg-black/65 px-4 py-2 text-xs font-black text-white shadow-xl backdrop-blur hover:bg-black/80" onClick={() => setActiveKey("roof")} type="button"><AppIcon className="size-4 -rotate-90" name="chevronRight" /> Tag</button> : null}
           </>
         ) : (
