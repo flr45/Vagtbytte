@@ -7,12 +7,15 @@ function read(relativePath: string) {
 }
 
 describe("Operativ Portal brandmandsflow", () => {
-  it("viser direkte sidevalg på køretøjet og store touchflader", () => {
+  it("viser direkte sidevalg, store touchflader og entydige venstre/højre pile", () => {
     const viewer = read("src/components/OperationalVehicleInteractiveViewer.tsx");
     expect(viewer).toContain('aria-label="Vælg side af køretøjet"');
     expect(viewer).toContain("Math.max(48, hotspot.sizePx)");
-    expect(viewer).toContain('name="back"');
-    expect(viewer).toContain('name="chevronRight"');
+    expect(viewer).toContain('aria-label="Vis venstre side af køretøjet"');
+    expect(viewer).toContain('onClick={() => goGround("left")}');
+    expect(viewer).toContain('aria-label="Vis højre side af køretøjet"');
+    expect(viewer).toContain('onClick={() => goGround("right")}');
+    expect(viewer).not.toContain("function rotate(");
     expect(viewer).not.toContain(">‹<");
     expect(viewer).not.toContain(">›<");
   });
@@ -24,14 +27,23 @@ describe("Operativ Portal brandmandsflow", () => {
     expect(page).toContain('loading="lazy"');
   });
 
-  it("bevarer synlig placering og retursti gennem underområder", () => {
+  it("bevarer synlig placering og præcis retursti gennem underområder", () => {
     const room = read("src/app/admin/operativ-portal/rum/[placeId]/interaktiv/page.tsx");
     const item = read("src/app/admin/operativ-portal/udstyr/[itemId]/page.tsx");
     expect(room).toContain('aria-label="Din placering"');
-    expect(room).toContain("sourceNode=");
+    expect(room).toContain("currentHref");
+    expect(room).toContain("returnTo=");
     expect(room).toContain("Math.max(48, hotspot.sizePx)");
+    expect(item).toContain("safeOperationalReturnTo");
+    expect(item).toContain("requestedReturnTo");
     expect(item).toContain("sourceNode");
-    expect(item).toContain('/interaktiv${sourceNode ?');
+  });
+
+  it("giver editoren en trinvis tilbagevej gennem underområder", () => {
+    const builder = read("src/app/admin/operativ-portal/rum/[placeId]/byg/page.tsx");
+    expect(builder).toContain("context.parentNodeId");
+    expect(builder).toContain("encodeURIComponent(context.parentNodeId)");
+    expect(builder).toContain("backHref={backHref}");
   });
 
   it("henter kun indhold for det valgte udstyr", () => {
