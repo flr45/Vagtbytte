@@ -9,6 +9,7 @@ import {
 import { listOperationalPortalGrantUserIds } from "@/lib/operativ-portal-access";
 import { prisma } from "@/lib/prisma";
 import { AdminAlarmManagement } from "@/components/AdminAlarmManagement";
+import { AppIcon, type AppIconName } from "@/components/AppIcon";
 import { TopBar } from "@/components/TopBar";
 import { CreateFirefighterForm, FirefighterEditForms, VcForm } from "@/components/AdminForms";
 import { formatDateTime } from "@/components/TransferSummary";
@@ -87,13 +88,13 @@ export default async function AdminPage() {
         </section>
 
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <AdminLink href="/admin/systemstatus" title="Systemstatus" text="Modem, SMS-gateway, push og seneste fejl." />
-          <AdminLink href="/admin/alarmstatistik" title="Alarmstatistik" text="Detaljer, grafer, CSV og nulstilling." />
-          <AdminLink href="/admin/alarmer" title="Alarmarkiv" text="Søg, filtrer og eksportér alle gemte alarmer." />
-          <AdminLink href="/admin/brugere" title="Brugeroverblik" text="Stationer, login, mail, programadgang og push-enheder." />
-          <AdminLink href="/admin/backups" title="Backup og gendannelse" text="Automatiske og manuelle backups samt restore." />
-          <AdminLink href="/admin/mailrapporter" title="Mailrapporter" text="Planlæg samlet overblik over vagter og vagtbytter." />
-          <AdminLink href="/admin/operativ-portal" title="Operativ Portal" text="Redigér køretøjer, rum, udstyr, videoer og dokumenter." />
+          <AdminLink href="/admin/systemstatus" icon="activity" title="Systemstatus" text="Modem, SMS-gateway, push og seneste fejl." />
+          <AdminLink href="/admin/alarmstatistik" icon="chart" title="Alarmstatistik" text="Detaljer, grafer, CSV og nulstilling." />
+          <AdminLink href="/admin/alarmer" icon="archive" title="Alarmarkiv" text="Søg, filtrer og eksportér alle gemte alarmer." />
+          <AdminLink href="/admin/brugere" icon="users" title="Brugeroverblik" text="Stationer, login, mail, programadgang og push-enheder." />
+          <AdminLink href="/admin/backups" icon="database" title="Backup og gendannelse" text="Automatiske og manuelle backups samt restore." />
+          <AdminLink href="/admin/mailrapporter" icon="mail" title="Mailrapporter" text="Planlæg samlet overblik over vagter og vagtbytter." />
+          <AdminLink href="/admin/operativ-portal" icon="truck" title="Operativ Portal" text="Redigér køretøjer, rum, udstyr, videoer og dokumenter." />
         </section>
 
         {smsSystemHasProblem ? (
@@ -220,11 +221,15 @@ export default async function AdminPage() {
   );
 }
 
-function AdminLink({ href, title, text }: { href: string; title: string; text: string }) {
+function AdminLink({ href, title, text, icon }: { href: string; title: string; text: string; icon: AppIconName }) {
   return (
-    <Link className="app-card-interactive grid gap-2" href={href}>
-      <h2 className="text-lg font-black">{title}</h2>
-      <p className="text-sm font-semibold text-zinc-600">{text}</p>
+    <Link className="app-card-interactive grid grid-cols-[44px_minmax(0,1fr)_20px] items-center gap-3" href={href}>
+      <span className="grid size-10 place-items-center rounded-xl bg-red-500/10 text-red-500"><AppIcon className="size-5" name={icon} /></span>
+      <span className="min-w-0">
+        <strong className="block text-lg font-black">{title}</strong>
+        <span className="mt-1 block text-sm font-semibold text-zinc-600">{text}</span>
+      </span>
+      <AppIcon className="size-5 text-zinc-400" name="chevronRight" />
     </Link>
   );
 }
