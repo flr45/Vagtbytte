@@ -25,10 +25,17 @@ export default async function OperationalContentBuilderPage({ params, searchPara
   const context = await getOperationalInteractiveContext(placeId, nodeId);
   if (!context) notFound();
 
+  const base = `/admin/operativ-portal/rum/${placeId}/byg`;
+  const backHref = context.nodeId
+    ? context.parentNodeId
+      ? `${base}?node=${encodeURIComponent(context.parentNodeId)}`
+      : base
+    : `/admin/operativ-portal/rum/${placeId}`;
+
   return (
     <OperationalPageFrame>
       <OperationalScreenHeader
-        backHref={`/admin/operativ-portal/rum/${placeId}`}
+        backHref={backHref}
         right={<AppIcon className="size-5" name="edit" />}
         title={`${context.nodeId ? "Redigér" : "Byg"} · ${context.nodeName || context.placeName}`}
       />
