@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { type FormEvent, useMemo, useRef, useState } from "react";
-import { AppIcon } from "./AppIcon";
+import { useRouter } from "next/navigation";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { AppIcon, type AppIconName } from "./AppIcon";
 import { OperationalQuickImageCapture } from "./OperationalQuickImageCapture";
 import {
   cloneOperationalInteractiveNodeAction,
@@ -32,12 +33,43 @@ type Interaction =
 
 type UndoAction =
   | { kind: "move"; id: string; x: number; y: number }
-  | { kind: "delete"; id: string }
+  | { kind: "delete"; link: OperationalInteractiveLink }
   | null;
 
+type Workspace = "hotspots" | "image" | "children" | "settings";
+
+type WorkspaceButtonProps = {
+  active: boolean;
+  icon: AppIconName;
+  label: string;
+  meta: string;
+  onClick: () => void;
+};
+
+function WorkspaceButton({ active, icon, label, meta, onClick }: WorkspaceButtonProps) {
+  return (
+    <button
+      aria-pressed={active}
+      className={`flex min-h-16 items-center gap-3 rounded-xl border px-3 text-left transition ${active ? "border-red-500/50 bg-red-500/10 text-white" : "border-white/10 bg-[#0d1317] text-slate-300 hover:border-white/20 hover:bg-white/5"}`}
+      onClick={onClick}
+      type="button"
+    >
+      <span className={`grid size-9 shrink-0 place-items-center rounded-lg ${active ? "bg-red-600 text-white" : "bg-white/5 text-slate-400"}`}>
+        <AppIcon className="size-4" name={icon} />
+      </span>
+      <span className="min-w-0">
+        <strong className="block text-xs font-black">{label}</strong>
+        <small className="mt-0.5 block truncate text-[10px] font-bold text-slate-500">{meta}</small>
+      </span>
+    </button>
+  );
+}
+
 export function OperationalContentBuilder({ context }: { context: OperationalInteractiveContext }) {
+  const router = useRouter();
   const canvasRef = useRef<HTMLDivElement>(null);
   const [links, setLinks] = useState(context.links);
+  const [workspace, setWorkspace] = useState<Workspace>(context.imageId ? "hotspots" : "image");
   const [interaction, setInteraction] = useState<Interaction>({ kind: "idle" });
   const [undo, setUndo] = useState<UndoAction>(null);
   const [targetType, setTargetType] = useState<"item" | "node" | "new-node">(
@@ -57,9 +89,18 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
   const builderBase = `/admin/operativ-portal/rum/${context.placeId}/byg`;
   const interactiveBase = `/admin/operativ-portal/rum/${context.placeId}/interaktiv`;
 
-  function reload() {
-    window.location.reload();
-  }
+  useEffect(() => {
+    setLinks(context.links);
+  }, [context.links]);
+
+  useEffect(() => {
+    setWorkspace(context.imageId ? "hotspots" : "image");
+    setInteraction({ kind: "idle" });
+    setUndo(null);
+    setMessage("");
+    setTargetType(context.children.length ? "node" : "item");
+    setTargetId(context.children[0]?.id ?? context.items[0]?.id ?? "");
+  }, [context.placeId, context.nodeId]);
 
   function pointFromEvent(event: React.PointerEvent) {
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -71,16 +112,20 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
   }
 
   function startPlacement() {
+    if (!context.imageId || busy) return;
     setInteraction({ kind: "placing" });
     setUndo(null);
     setMessage("Placering er aktiv. Klik på billedet dér, hvor det nye plus skal ligge.");
   }
 
-  function startPlacementAndScroll() {
+  function openHotspotPlacement() {
     if (!context.imageId || busy) return;
+    setWorkspace("hotspots");
     startPlacement();
     window.requestAnimationFrame(() => {
-      canvasRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      window.requestAnimationFrame(() => {
+        canvasRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
     });
   }
 
@@ -188,16 +233,19 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
 
   async function undoLastAction() {
     if (!undo) return;
+
     if (undo.kind === "delete") {
       const form = new FormData();
-      form.set("linkId", undo.id);
+      form.set("linkId", undo.link.id);
       form.set("placeId", context.placeId);
       const result = await restoreOperationalInteractiveLinkAction(form);
       if (!result?.ok) {
         setMessage(result?.error || "Sletningen kunne ikke fortrydes.");
         return;
       }
-      reload();
+      setLinks((current) => [...current, undo.link].sort((a, b) => a.sortOrder - b.sortOrder));
+      setUndo(null);
+      setMessage("Sletningen er fortrudt.");
       return;
     }
 
@@ -232,11 +280,18 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
     });
   }
 
+  function targetName(type: "item" | "node", id: string) {
+    return type === "node"
+      ? context.children.find((node) => node.id === id)?.name ?? "Underområde"
+      : context.items.find((item) => item.id === id)?.name ?? "Værktøj";
+  }
+
   async function createLink() {
     if (interaction.kind !== "creating" || busy) return;
     const point = interaction.point;
     setBusy(true);
     setMessage("");
+
     const form = new FormData();
     form.set("placeId", context.placeId);
     form.set("sourceNodeId", context.nodeId ?? "");
@@ -248,14 +303,38 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
     form.set("yPercent", String(point.y));
     form.set("sizePx", String(sizePx));
     form.set("sortOrder", String(links.length));
+
     const result = await createOperationalInteractiveLinkAction(form);
+    setBusy(false);
     if (!result?.ok) {
-      setBusy(false);
       setMessage(result?.error || "Plusset kunne ikke oprettes.");
       return;
     }
+
+    const finalType: "item" | "node" = targetType === "item" ? "item" : "node";
+    const finalTargetId = finalType === "node" ? (result.targetNodeId ?? targetId) : targetId;
+    const finalTargetName = targetType === "new-node" ? newNodeName.trim() : targetName(finalType, finalTargetId);
+    const newLink: OperationalInteractiveLink = {
+      id: result.id,
+      placeId: context.placeId,
+      sourceNodeId: context.nodeId,
+      targetNodeId: finalType === "node" ? finalTargetId : null,
+      itemId: finalType === "item" ? finalTargetId : null,
+      targetName: finalTargetName,
+      targetType: finalType,
+      label: "",
+      xPercent: point.x,
+      yPercent: point.y,
+      sizePx,
+      sortOrder: links.length
+    };
+
+    setLinks((current) => [...current, newLink]);
+    setEditTarget({ type: finalType, id: finalTargetId });
+    setInteraction({ kind: "editing", id: result.id });
+    setNewNodeName("");
     setMessage("Plusset er oprettet.");
-    reload();
+    if (targetType === "new-node") router.refresh();
   }
 
   async function saveLink(link: OperationalInteractiveLink, formElement: HTMLFormElement) {
@@ -263,6 +342,7 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
       setMessage("Vælg hvad plusset skal åbne.");
       return;
     }
+
     setBusy(true);
     const form = new FormData(formElement);
     form.set("linkId", link.id);
@@ -273,16 +353,34 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
     form.set("yPercent", String(link.yPercent));
     const result = await updateOperationalInteractiveLinkAction(form);
     setBusy(false);
+
     if (!result?.ok) {
       setMessage(result?.error || "Plusset kunne ikke gemmes.");
       return;
     }
+
+    const label = String(form.get("label") ?? "").trim();
+    const nextSize = Number(form.get("sizePx"));
+    const nextSortOrder = Number(form.get("sortOrder"));
+    const nextTargetName = targetName(editTarget.type, editTarget.id);
+    setLinks((current) => current.map((item) => item.id === link.id ? {
+      ...item,
+      targetNodeId: editTarget.type === "node" ? editTarget.id : null,
+      itemId: editTarget.type === "item" ? editTarget.id : null,
+      targetType: editTarget.type,
+      targetName: nextTargetName,
+      label,
+      sizePx: nextSize,
+      sortOrder: nextSortOrder
+    } : item));
     setMessage("Plusset er gemt.");
-    reload();
   }
 
   async function deleteLink(linkId: string) {
     if (busy) return;
+    const link = links.find((item) => item.id === linkId);
+    if (!link) return;
+
     setBusy(true);
     const form = new FormData();
     form.set("linkId", linkId);
@@ -293,9 +391,10 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
       setMessage(result?.error || "Plusset kunne ikke slettes.");
       return;
     }
-    setLinks((current) => current.filter((link) => link.id !== linkId));
+
+    setLinks((current) => current.filter((item) => item.id !== linkId));
     setInteraction({ kind: "idle" });
-    setUndo({ kind: "delete", id: linkId });
+    setUndo({ kind: "delete", link });
     setMessage("Plusset er fjernet.");
   }
 
@@ -309,7 +408,8 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
       setMessage(result?.error || "Billedet kunne ikke vælges.");
       return;
     }
-    reload();
+    setMessage("Billedet er valgt.");
+    router.refresh();
   }
 
   async function saveNode(event: FormEvent<HTMLFormElement>) {
@@ -322,7 +422,8 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
       setMessage(result?.error || "Underområdet kunne ikke gemmes.");
       return;
     }
-    reload();
+    setMessage("Underområdet er gemt.");
+    router.refresh();
   }
 
   async function cloneNode(event: FormEvent<HTMLFormElement>) {
@@ -335,7 +436,7 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
       setMessage(result?.error || "Underområdet kunne ikke klones.");
       return;
     }
-    window.location.assign(`${builderBase}?node=${result.id}`);
+    router.push(`${builderBase}?node=${result.id}`);
   }
 
   async function createChildNode(event: FormEvent<HTMLFormElement>) {
@@ -348,11 +449,18 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
       setMessage(result?.error || "Underområdet kunne ikke oprettes.");
       return;
     }
-    window.location.assign(`${builderBase}?node=${result.id}`);
+    router.push(`${builderBase}?node=${result.id}`);
   }
 
+  const tabs: Array<{ key: Workspace; label: string; icon: AppIconName; meta: string }> = [
+    { key: "hotspots", label: "Pluspunkter", icon: "edit", meta: `${links.length} placeret` },
+    { key: "image", label: "Billede", icon: "camera", meta: context.imageId ? "Billede valgt" : "Mangler billede" },
+    { key: "children", label: "Underområder", icon: "archive", meta: `${context.children.length} underområder` },
+    ...(context.nodeId ? [{ key: "settings" as const, label: "Indstillinger", icon: "settings" as const, meta: "Navn og rækkefølge" }] : [])
+  ];
+
   return (
-    <div className="grid gap-5">
+    <div className="grid gap-4">
       <section className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -381,6 +489,23 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
         </div>
       </section>
 
+      <nav aria-label="Redigeringsområder" className={`grid gap-2 ${context.nodeId ? "grid-cols-2 lg:grid-cols-4" : "grid-cols-3"}`}>
+        {tabs.map((tab) => (
+          <WorkspaceButton
+            active={workspace === tab.key}
+            icon={tab.icon}
+            key={tab.key}
+            label={tab.label}
+            meta={tab.meta}
+            onClick={() => {
+              setWorkspace(tab.key);
+              setInteraction({ kind: "idle" });
+              setMessage("");
+            }}
+          />
+        ))}
+      </nav>
+
       {message ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/5 p-3 text-xs font-bold text-slate-300" role="status">
           <span>{message}</span>
@@ -388,11 +513,185 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
         </div>
       ) : null}
 
-      {context.nodeId ? (
+      {workspace === "image" ? (
+        <section className="grid gap-4 lg:grid-cols-2">
+          <OperationalQuickImageCapture label={`Interaktivt billede · ${currentName}`} mode="context" nodeId={context.nodeId} placeId={context.placeId} vehicleId={context.vehicleId} />
+          <div className="grid content-start gap-3 rounded-xl border border-white/10 bg-[#0d1317] p-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">Eksisterende billede</p>
+              <h2 className="mt-1 text-sm font-black text-white">Vælg billede til dette niveau</h2>
+            </div>
+            <form className="grid gap-3" onSubmit={(event) => void saveExistingImage(event)}>
+              <input name="placeId" type="hidden" value={context.placeId} />
+              <input name="nodeId" type="hidden" value={context.nodeId ?? ""} />
+              <select className="dark-input" defaultValue={context.imageId ?? ""} name="imageId">
+                <option value="">Intet interaktivt billede</option>
+                {context.images.map((image) => <option key={image.id} value={image.id}>{image.title || image.originalName}</option>)}
+              </select>
+              <button className="app-button-primary" disabled={busy} type="submit">Brug valgt billede</button>
+            </form>
+            <p className="text-xs font-semibold leading-5 text-slate-500">
+              {context.nodeId
+                ? "Et underområde bruger kun det billede, du vælger her."
+                : `Billeder uploadet til ${context.placeName} kan genbruges på alle underområder.`}
+            </p>
+          </div>
+        </section>
+      ) : null}
+
+      {workspace === "hotspots" ? (
+        <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#080c0f] shadow-2xl">
+          <div className="border-b border-white/10 bg-[#11171b] p-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-red-400">Pluspunkter</p>
+                <p className="mt-1 text-xs font-semibold text-slate-400">
+                  {interaction.kind === "placing"
+                    ? "Klik nu på billedet for at vælge placeringen."
+                    : "Klik et eksisterende plus for at redigere det. Træk for at flytte."}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                {interaction.kind === "placing" || interaction.kind === "creating" ? (
+                  <button className="min-h-10 rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-black text-white" onClick={cancelInteraction} type="button">Annuller</button>
+                ) : null}
+                <button
+                  aria-pressed={interaction.kind === "placing"}
+                  className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-black ${interaction.kind === "placing" ? "bg-emerald-600 text-white" : "bg-red-600 text-white hover:bg-red-700"}`}
+                  disabled={!context.imageId || busy}
+                  onClick={startPlacement}
+                  type="button"
+                >
+                  <AppIcon className="size-4" name="edit" /> Placér nyt +
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {context.imageId ? (
+            <div
+              className={`relative touch-none overflow-hidden bg-black ${interaction.kind === "placing" ? "cursor-crosshair ring-2 ring-inset ring-emerald-400/70" : "cursor-default"}`}
+              onPointerDown={chooseCanvasPosition}
+              ref={canvasRef}
+            >
+              <img alt={currentName} className="pointer-events-none block w-full select-none" decoding="async" draggable={false} src={operationalImageUrl(context.imageId)} />
+              {links.map((link) => (
+                <button
+                  aria-label={`Redigér ${link.label || link.targetName}`}
+                  className={`absolute z-20 grid -translate-x-1/2 -translate-y-1/2 touch-none place-items-center rounded-full border-2 font-black leading-none text-white shadow-[0_5px_22px_rgba(0,0,0,.75)] ${selectedId === link.id ? "border-yellow-300 bg-red-500 ring-4 ring-yellow-300/30" : "border-white bg-red-600"}`}
+                  key={link.id}
+                  onClick={(event) => { event.preventDefault(); event.stopPropagation(); selectLink(link); }}
+                  onPointerCancel={cancelDrag}
+                  onPointerDown={(event) => beginDrag(event, link)}
+                  onPointerMove={drag}
+                  onPointerUp={finishDrag}
+                  style={{ left: `${link.xPercent}%`, top: `${link.yPercent}%`, width: link.sizePx, height: link.sizePx, fontSize: Math.max(18, Math.round(link.sizePx * 0.55)) }}
+                  title={`${link.label || link.targetName} · træk for at flytte`}
+                  type="button"
+                >+</button>
+              ))}
+              {draft ? (
+                <span className="pointer-events-none absolute z-10 grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-emerald-100 bg-emerald-600 font-black text-white shadow-xl" style={{ left: `${draft.x}%`, top: `${draft.y}%`, width: sizePx, height: sizePx, fontSize: Math.max(18, Math.round(sizePx * 0.55)) }}>+</span>
+              ) : null}
+            </div>
+          ) : (
+            <div className="grid min-h-64 place-items-center gap-3 p-6 text-center">
+              <div>
+                <p className="text-sm font-black text-white">Der mangler et billede</p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">Vælg et billede først, og placer derefter pluspunkterne.</p>
+              </div>
+              <button className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-red-600 px-4 text-xs font-black text-white" onClick={() => setWorkspace("image")} type="button">
+                <AppIcon className="size-4" name="camera" /> Gå til billede
+              </button>
+            </div>
+          )}
+
+          <div className="border-t border-white/10 bg-[#0d1317] p-4">
+            {interaction.kind === "creating" ? (
+              <div className="grid gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+                <div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-400">Nyt plus</p><h3 className="text-sm font-black">Hvad skal plusset åbne?</h3></div>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <button className={`rounded-lg border px-3 py-3 text-xs font-black ${targetType === "item" ? "border-red-400 bg-red-600 text-white" : "border-white/10 bg-white/5 text-slate-300"}`} disabled={!context.items.length} onClick={() => targetChanged("item")} type="button">Værktøj</button>
+                  <button className={`rounded-lg border px-3 py-3 text-xs font-black ${targetType === "node" ? "border-red-400 bg-red-600 text-white" : "border-white/10 bg-white/5 text-slate-300"}`} disabled={!context.children.length} onClick={() => targetChanged("node")} type="button">Eksisterende underområde</button>
+                  <button className={`rounded-lg border px-3 py-3 text-xs font-black ${targetType === "new-node" ? "border-red-400 bg-red-600 text-white" : "border-white/10 bg-white/5 text-slate-300"}`} onClick={() => targetChanged("new-node")} type="button">Nyt underområde</button>
+                </div>
+                {targetType === "item" ? <select className="dark-input" onChange={(event) => setTargetId(event.target.value)} value={targetId}>{context.items.map((item) => <option key={item.id} value={item.id}>{item.name}{item.quantity > 1 ? ` ×${item.quantity}` : ""}</option>)}</select> : null}
+                {targetType === "node" ? <select className="dark-input" onChange={(event) => setTargetId(event.target.value)} value={targetId}>{context.children.map((node) => <option key={node.id} value={node.id}>{node.name}</option>)}</select> : null}
+                {targetType === "new-node" ? <input className="dark-input" maxLength={120} onChange={(event) => setNewNodeName(event.target.value)} placeholder="Fx Øverste hylde eller Kasse 1" value={newNodeName} /> : null}
+                <label className="grid gap-2 text-xs font-black text-slate-300">Plusstørrelse · {sizePx}px<input max="96" min="24" onChange={(event) => setSizePx(Number(event.target.value))} step="2" type="range" value={sizePx} /></label>
+                <div className="flex flex-wrap gap-2">
+                  <button className="app-button-primary min-h-11 flex-1 disabled:opacity-40" disabled={busy || (targetType === "new-node" ? !newNodeName.trim() : !targetId)} onClick={() => void createLink()} type="button">{busy ? "Gemmer…" : "Opret plus"}</button>
+                  <button className="rounded-lg border border-white/10 px-4 text-xs font-black text-slate-300" onClick={cancelInteraction} type="button">Annuller</button>
+                </div>
+              </div>
+            ) : selected ? (
+              <form className="grid gap-3 rounded-xl border border-yellow-300/20 bg-yellow-300/5 p-4" onSubmit={(event) => { event.preventDefault(); void saveLink(selected, event.currentTarget); }}>
+                <div className="flex items-start justify-between gap-3">
+                  <div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-yellow-300">Valgt plus</p><h3 className="text-sm font-black">{selected.targetName}</h3><p className="text-xs text-slate-500">Redigér målet her eller træk plusset direkte på billedet.</p></div>
+                  <button className="rounded-lg border border-red-500/30 px-3 py-2 text-xs font-black text-red-400" disabled={busy} onClick={() => void deleteLink(selected.id)} type="button">Slet plus</button>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1.5 text-xs font-black text-slate-300">Åbn type<select className="dark-input" onChange={(event) => editTargetChanged(event.target.value as "item" | "node")} value={editTarget.type}><option value="item">Værktøj</option><option disabled={!context.children.length} value="node">Underområde</option></select></label>
+                  <label className="grid gap-1.5 text-xs font-black text-slate-300">Åbner{editTarget.type === "node" ? <select className="dark-input" onChange={(event) => setEditTarget({ type: "node", id: event.target.value })} value={editTarget.id}>{context.children.map((node) => <option key={node.id} value={node.id}>{node.name}</option>)}</select> : <select className="dark-input" onChange={(event) => setEditTarget({ type: "item", id: event.target.value })} value={editTarget.id}>{context.items.map((item) => <option key={item.id} value={item.id}>{item.name}{item.quantity > 1 ? ` ×${item.quantity}` : ""}</option>)}</select>}</label>
+                </div>
+                <label className="grid gap-1.5 text-xs font-black text-slate-300">Label<input className="dark-input" defaultValue={selected.label} maxLength={100} name="label" placeholder={selected.targetName} /></label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1.5 text-xs font-black text-slate-300">Størrelse<input className="dark-input" defaultValue={selected.sizePx} max="96" min="24" name="sizePx" step="2" type="number" /></label>
+                  <label className="grid gap-1.5 text-xs font-black text-slate-300">Rækkefølge<input className="dark-input" defaultValue={selected.sortOrder} min="0" name="sortOrder" type="number" /></label>
+                </div>
+                <button className="app-button-primary" disabled={busy || !editTarget.id} type="submit">Gem pluspunkt</button>
+              </form>
+            ) : (
+              <p className="text-center text-xs font-semibold text-slate-500">Klik på et eksisterende plus for at redigere det, eller vælg “Placér nyt +”.</p>
+            )}
+          </div>
+        </section>
+      ) : null}
+
+      {workspace === "children" ? (
+        <section className="grid gap-3 rounded-xl border border-white/10 bg-[#0d1317] p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-red-400">Næste niveau</p>
+              <h2 className="text-lg font-black">Underområder i {currentName}</h2>
+              <p className="mt-1 text-xs font-semibold text-slate-500">Åbn et eksisterende område eller opret næste niveau.</p>
+            </div>
+            <button
+              className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-red-600 px-3 text-xs font-black text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={!context.imageId || busy}
+              onClick={openHotspotPlacement}
+              type="button"
+            >
+              <AppIcon className="size-4" name="edit" /> Tilføj +
+            </button>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            {context.children.map((node) => (
+              <Link className="grid min-h-16 grid-cols-[minmax(0,1fr)_24px] items-center gap-2 rounded-lg border border-white/10 bg-[#11191e] p-3 hover:border-red-500/30" href={`${builderBase}?node=${node.id}`} key={node.id}>
+                <span><strong className="block text-sm text-white">{node.name}</strong><small className="mt-1 block text-xs text-slate-500">{node.imageId ? "Billede valgt" : "Mangler eget billede"} · rækkefølge {node.sortOrder}</small></span>
+                <AppIcon className="size-5 text-red-500" name="chevronRight" />
+              </Link>
+            ))}
+            {context.children.length === 0 ? <p className="rounded-lg border border-dashed border-white/10 p-4 text-center text-xs font-semibold text-slate-500 sm:col-span-2">Ingen underområder på dette niveau endnu.</p> : null}
+          </div>
+
+          <form className="mt-2 grid gap-2 rounded-lg border border-dashed border-white/15 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_110px_auto]" onSubmit={(event) => void createChildNode(event)}>
+            <input name="placeId" type="hidden" value={context.placeId} />
+            <input name="parentNodeId" type="hidden" value={context.nodeId ?? ""} />
+            <input className="dark-input" maxLength={120} name="name" placeholder="Nyt underområde" required />
+            <input className="dark-input" maxLength={500} name="description" placeholder="Kort beskrivelse" />
+            <input aria-label="Rækkefølge" className="dark-input" defaultValue={context.children.length} min="0" name="sortOrder" type="number" />
+            <button className="rounded-lg bg-white px-4 py-2 text-xs font-black text-black disabled:opacity-40" disabled={busy} type="submit">Opret og redigér</button>
+          </form>
+        </section>
+      ) : null}
+
+      {workspace === "settings" && context.nodeId ? (
         <section className="rounded-xl border border-white/10 bg-[#0d1317] p-4">
           <div className="mb-3">
-            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-red-400">Dette underområde</p>
-            <h2 className="mt-1 text-lg font-black text-white">Navn og beskrivelse</h2>
+            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-red-400">Indstillinger</p>
+            <h2 className="mt-1 text-lg font-black text-white">Navn, beskrivelse og rækkefølge</h2>
           </div>
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
             <form className="grid gap-3 sm:grid-cols-2" onSubmit={(event) => void saveNode(event)}>
@@ -411,165 +710,6 @@ export function OperationalContentBuilder({ context }: { context: OperationalInt
           </div>
         </section>
       ) : null}
-
-      <section className="grid gap-4 lg:grid-cols-2">
-        <OperationalQuickImageCapture label={`Interaktivt billede · ${currentName}`} mode="context" nodeId={context.nodeId} placeId={context.placeId} vehicleId={context.vehicleId} />
-        <div className="grid content-start gap-3 rounded-xl border border-white/10 bg-[#0d1317] p-4">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">Eksisterende billede</p>
-            <h2 className="mt-1 text-sm font-black text-white">Vælg billede til dette niveau</h2>
-          </div>
-          <form className="grid gap-3" onSubmit={(event) => void saveExistingImage(event)}>
-            <input name="placeId" type="hidden" value={context.placeId} />
-            <input name="nodeId" type="hidden" value={context.nodeId ?? ""} />
-            <select className="dark-input" defaultValue={context.imageId ?? ""} name="imageId">
-              <option value="">Intet interaktivt billede</option>
-              {context.images.map((image) => <option key={image.id} value={image.id}>{image.title || image.originalName}</option>)}
-            </select>
-            <button className="app-button-primary" disabled={busy} type="submit">Brug valgt billede</button>
-          </form>
-          <p className="text-xs font-semibold leading-5 text-slate-500">
-            {context.nodeId
-              ? "Et underområde bruger kun det billede, du vælger her. Det arver ikke længere automatisk rummets billede."
-              : `Billeder uploadet til ${context.placeName} kan genbruges på alle underområder.`}
-          </p>
-        </div>
-      </section>
-
-      <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#080c0f] shadow-2xl">
-        <div className="border-b border-white/10 bg-[#11171b] p-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-red-400">Pluspunkter</p>
-              <p className="mt-1 text-xs font-semibold text-slate-400">
-                {interaction.kind === "placing"
-                  ? "Klik nu på billedet for at vælge placeringen."
-                  : "Klik et eksisterende plus for at redigere det. Træk for at flytte."}
-              </p>
-            </div>
-            <div className="flex gap-2">
-              {interaction.kind === "placing" || interaction.kind === "creating" ? (
-                <button className="min-h-10 rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-black text-white" onClick={cancelInteraction} type="button">Annuller placering</button>
-              ) : null}
-              <button
-                aria-pressed={interaction.kind === "placing"}
-                className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-black ${interaction.kind === "placing" ? "bg-emerald-600 text-white" : "bg-red-600 text-white hover:bg-red-700"}`}
-                disabled={!context.imageId || busy}
-                onClick={startPlacement}
-                type="button"
-              >
-                <AppIcon className="size-4" name="edit" /> Placér nyt +
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {context.imageId ? (
-          <div
-            className={`relative touch-none overflow-hidden bg-black ${interaction.kind === "placing" ? "cursor-crosshair ring-2 ring-inset ring-emerald-400/70" : "cursor-default"}`}
-            onPointerDown={chooseCanvasPosition}
-            ref={canvasRef}
-          >
-            <img alt={currentName} className="pointer-events-none block w-full select-none" draggable={false} src={operationalImageUrl(context.imageId)} />
-            {links.map((link) => (
-              <button
-                aria-label={`Redigér ${link.label || link.targetName}`}
-                className={`absolute z-20 grid -translate-x-1/2 -translate-y-1/2 touch-none place-items-center rounded-full border-2 font-black leading-none text-white shadow-[0_5px_22px_rgba(0,0,0,.75)] ${selectedId === link.id ? "border-yellow-300 bg-red-500 ring-4 ring-yellow-300/30" : "border-white bg-red-600"}`}
-                key={link.id}
-                onClick={(event) => { event.preventDefault(); event.stopPropagation(); selectLink(link); }}
-                onPointerCancel={cancelDrag}
-                onPointerDown={(event) => beginDrag(event, link)}
-                onPointerMove={drag}
-                onPointerUp={finishDrag}
-                style={{ left: `${link.xPercent}%`, top: `${link.yPercent}%`, width: link.sizePx, height: link.sizePx, fontSize: Math.max(18, Math.round(link.sizePx * 0.55)) }}
-                title={`${link.label || link.targetName} · træk for at flytte`}
-                type="button"
-              >+</button>
-            ))}
-            {draft ? (
-              <span className="pointer-events-none absolute z-10 grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-emerald-100 bg-emerald-600 font-black text-white shadow-xl" style={{ left: `${draft.x}%`, top: `${draft.y}%`, width: sizePx, height: sizePx, fontSize: Math.max(18, Math.round(sizePx * 0.55)) }}>+</span>
-            ) : null}
-          </div>
-        ) : (
-          <div className="grid min-h-64 place-items-center p-6 text-center text-sm font-semibold text-slate-500">Vælg eller upload et billede til dette niveau, før du placerer pluspunkter.</div>
-        )}
-
-        <div className="border-t border-white/10 bg-[#0d1317] p-4">
-          {interaction.kind === "creating" ? (
-            <div className="grid gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-              <div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-400">Nyt plus</p><h3 className="text-sm font-black">Hvad skal plusset åbne?</h3></div>
-              <div className="grid gap-2 sm:grid-cols-3">
-                <button className={`rounded-lg border px-3 py-3 text-xs font-black ${targetType === "item" ? "border-red-400 bg-red-600 text-white" : "border-white/10 bg-white/5 text-slate-300"}`} disabled={!context.items.length} onClick={() => targetChanged("item")} type="button">Værktøj</button>
-                <button className={`rounded-lg border px-3 py-3 text-xs font-black ${targetType === "node" ? "border-red-400 bg-red-600 text-white" : "border-white/10 bg-white/5 text-slate-300"}`} disabled={!context.children.length} onClick={() => targetChanged("node")} type="button">Eksisterende underområde</button>
-                <button className={`rounded-lg border px-3 py-3 text-xs font-black ${targetType === "new-node" ? "border-red-400 bg-red-600 text-white" : "border-white/10 bg-white/5 text-slate-300"}`} onClick={() => targetChanged("new-node")} type="button">Nyt underområde</button>
-              </div>
-              {targetType === "item" ? <select className="dark-input" onChange={(event) => setTargetId(event.target.value)} value={targetId}>{context.items.map((item) => <option key={item.id} value={item.id}>{item.name}{item.quantity > 1 ? ` ×${item.quantity}` : ""}</option>)}</select> : null}
-              {targetType === "node" ? <select className="dark-input" onChange={(event) => setTargetId(event.target.value)} value={targetId}>{context.children.map((node) => <option key={node.id} value={node.id}>{node.name}</option>)}</select> : null}
-              {targetType === "new-node" ? <input className="dark-input" maxLength={120} onChange={(event) => setNewNodeName(event.target.value)} placeholder="Fx Øverste hylde eller Kasse 1" value={newNodeName} /> : null}
-              <label className="grid gap-2 text-xs font-black text-slate-300">Plusstørrelse · {sizePx}px<input max="96" min="24" onChange={(event) => setSizePx(Number(event.target.value))} step="2" type="range" value={sizePx} /></label>
-              <div className="flex flex-wrap gap-2">
-                <button className="app-button-primary min-h-11 flex-1 disabled:opacity-40" disabled={busy || (targetType === "new-node" ? !newNodeName.trim() : !targetId)} onClick={() => void createLink()} type="button">{busy ? "Gemmer…" : "Opret plus"}</button>
-                <button className="rounded-lg border border-white/10 px-4 text-xs font-black text-slate-300" onClick={cancelInteraction} type="button">Annuller</button>
-              </div>
-              {targetType === "new-node" ? <p className="text-[10px] font-semibold text-slate-500">Underområdet og pluspunktet gemmes samlet, så der ikke kan opstå et tomt underområde hvis plusset fejler.</p> : null}
-            </div>
-          ) : selected ? (
-            <form className="grid gap-3 rounded-xl border border-yellow-300/20 bg-yellow-300/5 p-4" onSubmit={(event) => { event.preventDefault(); void saveLink(selected, event.currentTarget); }}>
-              <div className="flex items-start justify-between gap-3">
-                <div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-yellow-300">Valgt plus</p><h3 className="text-sm font-black">{selected.targetName}</h3><p className="text-xs text-slate-500">Mål, label, størrelse og rækkefølge kan ændres her. Træk plusset på billedet for at flytte det.</p></div>
-                <button className="rounded-lg border border-red-500/30 px-3 py-2 text-xs font-black text-red-400" disabled={busy} onClick={() => void deleteLink(selected.id)} type="button">Slet plus</button>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="grid gap-1.5 text-xs font-black text-slate-300">Åbn type<select className="dark-input" onChange={(event) => editTargetChanged(event.target.value as "item" | "node")} value={editTarget.type}><option value="item">Værktøj</option><option disabled={!context.children.length} value="node">Underområde</option></select></label>
-                <label className="grid gap-1.5 text-xs font-black text-slate-300">Åbner{editTarget.type === "node" ? <select className="dark-input" onChange={(event) => setEditTarget({ type: "node", id: event.target.value })} value={editTarget.id}>{context.children.map((node) => <option key={node.id} value={node.id}>{node.name}</option>)}</select> : <select className="dark-input" onChange={(event) => setEditTarget({ type: "item", id: event.target.value })} value={editTarget.id}>{context.items.map((item) => <option key={item.id} value={item.id}>{item.name}{item.quantity > 1 ? ` ×${item.quantity}` : ""}</option>)}</select>}</label>
-              </div>
-              <label className="grid gap-1.5 text-xs font-black text-slate-300">Label<input className="dark-input" defaultValue={selected.label} maxLength={100} name="label" placeholder={selected.targetName} /></label>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="grid gap-1.5 text-xs font-black text-slate-300">Størrelse<input className="dark-input" defaultValue={selected.sizePx} max="96" min="24" name="sizePx" step="2" type="number" /></label>
-                <label className="grid gap-1.5 text-xs font-black text-slate-300">Rækkefølge<input className="dark-input" defaultValue={selected.sortOrder} min="0" name="sortOrder" type="number" /></label>
-              </div>
-              <button className="app-button-primary" disabled={busy || !editTarget.id} type="submit">Gem pluspunkt</button>
-            </form>
-          ) : (
-            <p className="text-center text-xs font-semibold text-slate-500">Editoren er i valgtilstand. Klik på et eksisterende plus for at redigere det, eller vælg “Placér nyt +”.</p>
-          )}
-        </div>
-      </section>
-
-      <section className="grid gap-3 rounded-xl border border-white/10 bg-[#0d1317] p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-red-400">Næste niveau</p><h2 className="text-lg font-black">Underområder i {currentName}</h2></div>
-          <div className="flex items-center gap-2">
-            <span className="rounded-full bg-white/5 px-2.5 py-1 text-xs font-black text-slate-400">{context.children.length}</span>
-            <button
-              className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-red-600 px-3 text-xs font-black text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={!context.imageId || busy}
-              onClick={startPlacementAndScroll}
-              type="button"
-            >
-              <AppIcon className="size-4" name="edit" /> Tilføj +
-            </button>
-          </div>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {context.children.map((node) => (
-            <Link className="grid min-h-16 grid-cols-[minmax(0,1fr)_24px] items-center gap-2 rounded-lg border border-white/10 bg-[#11191e] p-3 hover:border-red-500/30" href={`${builderBase}?node=${node.id}`} key={node.id}>
-              <span><strong className="block text-sm text-white">{node.name}</strong><small className="mt-1 block text-xs text-slate-500">{node.imageId ? "Billede valgt" : "Mangler eget billede"} · rækkefølge {node.sortOrder}</small></span>
-              <AppIcon className="size-5 text-red-500" name="chevronRight" />
-            </Link>
-          ))}
-          {context.children.length === 0 ? <p className="rounded-lg border border-dashed border-white/10 p-4 text-center text-xs font-semibold text-slate-500 sm:col-span-2">Ingen underområder på dette niveau endnu.</p> : null}
-        </div>
-        <form className="mt-2 grid gap-2 rounded-lg border border-dashed border-white/15 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_110px_auto]" onSubmit={(event) => void createChildNode(event)}>
-          <input name="placeId" type="hidden" value={context.placeId} />
-          <input name="parentNodeId" type="hidden" value={context.nodeId ?? ""} />
-          <input className="dark-input" maxLength={120} name="name" placeholder="Nyt underområde" required />
-          <input className="dark-input" maxLength={500} name="description" placeholder="Kort beskrivelse" />
-          <input aria-label="Rækkefølge" className="dark-input" defaultValue={context.children.length} min="0" name="sortOrder" type="number" />
-          <button className="rounded-lg bg-white px-4 py-2 text-xs font-black text-black disabled:opacity-40" disabled={busy} type="submit">Opret og redigér</button>
-        </form>
-        <p className="text-[10px] font-semibold leading-4 text-slate-500">Brug “Tilføj +” for at placere et plus på dette niveau. Opretter du et underområde her, åbnes det bagefter til redigering.</p>
-      </section>
     </div>
   );
 }

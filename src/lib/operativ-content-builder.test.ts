@@ -46,12 +46,43 @@ describe("Operativ Portal interaktiv indholdsbygger", () => {
     expect(page).not.toContain("OperationalContentBuilderGuard");
   });
 
-  it("kan starte placering af et plus direkte fra underområde-sektionen", () => {
+  it("samler editoren i tydelige arbejdsområder", () => {
     const builder = read("src/components/OperationalContentBuilder.tsx");
-    expect(builder).toContain("function startPlacementAndScroll()");
+    expect(builder).toContain('type Workspace = "hotspots" | "image" | "children" | "settings"');
+    expect(builder).toContain('aria-label="Redigeringsområder"');
+    expect(builder).toContain('label: "Pluspunkter"');
+    expect(builder).toContain('label: "Billede"');
+    expect(builder).toContain('label: "Underområder"');
+    expect(builder).toContain('label: "Indstillinger"');
+  });
+
+  it("kan starte placering af et plus direkte fra underområde-arbejdsområdet", () => {
+    const builder = read("src/components/OperationalContentBuilder.tsx");
+    expect(builder).toContain("function openHotspotPlacement()");
+    expect(builder).toContain('setWorkspace("hotspots")');
     expect(builder).toContain('scrollIntoView({ behavior: "smooth", block: "center" })');
-    expect(builder).toContain("onClick={startPlacementAndScroll}");
+    expect(builder).toContain("onClick={openHotspotPlacement}");
     expect(builder).toContain("Tilføj +");
+  });
+
+  it("undgår fulde browser-reloads ved normal redigering", () => {
+    const builder = read("src/components/OperationalContentBuilder.tsx");
+    const capture = read("src/components/OperationalQuickImageCapture.tsx");
+    expect(builder).not.toContain("window.location.reload");
+    expect(builder).not.toContain("window.location.assign");
+    expect(builder).toContain("router.refresh()");
+    expect(builder).toContain("router.push(");
+    expect(capture).not.toContain("window.location.reload");
+    expect(capture).not.toContain("window.location.assign");
+    expect(capture).toContain("MAX_IMAGE_EDGE = 2048");
+  });
+
+  it("cachelagrer beskyttede billeder kortvarigt uden at gøre cachen offentlig", () => {
+    const route = read("src/app/api/admin/operativ-portal/billeder/[imageId]/route.ts");
+    expect(route).toContain('private, max-age=300, must-revalidate');
+    expect(route).toContain('request.headers.get("if-none-match")');
+    expect(route).toContain("ETag: etag");
+    expect(route).not.toContain('"Cache-Control": "private, no-store"');
   });
 
   it("gemmer nyt underområde og dets pluspunkt atomisk og afviser falsk succes", () => {
