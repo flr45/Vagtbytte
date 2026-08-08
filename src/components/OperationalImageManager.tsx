@@ -6,6 +6,7 @@ import {
   updateOperationalImageMetadataAction
 } from "@/lib/operativ-portal-image-actions";
 import { OperationalImageUploadForm } from "./OperationalImageUploadForm";
+import { OperationalVehicleImageUseButton } from "./OperationalVehicleImageUseButton";
 
 export function OperationalImageManager({
   title,
@@ -22,6 +23,8 @@ export function OperationalImageManager({
   placeId?: string;
   itemId?: string;
 }) {
+  const vehicleOnly = !placeId && !itemId;
+
   return (
     <section className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,.65fr)_minmax(0,1.35fr)]">
       <div className="min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-[#0d1317] p-5 shadow-sm">
@@ -43,6 +46,7 @@ export function OperationalImageManager({
               <div className="min-w-0 p-4">
                 <strong className="block truncate text-white">{image.title}</strong>
                 <small className="block truncate text-slate-500">{image.originalName} · {formatBytes(image.sizeBytes)}</small>
+                {vehicleOnly ? <div className="mt-3"><OperationalVehicleImageUseButton imageId={image.id} vehicleId={vehicleId} /></div> : null}
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   {!image.isCover ? <form action={setOperationalImageCoverAction}><input name="imageId" type="hidden" value={image.id} /><button className="min-h-10 w-full rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-black text-white hover:bg-white/10" type="submit">Vælg som forside</button></form> : <div className="grid min-h-10 place-items-center rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 text-center text-xs font-black text-emerald-300">Aktuel forside</div>}
                   <form action={deleteOperationalImageAction}><input name="imageId" type="hidden" value={image.id} /><button className="min-h-10 w-full rounded-lg border border-red-500/30 bg-red-500/5 px-3 text-xs font-black text-red-300 hover:bg-red-500/10" type="submit">Slet billede</button></form>
