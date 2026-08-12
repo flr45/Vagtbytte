@@ -30,12 +30,13 @@ describe("SBR Fire App unified shell", () => {
     ]));
   });
 
-  it("sender shortcuts videre efter login, rolle og operativ adgang", () => {
+  it("sender shortcuts videre efter login, rolle og adgang", () => {
     const alarmSource = fs.readFileSync(path.join(process.cwd(), "src", "app", "app", "alarmer", "page.tsx"), "utf8");
     const vagtSource = fs.readFileSync(path.join(process.cwd(), "src", "app", "app", "vagt", "page.tsx"), "utf8");
     const operativSource = fs.readFileSync(path.join(process.cwd(), "src", "app", "app", "operativ", "page.tsx"), "utf8");
 
-    expect(alarmSource).toContain('user.role === "BRANDFIGHTER" ? "/brandmand/alarmer" : "/app"');
+    expect(alarmSource).toContain('user.role === "BRANDFIGHTER" && user.alarmStations.length > 0');
+    expect(alarmSource).toContain('redirect(canOpenAlarmFeed ? "/brandmand/alarmer" : "/app")');
     expect(vagtSource).toContain('redirect("/brandmand")');
     expect(vagtSource).toContain('redirect("/vagtcentral")');
     expect(vagtSource).toContain('redirect("/admin")');
