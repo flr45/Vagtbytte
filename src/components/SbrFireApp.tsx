@@ -23,7 +23,7 @@ function navigationFor(user: NonNullable<Awaited<ReturnType<typeof getCurrentUse
     { key: "home", href: "/app", label: "Hjem", icon: "home" }
   ];
 
-  if (user.role === "BRANDFIGHTER") {
+  if (user.role === "BRANDFIGHTER" && user.alarmStations.length > 0) {
     items.push({ key: "alarm", href: "/brandmand/alarmer", label: "Alarmer", icon: "alarm" });
   }
 
