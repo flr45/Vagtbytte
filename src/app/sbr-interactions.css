@@ -1,0 +1,44 @@
+/* SBR Fire App interaction layer.
+   Keep these rules separate from the legacy light Vagtbytte surfaces. */
+
+html:has(.sbr-fire-skin),
+body:has(.sbr-fire-skin) {
+  background: #070b0e;
+}
+
+.sbr-fire-skin button,
+.sbr-fire-skin a[href] {
+  -webkit-tap-highlight-color: rgba(220, 38, 38, 0.28);
+}
+
+.sbr-fire-skin button:active:not(:disabled),
+.sbr-fire-skin a[href]:active {
+  filter: brightness(0.72);
+  opacity: 0.9;
+}
+
+/* The hit area stays easy to tap, while the visible red + can be smaller on
+   phones. Admin-configured hotspot sizes are preserved on larger screens. */
+.operativ-hotspot-hit {
+  width: max(48px, var(--hotspot-size, 40px));
+  height: max(48px, var(--hotspot-size, 40px));
+}
+
+.operativ-hotspot-mark {
+  width: var(--hotspot-size, 40px);
+  height: var(--hotspot-size, 40px);
+  font-size: max(18px, calc(var(--hotspot-size, 40px) * 0.55));
+}
+
+@media (max-width: 639px) {
+  .operativ-hotspot-hit {
+    width: 44px;
+    height: 44px;
+  }
+
+  .operativ-hotspot-mark {
+    width: min(var(--hotspot-size, 40px), 32px);
+    height: min(var(--hotspot-size, 40px), 32px);
+    font-size: 18px;
+  }
+}
