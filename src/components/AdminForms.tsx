@@ -9,6 +9,7 @@ import {
   updateManagedUserAction
 } from "@/lib/admin-user-actions";
 import { STATIONS } from "@/lib/stations";
+import { updateVcSmsPhoneAction } from "@/lib/vc-settings-actions";
 import { ActionMessage } from "./ActionMessage";
 import { Checkbox, Field } from "./Field";
 import { PasswordCreationFields } from "./PasswordCreationFields";
@@ -286,30 +287,55 @@ function AlarmStationCheckboxes({ selected = [] }: { selected?: string[] }) {
 export function VcForm({
   vc
 }: {
-  vc: { loginIdentifier: string; isActive: boolean } | null;
+  vc: { loginIdentifier: string; isActive: boolean; vcSmsPhoneNumber: string | null } | null;
 }) {
   const [state, action] = useActionState(updateVcAction, {});
+  const [smsState, smsAction] = useActionState(updateVcSmsPhoneAction, {});
 
   return (
-    <form action={action} className="grid gap-4 rounded-lg border border-brand-line bg-white p-4">
-      <h2 className="text-xl font-bold">VC-konto</h2>
-      <p className="text-sm text-zinc-600">
-        Der må kun være én fælles aktiv konto til vagtcentralen i denne version.
-      </p>
-      <Field
-        defaultValue={vc?.loginIdentifier ?? "vc"}
-        label="Brugernavn"
-        name="loginIdentifier"
-      />
-      <PasswordCreationFields
-        passwordLabel="Ny adgangskode (valgfri)"
-        passwordName="temporaryPassword"
-        required={false}
-        showConfirmation={false}
-      />
-      <Checkbox defaultChecked={vc?.isActive ?? true} label="Aktiv" name="isActive" />
-      <ActionMessage message={state.message} ok={state.ok} />
-      <SubmitButton>Gem VC-konto</SubmitButton>
-    </form>
+    <section className="grid gap-4 rounded-lg border border-brand-line bg-white p-4">
+      <form action={action} className="grid gap-4">
+        <h2 className="text-xl font-bold">VC-konto</h2>
+        <p className="text-sm text-zinc-600">
+          Der må kun være én fælles aktiv konto til vagtcentralen i denne version.
+        </p>
+        <Field
+          defaultValue={vc?.loginIdentifier ?? "vc"}
+          label="Brugernavn"
+          name="loginIdentifier"
+        />
+        <PasswordCreationFields
+          passwordLabel="Ny adgangskode (valgfri)"
+          passwordName="temporaryPassword"
+          required={false}
+          showConfirmation={false}
+        />
+        <Checkbox defaultChecked={vc?.isActive ?? true} label="Aktiv" name="isActive" />
+        <ActionMessage message={state.message} ok={state.ok} />
+        <SubmitButton>Gem VC-konto</SubmitButton>
+      </form>
+
+      <form action={smsAction} className="grid gap-4 border-t border-brand-line pt-5">
+        <div>
+          <h3 className="font-black">SMS til Vagtcentralen</h3>
+          <p className="mt-1 text-sm text-zinc-600">
+            Når en sag kræver handling i Vagtcentralen, sendes automatisk en SMS til dette nummer. Lad feltet være tomt for at slå funktionen fra.
+          </p>
+        </div>
+        <Field
+          autoComplete="tel"
+          defaultValue={vc?.vcSmsPhoneNumber ?? ""}
+          label="VC telefonnummer"
+          name="vcSmsPhoneNumber"
+          required={false}
+          type="tel"
+        />
+        <p className="-mt-2 text-xs font-semibold text-zinc-500">
+          Du kan skrive dansk 8-cifret nummer eller internationalt format, fx +4512345678.
+        </p>
+        <ActionMessage message={smsState.message} ok={smsState.ok} />
+        <SubmitButton>Gem SMS-nummer</SubmitButton>
+      </form>
+    </section>
   );
 }
