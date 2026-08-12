@@ -1,10 +1,11 @@
 import type { NotificationType, PrismaClient } from "@prisma/client";
 import { createHash } from "crypto";
 import webpush from "web-push";
+import { sendVcSmsForNotification } from "./vc-sms";
 
 export type NotificationRepo = Pick<
   PrismaClient,
-  "notification" | "pushSubscription" | "pushDelivery" | "shiftTransfer" | "returnRequest"
+  "notification" | "pushSubscription" | "pushDelivery" | "shiftTransfer" | "returnRequest" | "user"
 >;
 
 export type NotificationInput = {
@@ -48,8 +49,11 @@ export async function createNotification(
     }
   });
 
-  if (notification.publishedAt && options.sendPush !== false) {
-    await sendPushForNotification(repo, notification.id);
+  if (notification.publishedAt) {
+    if (options.sendPush !== false) {
+      await sendPushForNotification(repo, notification.id);
+    }
+    await queueVcSmsForPublishedNotification(repo, notification);
   }
 
   return notification;
@@ -273,6 +277,7 @@ export async function publishDueNotifications(repo: NotificationRepo, now = new 
       continue;
     }
     await sendPushForNotification(repo, notification.id);
+    await queueVcSmsForPublishedNotification(repo, notification);
     published += 1;
   }
 
@@ -304,6 +309,25 @@ export function markRead<T extends { readAt: Date | null }>(notification: T, now
 
 export function markAllRead<T extends { readAt: Date | null }>(notifications: T[], now = new Date()) {
   return notifications.map((notification) => markRead(notification, now));
+}
+
+async function queueVcSmsForPublishedNotification(
+  repo: NotificationRepo,
+  notification: {
+    type: NotificationType;
+    title: string;
+    body: string;
+    link: string;
+    shiftTransferId: string | null;
+  }
+) {
+  await sendVcSmsForNotification(repo, {
+    type: notification.type,
+    title: notification.title,
+    body: notification.body,
+    link: notification.link,
+    shiftTransferId: notification.shiftTransferId
+  });
 }
 
 async function shouldCancelScheduledNotification(repo: NotificationRepo, notificationId: string) {

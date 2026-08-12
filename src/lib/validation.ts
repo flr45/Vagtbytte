@@ -2,6 +2,7 @@ import { z } from "zod";
 import { parseCopenhagenDateTimeLocal } from "./copenhagen-datetime";
 import { normalizeLoginIdentifier } from "./login-identifiers";
 import { passwordSchema } from "./passwords";
+import { normalizeSmsPhoneNumber } from "./sms-phone";
 
 const expectedEndModeSchema = z.enum(["SPECIFIC_TIME", "UNTIL_SHIFT_END"], {
   required_error: "Vælg forventet tilbagelevering"
@@ -20,6 +21,16 @@ const copenhagenDateTimeLocalSchema = z
       return z.NEVER;
     }
   });
+
+const smsPhoneSchema = z.string().trim().max(30, "Telefonnummeret er for langt").transform((value, context) => {
+  if (!value) return null;
+  try {
+    return normalizeSmsPhoneNumber(value);
+  } catch {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Indtast et gyldigt telefonnummer" });
+    return z.NEVER;
+  }
+});
 
 export const loginSchema = z.object({
   identifier: z.string().trim().min(1, "Udfyld medarbejdernummer eller brugernavn"),
@@ -49,6 +60,10 @@ export const vcUpdateSchema = z.object({
   loginIdentifier: z.string().trim().min(1, "Brugernavn skal udfyldes").transform(normalizeLoginIdentifier),
   temporaryPassword: passwordSchema.optional().or(z.literal("")),
   isActive: z.boolean()
+});
+
+export const vcSmsPhoneUpdateSchema = z.object({
+  vcSmsPhoneNumber: smsPhoneSchema
 });
 
 export const changePasswordSchema = z.object({
@@ -110,7 +125,7 @@ export const returnRequestCreateSchema = z.object({
 
 export const returnRequestResponseSchema = z.object({
   returnRequestId: z.string().min(1),
-  responseComment: z.string().trim().max(500, "Kommentaren må højst være 500 tegn").optional()
+  responseComment: z.string().trim().max(500, "Begrundelsen må højst være 500 tegn").optional()
 });
 
 export const vcReturnDecisionSchema = z.object({

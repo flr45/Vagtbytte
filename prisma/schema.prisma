@@ -109,6 +109,7 @@ model User {
   employeeNumber         String?              @unique
   loginIdentifier        String               @unique
   email                  String?              @unique
+  vcSmsPhoneNumber       String?
   passwordHash           String
   isActive               Boolean              @default(true)
   mustChangePassword     Boolean              @default(false)

@@ -48,7 +48,7 @@ export default async function AdminPage() {
     listOperationalPortalGrantUserIds(),
     prisma.user.findFirst({
       where: { role: UserRole.VC },
-      select: { loginIdentifier: true, isActive: true }
+      select: { loginIdentifier: true, isActive: true, vcSmsPhoneNumber: true }
     }),
     prisma.auditLog.findMany({
       orderBy: { createdAt: "desc" },
