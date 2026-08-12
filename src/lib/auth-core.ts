@@ -12,6 +12,7 @@ export type AuthUser = {
   passwordHash: string;
   isActive: boolean;
   mustChangePassword: boolean;
+  alarmStations: string[];
   hasAdminAccess: boolean;
   hasOperationalPortalAccess?: boolean;
 };
@@ -164,21 +165,16 @@ export async function authenticateLogin(input: {
     await input.repo.audit({
       actorUserId: user.id,
       actorRole: user.role,
-      action: "LOGIN_BLOCKED_INACTIVE",
+      action: "LOGIN_INACTIVE",
       targetUserId: user.id,
-      description: "Login afvist fordi brugeren er deaktiveret"
+      description: "Login afvist for deaktiveret bruger"
     });
     return { ok: false, reason: "INACTIVE", message: "Brugeren er deaktiveret." };
   }
 
   const rawToken = newSessionToken();
   const expiresAt = sessionExpiry();
-
-  await input.repo.createSession({
-    userId: user.id,
-    tokenHash: hashSessionToken(rawToken),
-    expiresAt
-  });
+  await input.repo.createSession({ userId: user.id, tokenHash: hashSessionToken(rawToken), expiresAt });
   await input.repo.markLogin(user.id);
   await input.repo.recordAttempt({
     identifier,
