@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { SessionRefresher } from "@/components/SessionRefresher";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 import "./globals.css";
+import "./sbr-interactions.css";
 
 export const metadata: Metadata = {
   title: "SBR Fire App",
