@@ -17,10 +17,24 @@ describe("mobilvisning", () => {
     expect(css).toContain("overflow-x: hidden");
   });
 
-  it("loading bruger skeletons frem for spinner", () => {
+  it("loading bruger mørke skeletons frem for hvidt flash eller spinner", () => {
     const source = readFileSync("src/app/loading.tsx", "utf8");
 
     expect(source).toContain("animate-pulse");
+    expect(source).toContain("bg-[#070b0e]");
+    expect(source).toContain("sbr-fire-skin");
+    expect(source).not.toContain("bg-white");
     expect(source).not.toContain("spinner");
+  });
+
+  it("SBR-interaktionslaget gør tryk tydelige og plusser kompakte på telefon", () => {
+    const css = readFileSync("src/app/sbr-interactions.css", "utf8");
+
+    expect(css).toContain("a[href]:active");
+    expect(css).toContain("filter: brightness(0.72)");
+    expect(css).toContain(".operativ-hotspot-hit");
+    expect(css).toContain(".operativ-hotspot-mark");
+    expect(css).toContain("@media (max-width: 639px)");
+    expect(css).toContain("32px");
   });
 });

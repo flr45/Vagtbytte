@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { type CSSProperties, useMemo, useState } from "react";
 import { operationalImageUrl } from "@/lib/operativ-client";
 import {
   OPERATIONAL_VIEW_CONFIG,
@@ -104,19 +104,17 @@ export function OperationalVehicleViewer({
         {activeHotspots.map((hotspot) => (
           <Link
             aria-label={`Åbn ${hotspot.label || hotspot.placeName}`}
-            className="absolute z-20 grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-white bg-[#d71920] font-black leading-none text-white shadow-[0_4px_18px_rgba(0,0,0,.65)] transition hover:scale-110 focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-white"
+            className="operativ-hotspot-hit group absolute z-20 grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-white"
             href={`/admin/operativ-portal/rum/${hotspot.placeId}/interaktiv`}
             key={hotspot.id}
             style={{
               left: `${hotspot.xPercent}%`,
               top: `${hotspot.yPercent}%`,
-              width: hotspot.sizePx,
-              height: hotspot.sizePx,
-              fontSize: Math.max(18, Math.round(hotspot.sizePx * 0.55))
-            }}
+              "--hotspot-size": `${hotspot.sizePx}px`
+            } as CSSProperties}
             title={hotspot.label || hotspot.placeName}
           >
-            +
+            <span className="operativ-hotspot-mark grid place-items-center rounded-full border-2 border-white bg-[#d71920] font-black leading-none text-white shadow-[0_4px_18px_rgba(0,0,0,.65)] transition group-hover:scale-110 group-focus-visible:scale-110">+</span>
           </Link>
         ))}
       </div>

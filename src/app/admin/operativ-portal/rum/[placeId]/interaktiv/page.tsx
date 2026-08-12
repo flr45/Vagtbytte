@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppIcon } from "@/components/AppIcon";
@@ -58,9 +59,10 @@ export default async function OperationalPlaceInteractivePage({ params, searchPa
       </nav>
 
       <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#080c0f] shadow-2xl">
-        <div className="border-b border-white/10 bg-[#b70f18] px-4 py-3 text-center">
+        <div className="border-b border-white/10 bg-[#b70f18] px-4 py-4 text-center">
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-100/70">{context.nodeId ? "Underområde" : "Rum"}</p>
-          <h1 className="mt-0.5 text-base font-black text-white">Tryk på et + for at gå videre til næste niveau eller udstyret</h1>
+          <h1 className="mt-1 text-2xl font-black leading-tight text-white sm:text-3xl">{title}</h1>
+          <p className="mt-1 text-xs font-bold text-red-100/80">Tryk på et + for at gå videre til næste niveau eller udstyret</p>
         </div>
 
         {context.imageId ? (
@@ -72,29 +74,20 @@ export default async function OperationalPlaceInteractivePage({ params, searchPa
                 : hotspot.itemId
                   ? `/admin/operativ-portal/udstyr/${hotspot.itemId}?returnTo=${encodeURIComponent(currentHref)}`
                   : base;
-              const hitSize = Math.max(48, hotspot.sizePx);
               return (
                 <Link
                   aria-label={`Åbn ${hotspot.label || hotspot.targetName}`}
-                  className="group absolute grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full focus:outline-none focus-visible:ring-4 focus-visible:ring-yellow-300/60"
+                  className="operativ-hotspot-hit group absolute grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full focus:outline-none focus-visible:ring-4 focus-visible:ring-yellow-300/60"
                   href={href}
                   key={hotspot.id}
                   style={{
                     left: `${hotspot.xPercent}%`,
                     top: `${hotspot.yPercent}%`,
-                    width: hitSize,
-                    height: hitSize
-                  }}
+                    "--hotspot-size": `${hotspot.sizePx}px`
+                  } as CSSProperties}
                   title={hotspot.label || hotspot.targetName}
                 >
-                  <span
-                    className="grid place-items-center rounded-full border-2 border-white bg-[#d71920] font-black leading-none text-white shadow-[0_5px_22px_rgba(0,0,0,.75)] transition group-hover:scale-110 group-focus-visible:scale-110"
-                    style={{
-                      width: hotspot.sizePx,
-                      height: hotspot.sizePx,
-                      fontSize: Math.max(18, Math.round(hotspot.sizePx * 0.55))
-                    }}
-                  >+</span>
+                  <span className="operativ-hotspot-mark grid place-items-center rounded-full border-2 border-white bg-[#d71920] font-black leading-none text-white shadow-[0_5px_22px_rgba(0,0,0,.75)] transition group-hover:scale-110 group-focus-visible:scale-110">+</span>
                 </Link>
               );
             })}

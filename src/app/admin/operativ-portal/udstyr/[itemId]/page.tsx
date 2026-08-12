@@ -49,6 +49,8 @@ export default async function OperationalItemPage({ params, searchParams }: Page
   const legacyInteractiveHref = `/admin/operativ-portal/rum/${item.placeId}/interaktiv${sourceNode ? `?node=${encodeURIComponent(sourceNode)}` : ""}`;
   const backHref = safeOperationalReturnTo(requestedReturnTo) ?? (sourceNode ? legacyInteractiveHref : placeHref);
   const vehicleHref = `/admin/operativ-portal/koeretoejer/${item.vehicleId}`;
+  const videoAdminHref = `/admin/operativ-portal/videoer?itemId=${item.id}&placeId=${item.placeId}&vehicleId=${item.vehicleId}`;
+  const documentAdminHref = `/admin/operativ-portal/dokumenter?itemId=${item.id}&placeId=${item.placeId}&vehicleId=${item.vehicleId}`;
 
   return (
     <OperationalPageFrame>
@@ -63,6 +65,17 @@ export default async function OperationalItemPage({ params, searchParams }: Page
         <span className="shrink-0 text-white">{item.name}</span>
       </nav>
 
+      {isEditor ? (
+        <section className="grid grid-cols-2 gap-2 rounded-xl border border-red-500/20 bg-red-500/5 p-3">
+          <Link className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-red-600 px-3 text-xs font-black text-white" href={videoAdminHref}>
+            <AppIcon className="size-4" name="video" /> Tilføj video
+          </Link>
+          <Link className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-black text-white" href={documentAdminHref}>
+            <AppIcon className="size-4" name="document" /> Tilføj dokument
+          </Link>
+        </section>
+      ) : null}
+
       <section className="overflow-hidden rounded-xl border border-white/10 bg-[#0b1013]">
         {item.coverImageId ? (
           <img alt={item.name} className="aspect-[16/10] w-full bg-[#161c20] object-contain" src={operationalImageUrl(item.coverImageId)} />
@@ -74,13 +87,13 @@ export default async function OperationalItemPage({ params, searchParams }: Page
           { href: "#video", label: "Video" },
           { href: "#dokumenter", label: "Dokumenter" }
         ]} />
-        <div id="overblik" className="p-4">
+        <div id="overblik" className="p-4 sm:p-5">
           <p className="text-[10px] font-black uppercase tracking-[0.14em] text-red-500">{item.vehicleName} · {item.placeName}</p>
-          <div className="mt-1 flex items-start justify-between gap-3">
-            <h1 className="text-2xl font-black">{item.name}</h1>
-            <span className="rounded bg-red-600 px-2 py-1 text-[10px] font-black text-white">×{item.quantity}</span>
+          <div className="mt-2 flex items-start justify-between gap-3">
+            <h1 className="text-3xl font-black leading-tight text-white sm:text-4xl">{item.name}</h1>
+            <span className="shrink-0 rounded bg-red-600 px-2 py-1 text-[10px] font-black text-white">×{item.quantity}</span>
           </div>
-          <p className="mt-4 text-xs font-black uppercase tracking-[0.12em] text-slate-300">Beskrivelse</p>
+          <p className="mt-5 text-xs font-black uppercase tracking-[0.12em] text-slate-300">Beskrivelse</p>
           <p className="mt-2 text-sm font-medium leading-6 text-slate-400">{item.note || "Der er endnu ikke tilføjet en beskrivelse til udstyret."}</p>
 
           {specificationLines.length > 0 ? (
@@ -104,6 +117,10 @@ export default async function OperationalItemPage({ params, searchParams }: Page
       </section>
 
       <section id="video" className="scroll-mt-20">
+        <div className="mb-3 flex items-center justify-between gap-3 px-1">
+          <h2 className="text-lg font-black text-white">Video</h2>
+          {isEditor ? <Link className="text-xs font-black text-red-400" href={videoAdminHref}>Tilføj video</Link> : null}
+        </div>
         {videos.length > 0 ? (
           <article className="overflow-hidden rounded-xl border border-white/10 bg-[#0d1317]">
             <iframe allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen className="aspect-video w-full" loading="lazy" src={youtubeEmbedUrl(videos[0].youtubeId)} title={videos[0].title} />
@@ -128,7 +145,7 @@ export default async function OperationalItemPage({ params, searchParams }: Page
       </section>
 
       <OperationalPanel className="scroll-mt-20">
-        <div id="dokumenter" className="flex items-center justify-between"><h2 className="text-sm font-black">Dokumenter</h2>{isEditor ? <Link className="text-xs font-bold text-red-500" href={`/admin/operativ-portal/dokumenter?itemId=${item.id}&placeId=${item.placeId}&vehicleId=${item.vehicleId}`}>Tilføj</Link> : null}</div>
+        <div id="dokumenter" className="flex items-center justify-between gap-3"><h2 className="text-lg font-black">Dokumenter</h2>{isEditor ? <Link className="text-xs font-black text-red-400" href={documentAdminHref}>Tilføj dokument</Link> : null}</div>
         <div className="mt-3 grid gap-2">
           {documents.map((document) => <a className="grid min-h-14 grid-cols-[40px_minmax(0,1fr)_20px] items-center gap-2 rounded-lg bg-[#151b1f] p-2.5" href={`/api/admin/operativ-portal/dokumenter/${document.id}`} key={document.id} target="_blank"><span className="grid size-10 place-items-center rounded bg-[#c71019] text-white"><AppIcon className="size-5" name="document" /></span><span className="min-w-0"><strong className="block truncate text-xs">{document.title}</strong><small className="block truncate text-[10px] text-slate-500">{document.category}</small></span><AppIcon className="size-5 text-slate-500" name="chevronRight" /></a>)}
           {documents.length === 0 ? <p className="text-sm text-slate-500">Ingen dokumenter tilknyttet.</p> : null}

@@ -27,11 +27,22 @@ export function OperationalPortalNav({ isEditor = false }: { isEditor?: boolean 
         <Link className="operativ-nav-link" href="/admin/operativ-portal/videoer">Videoakademi</Link>
         <Link className="operativ-nav-link" href="/admin/operativ-portal/dokumenter">Videnbank</Link>
         <Link className="operativ-nav-link" href="/admin/operativ-portal/soeg">Søg</Link>
-        <Link className="operativ-nav-link ml-auto" href="/app">SBR Fire App</Link>
+        <Link className="operativ-nav-link ml-auto" href="/app/vagt"><AppIcon className="mr-1 size-4" name="swap" /> Vagtbytte</Link>
+        <Link className="operativ-nav-link" href="/app">SBR Fire App</Link>
         <span className="rounded-md bg-[#171d21] px-2.5 py-2 text-[10px] font-black uppercase tracking-[0.13em] text-slate-400">
           {isEditor ? "Admin" : "Læseadgang"}
         </span>
       </nav>
+
+      <div className="grid grid-cols-2 gap-2 md:hidden" aria-label="Genveje ud af Operativ Portal">
+        <Link className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 text-xs font-black text-red-200" href="/app/vagt">
+          <AppIcon className="size-4" name="swap" /> Vagtbytte
+        </Link>
+        <Link className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 text-xs font-black text-slate-200" href="/app">
+          <AppIcon className="size-4" name="home" /> SBR Fire App
+        </Link>
+      </div>
+
       <SbrFireNavigation active="operativ" desktop={false} />
     </>
   );

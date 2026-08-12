@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { type CSSProperties, useMemo, useState } from "react";
 import { AppIcon } from "./AppIcon";
 import { operationalImageUrl } from "@/lib/operativ-client";
 import type {
@@ -63,33 +63,22 @@ export function OperationalVehicleInteractiveViewer({
       <div className="relative overflow-hidden">
         <img alt={`${activeView.label} af ${vehicleName}`} className="block w-full" src={operationalImageUrl(activeView.imageId)} />
 
-        {activeHotspots.map((hotspot) => {
-          const hitSize = Math.max(48, hotspot.sizePx);
-          return (
-            <Link
-              aria-label={`Åbn ${hotspot.label || hotspot.placeName}`}
-              className="group absolute z-20 grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full focus:outline-none focus-visible:ring-4 focus-visible:ring-yellow-300/60"
-              href={`/admin/operativ-portal/rum/${hotspot.placeId}/interaktiv`}
-              key={hotspot.id}
-              style={{
-                left: `${hotspot.xPercent}%`,
-                top: `${hotspot.yPercent}%`,
-                width: hitSize,
-                height: hitSize
-              }}
-              title={hotspot.label || hotspot.placeName}
-            >
-              <span
-                className="grid place-items-center rounded-full border-2 border-white bg-[#d71920] font-black leading-none text-white shadow-[0_5px_22px_rgba(0,0,0,.75)] transition group-hover:scale-110 group-focus-visible:scale-110"
-                style={{
-                  width: hotspot.sizePx,
-                  height: hotspot.sizePx,
-                  fontSize: Math.max(18, Math.round(hotspot.sizePx * 0.55))
-                }}
-              >+</span>
-            </Link>
-          );
-        })}
+        {activeHotspots.map((hotspot) => (
+          <Link
+            aria-label={`Åbn ${hotspot.label || hotspot.placeName}`}
+            className="operativ-hotspot-hit group absolute z-20 grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full focus:outline-none focus-visible:ring-4 focus-visible:ring-yellow-300/60"
+            href={`/admin/operativ-portal/rum/${hotspot.placeId}/interaktiv`}
+            key={hotspot.id}
+            style={{
+              left: `${hotspot.xPercent}%`,
+              top: `${hotspot.yPercent}%`,
+              "--hotspot-size": `${hotspot.sizePx}px`
+            } as CSSProperties}
+            title={hotspot.label || hotspot.placeName}
+          >
+            <span className="operativ-hotspot-mark grid place-items-center rounded-full border-2 border-white bg-[#d71920] font-black leading-none text-white shadow-[0_5px_22px_rgba(0,0,0,.75)] transition group-hover:scale-110 group-focus-visible:scale-110">+</span>
+          </Link>
+        ))}
 
         {!onRoof ? (
           <>
