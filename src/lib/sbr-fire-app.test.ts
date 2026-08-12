@@ -42,6 +42,23 @@ describe("SBR Fire App unified shell", () => {
     expect(operativSource).toContain('canAccessOperationalPortal(user) ? "/admin/operativ-portal" : "/app"');
   });
 
+  it("skjuler alarmmodulet for brandmænd uden valgte notifikationsstationer", () => {
+    const navigation = fs.readFileSync(path.join(process.cwd(), "src", "components", "SbrFireApp.tsx"), "utf8");
+    const home = fs.readFileSync(path.join(process.cwd(), "src", "app", "app", "page.tsx"), "utf8");
+
+    expect(navigation).toContain('user.role === "BRANDFIGHTER" && user.alarmStations.length > 0');
+    expect(home).toContain('const hasAlarmStations = user.role === "BRANDFIGHTER" && user.alarmStations.length > 0');
+    expect(home).toContain("{hasAlarmStations ? (");
+  });
+
+  it("giver Operativ Portal en tydelig retur til Vagtbytte på desktop og mobil", () => {
+    const source = fs.readFileSync(path.join(process.cwd(), "src", "components", "OperationalPortalNav.tsx"), "utf8");
+
+    expect(source).toContain('href="/app/vagt"');
+    expect(source).toContain("Vagtbytte");
+    expect(source).toContain('aria-label="Genveje ud af Operativ Portal"');
+  });
+
   it("lader Operativ bruge det fælles manifest", () => {
     const layoutPath = path.join(process.cwd(), "src", "app", "admin", "operativ-portal", "layout.tsx");
     const source = fs.readFileSync(layoutPath, "utf8");
