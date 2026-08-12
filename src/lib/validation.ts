@@ -59,8 +59,11 @@ export const passwordResetSchema = z.object({
 export const vcUpdateSchema = z.object({
   loginIdentifier: z.string().trim().min(1, "Brugernavn skal udfyldes").transform(normalizeLoginIdentifier),
   temporaryPassword: passwordSchema.optional().or(z.literal("")),
-  vcSmsPhoneNumber: smsPhoneSchema,
   isActive: z.boolean()
+});
+
+export const vcSmsPhoneUpdateSchema = z.object({
+  vcSmsPhoneNumber: smsPhoneSchema
 });
 
 export const changePasswordSchema = z.object({
