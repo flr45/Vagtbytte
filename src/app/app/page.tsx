@@ -29,6 +29,7 @@ export default async function SbrFireHomePage() {
     where: { recipientUserId: user.id, readAt: null, publishedAt: { not: null }, cancelledAt: null }
   });
 
+  const hasAlarmStations = user.role === "BRANDFIGHTER" && user.alarmStations.length > 0;
   const firefighterData = user.role === "BRANDFIGHTER" ? await getFirefighterHomeData(user.id) : null;
   const vcPending = user.role === "VC"
     ? await prisma.shiftTransfer.count({ where: { status: "RECEIVER_ACCEPTED_AWAITING_VC" } })
@@ -53,7 +54,7 @@ export default async function SbrFireHomePage() {
         </div>
       </section>
 
-      {firefighterData?.latestAlarm ? (
+      {hasAlarmStations && firefighterData?.latestAlarm ? (
         <Link
           className="group overflow-hidden rounded-2xl border border-red-500/30 bg-[#0d1317] shadow-xl transition hover:border-red-500/60"
           href={`/brandmand/alarmer#alarm-${firefighterData.latestAlarm.id}`}
@@ -77,7 +78,7 @@ export default async function SbrFireHomePage() {
             <p className="mt-1 inline-flex items-center gap-1 text-xs font-black text-red-400 group-hover:text-red-300">Åbn alarm <AppIcon className="size-4" name="chevronRight" /></p>
           </div>
         </Link>
-      ) : user.role === "BRANDFIGHTER" ? (
+      ) : hasAlarmStations ? (
         <section className="rounded-2xl border border-white/10 bg-[#0d1317] p-4">
           <p className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500"><AppIcon className="size-4" name="alarm" /> Alarm</p>
           <h3 className="mt-1 text-lg font-black">Ingen alarmer i feedet</h3>
@@ -99,7 +100,7 @@ export default async function SbrFireHomePage() {
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {user.role === "BRANDFIGHTER" ? (
+          {hasAlarmStations ? (
             <ModuleCard
               badge={firefighterData?.latestAlarm?.status === "ACTIVE" ? "AKTIV" : undefined}
               description="Meldinger fra dine stationer"
