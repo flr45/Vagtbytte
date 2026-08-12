@@ -11,5 +11,6 @@ export default async function AlarmShortcutPage() {
     redirect("/skift-adgangskode");
   }
 
-  redirect(user.role === "BRANDFIGHTER" ? "/brandmand/alarmer" : "/app");
+  const canOpenAlarmFeed = user.role === "BRANDFIGHTER" && user.alarmStations.length > 0;
+  redirect(canOpenAlarmFeed ? "/brandmand/alarmer" : "/app");
 }
