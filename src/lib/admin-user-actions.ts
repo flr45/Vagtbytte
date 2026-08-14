@@ -11,7 +11,6 @@ import { hashPassword, passwordSchema } from "./passwords";
 import { prisma } from "./prisma";
 import {
   STATION_CODE_VALUES,
-  isStationCode,
   normalizeStationCodes
 } from "./stations";
 
@@ -66,11 +65,7 @@ function firstError(error: z.ZodError) {
 
 function userInput(formData: FormData) {
   const stationCode = String(formData.get("stationCode") ?? "");
-  const selectedAlarmStations = normalizeStationCodes(formData.getAll("alarmStations"));
-  const alarmStations =
-    isStationCode(stationCode) && !selectedAlarmStations.includes(stationCode)
-      ? [...selectedAlarmStations, stationCode]
-      : selectedAlarmStations;
+  const alarmStations = normalizeStationCodes(formData.getAll("alarmStations"));
 
   return {
     name: formData.get("name"),
