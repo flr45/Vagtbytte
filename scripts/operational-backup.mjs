@@ -23,7 +23,7 @@ const TABLE_CONFIG = {
   operationalPlaces: { sqlName: "operational_place", orderBy: "vehicle_id, sort_order, id" },
   operationalItems: { sqlName: "operational_item", orderBy: "place_id, sort_order, id" },
   operationalImages: { sqlName: "operational_image", orderBy: "vehicle_id, place_id, item_id, sort_order, id" },
-  operationalDocuments: { sqlName: "operational_document", orderBy: "vehicle_id, place_id, item_id, sort_order, id" },
+  operationalDocuments: { sqlName: "operational_document", orderBy: "vehicle_id, place_id, item_id, created_at, id" },
   operationalVideos: { sqlName: "operational_video", orderBy: "vehicle_id, place_id, item_id, sort_order, id" },
   operationalHotspots: { sqlName: "operational_hotspot", orderBy: "vehicle_id, view_key, sort_order, id" },
   operationalPlaceHotspots: { sqlName: "operational_place_hotspot", orderBy: "place_id, sort_order, id" },
@@ -110,6 +110,41 @@ export function normalizeOperationalTables(tables = {}) {
   return Object.fromEntries(
     OPERATIONAL_BACKUP_TABLE_NAMES.map((name) => [name, Array.isArray(tables[name]) ? tables[name] : []])
   );
+}
+
+export function validateOperationalBackupFiles(rawTables, files) {
+  const tables = normalizeOperationalTables(rawTables);
+  const expected = new Map();
+  for (const [kind, rows] of [
+    ["image", tables.operationalImages],
+    ["document", tables.operationalDocuments]
+  ]) {
+    for (const row of rows) {
+      const storageName = safeStorageName(row.storage_name);
+      const key = `${kind}:${storageName}`;
+      if (expected.has(key)) throw new Error(`Dubleret operativ database-reference: ${storageName}`);
+      expected.set(key, Number(row.size_bytes));
+    }
+  }
+
+  const actual = new Set();
+  for (const file of files) {
+    const kind = file?.kind === "image" || file?.kind === "document" ? file.kind : null;
+    if (!kind) throw new Error("Backupen indeholder en ukendt operativ filtype.");
+    const storageName = safeStorageName(file.storageName);
+    const key = `${kind}:${storageName}`;
+    if (actual.has(key)) throw new Error(`Backupen indeholder filen ${storageName} flere gange.`);
+    actual.add(key);
+    if (!expected.has(key)) throw new Error(`Backupen indeholder en uventet operativ fil: ${storageName}`);
+    const expectedSize = expected.get(key);
+    if (Number.isFinite(expectedSize) && expectedSize >= 0 && expectedSize !== file.sizeBytes) {
+      throw new Error(`Backupfilens størrelse stemmer ikke med databasen for ${storageName}.`);
+    }
+  }
+
+  for (const key of expected.keys()) {
+    if (!actual.has(key)) throw new Error(`Backupen mangler den operative fil ${key.split(":").slice(1).join(":")}.`);
+  }
 }
 
 async function insertJsonRows(tx, config, rows) {
