@@ -5,6 +5,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 export const DEFAULT_ALARM_DATA_RETENTION_DAYS = 90;
 export const DEFAULT_BACKUP_MAX_AGE_DAYS = 90;
+export const DEFAULT_LOGIN_ATTEMPT_RETENTION_DAYS = 90;
+export const DEFAULT_NOTIFICATION_RETENTION_DAYS = 180;
+export const DEFAULT_AUDIT_LOG_RETENTION_DAYS = 365;
+export const DEFAULT_OPERATIONAL_RECENT_RETENTION_DAYS = 30;
 
 export function configuredRetentionDays(name, fallback, env = process.env) {
   const raw = env[name];
@@ -38,6 +42,11 @@ export async function runDataRetention(prisma, now = new Date(), env = process.e
       alarmsDeleted: 0,
       alarmNotificationsDeleted: 0,
       passwordResetTokensDeleted: 0,
+      expiredSessionsDeleted: 0,
+      loginAttemptsDeleted: 0,
+      notificationsDeleted: 0,
+      auditLogsDeleted: 0,
+      operationalRecentDeleted: 0,
       backupsDeleted: 0,
       backupErrors: []
     };
@@ -53,9 +62,33 @@ export async function runDataRetention(prisma, now = new Date(), env = process.e
     DEFAULT_BACKUP_MAX_AGE_DAYS,
     env
   );
+  const loginAttemptDays = configuredRetentionDays(
+    "LOGIN_ATTEMPT_RETENTION_DAYS",
+    DEFAULT_LOGIN_ATTEMPT_RETENTION_DAYS,
+    env
+  );
+  const notificationDays = configuredRetentionDays(
+    "NOTIFICATION_RETENTION_DAYS",
+    DEFAULT_NOTIFICATION_RETENTION_DAYS,
+    env
+  );
+  const auditLogDays = configuredRetentionDays(
+    "AUDIT_LOG_RETENTION_DAYS",
+    DEFAULT_AUDIT_LOG_RETENTION_DAYS,
+    env
+  );
+  const operationalRecentDays = configuredRetentionDays(
+    "OPERATIONAL_RECENT_RETENTION_DAYS",
+    DEFAULT_OPERATIONAL_RECENT_RETENTION_DAYS,
+    env
+  );
 
   const alarmCutoff = retentionCutoff(now, alarmDays);
   const backupCutoff = retentionCutoff(now, backupDays);
+  const loginAttemptCutoff = retentionCutoff(now, loginAttemptDays);
+  const notificationCutoff = retentionCutoff(now, notificationDays);
+  const auditLogCutoff = retentionCutoff(now, auditLogDays);
+  const operationalRecentCutoff = retentionCutoff(now, operationalRecentDays);
 
   const alarmResult = alarmCutoff
     ? await prisma.$transaction(async (tx) => {
@@ -79,6 +112,26 @@ export async function runDataRetention(prisma, now = new Date(), env = process.e
   const resetTokens = await prisma.passwordResetToken.deleteMany({
     where: { expiresAt: { lt: now } }
   });
+  const expiredSessions = await prisma.session.deleteMany({
+    where: { expiresAt: { lt: now } }
+  });
+  const loginAttempts = loginAttemptCutoff
+    ? await prisma.loginAttempt.deleteMany({ where: { createdAt: { lt: loginAttemptCutoff } } })
+    : { count: 0 };
+  const notifications = notificationCutoff
+    ? await prisma.notification.deleteMany({ where: { createdAt: { lt: notificationCutoff } } })
+    : { count: 0 };
+  const auditLogs = auditLogCutoff
+    ? await prisma.auditLog.deleteMany({ where: { createdAt: { lt: auditLogCutoff } } })
+    : { count: 0 };
+  const operationalRecentDeleted = operationalRecentCutoff
+    ? Number(
+        await prisma.$executeRaw`
+          DELETE FROM operational_recent
+          WHERE last_viewed_at < ${operationalRecentCutoff}
+        `
+      )
+    : 0;
 
   const backupResult = backupCutoff
     ? await deleteExpiredBackups(prisma, backupCutoff)
@@ -88,8 +141,17 @@ export async function runDataRetention(prisma, now = new Date(), env = process.e
     disabled: false,
     alarmRetentionDays: alarmDays,
     backupRetentionDays: backupDays,
+    loginAttemptRetentionDays: loginAttemptDays,
+    notificationRetentionDays: notificationDays,
+    auditLogRetentionDays: auditLogDays,
+    operationalRecentRetentionDays: operationalRecentDays,
     ...alarmResult,
     passwordResetTokensDeleted: resetTokens.count,
+    expiredSessionsDeleted: expiredSessions.count,
+    loginAttemptsDeleted: loginAttempts.count,
+    notificationsDeleted: notifications.count,
+    auditLogsDeleted: auditLogs.count,
+    operationalRecentDeleted,
     ...backupResult
   };
 
@@ -97,6 +159,11 @@ export async function runDataRetention(prisma, now = new Date(), env = process.e
     result.alarmsDeleted > 0 ||
     result.alarmNotificationsDeleted > 0 ||
     result.passwordResetTokensDeleted > 0 ||
+    result.expiredSessionsDeleted > 0 ||
+    result.loginAttemptsDeleted > 0 ||
+    result.notificationsDeleted > 0 ||
+    result.auditLogsDeleted > 0 ||
+    result.operationalRecentDeleted > 0 ||
     result.backupsDeleted > 0
   ) {
     await prisma.auditLog
@@ -106,8 +173,10 @@ export async function runDataRetention(prisma, now = new Date(), env = process.e
           description:
             `Dataretention gennemført: ${result.alarmsDeleted} alarmer, ` +
             `${result.alarmNotificationsDeleted} alarmnotifikationer, ` +
-            `${result.passwordResetTokensDeleted} udløbne nulstillingstokens og ` +
-            `${result.backupsDeleted} backups slettet.`
+            `${result.passwordResetTokensDeleted} nulstillingstokens, ` +
+            `${result.expiredSessionsDeleted} sessioner, ${result.loginAttemptsDeleted} loginforsøg, ` +
+            `${result.notificationsDeleted} notifikationer, ${result.auditLogsDeleted} auditlogs, ` +
+            `${result.operationalRecentDeleted} senest-set poster og ${result.backupsDeleted} backups slettet.`
         }
       })
       .catch(() => null);
