@@ -2,7 +2,6 @@
 
 import { randomUUID } from "node:crypto";
 import { unlink } from "node:fs/promises";
-import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { UserRole } from "@prisma/client";
@@ -19,6 +18,7 @@ import {
   OPERATIONAL_DOCUMENT_DIRECTORY,
   extractYouTubeId
 } from "./operativ-portal";
+import { operationalStoredFilePath } from "./operativ-storage";
 import { prisma } from "./prisma";
 
 const titleSchema = z.string().trim().min(1).max(180);
@@ -185,7 +185,11 @@ export async function deleteManagedOperationalDocumentAction(formData: FormData)
   if (!document) return;
 
   await prisma.$executeRaw`DELETE FROM operational_document WHERE id = ${parsed.data}`;
-  await unlink(path.join(OPERATIONAL_DOCUMENT_DIRECTORY, document.storageName)).catch(() => undefined);
+  try {
+    await unlink(operationalStoredFilePath(OPERATIONAL_DOCUMENT_DIRECTORY, document.storageName));
+  } catch {
+    // Databaseposten er slettet. En manglende/ugyldig filreference må ikke kunne slette uden for storage.
+  }
   await audit("OPERATIONAL_DOCUMENT_DELETED", `Dokumentet ${document.title} blev slettet`);
   revalidateTargets({
     vehicleId: document.vehicleId,
