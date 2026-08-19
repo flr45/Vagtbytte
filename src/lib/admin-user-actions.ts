@@ -19,6 +19,9 @@ export type AdminUserActionState = {
   message?: string;
 };
 
+const ANONYMIZED_NAME = "Slettet bruger";
+const ANONYMIZED_EMPLOYEE_NUMBER = "ANONYMISERET";
+
 const optionalEmailSchema = z
   .string()
   .trim()
@@ -285,7 +288,7 @@ export async function deleteManagedUserAction(
       where: { loginIdentifier: "__deleted_user__" },
       update: { isActive: false },
       create: {
-        name: "Slettet bruger",
+        name: ANONYMIZED_NAME,
         role: UserRole.BRANDFIGHTER,
         employeeNumber: null,
         loginIdentifier: "__deleted_user__",
@@ -300,25 +303,100 @@ export async function deleteManagedUserAction(
       }
     });
 
+    const transfers = await tx.shiftTransfer.findMany({
+      where: { OR: [{ giverUserId: target.id }, { receiverUserId: target.id }] },
+      select: { id: true }
+    });
+    const returns = await tx.returnRequest.findMany({
+      where: {
+        OR: [
+          { createdByUserId: target.id },
+          { originalUserId: target.id },
+          { currentHolderUserId: target.id }
+        ]
+      },
+      select: { id: true }
+    });
+
+    const transferIds = transfers.map((entry) => entry.id);
+    const returnIds = returns.map((entry) => entry.id);
+    if (transferIds.length > 0 || returnIds.length > 0) {
+      await tx.notification.deleteMany({
+        where: {
+          OR: [
+            ...(transferIds.length > 0 ? [{ shiftTransferId: { in: transferIds } }] : []),
+            ...(returnIds.length > 0 ? [{ returnRequestId: { in: returnIds } }] : [])
+          ]
+        }
+      });
+    }
+
     await tx.shiftTransfer.updateMany({
       where: { giverUserId: target.id },
-      data: { giverUserId: placeholder.id }
+      data: {
+        giverUserId: placeholder.id,
+        giverNameSnapshot: ANONYMIZED_NAME,
+        giverEmployeeNumberSnapshot: ANONYMIZED_EMPLOYEE_NUMBER
+      }
     });
     await tx.shiftTransfer.updateMany({
       where: { receiverUserId: target.id },
-      data: { receiverUserId: placeholder.id }
+      data: {
+        receiverUserId: placeholder.id,
+        receiverNameSnapshot: ANONYMIZED_NAME,
+        receiverEmployeeNumberSnapshot: ANONYMIZED_EMPLOYEE_NUMBER
+      }
     });
+    await tx.shiftTransfer.updateMany({
+      where: { activationConfirmedByUserId: target.id },
+      data: { activationConfirmedByUserId: null }
+    });
+    await tx.shiftTransfer.updateMany({
+      where: { returnExecutionConfirmedByUserId: target.id },
+      data: { returnExecutionConfirmedByUserId: null }
+    });
+    await tx.shiftTransfer.updateMany({
+      where: { cancelledByUserId: target.id },
+      data: { cancelledByUserId: null }
+    });
+
     await tx.returnRequest.updateMany({
       where: { createdByUserId: target.id },
       data: { createdByUserId: placeholder.id }
     });
     await tx.returnRequest.updateMany({
       where: { originalUserId: target.id },
-      data: { originalUserId: placeholder.id }
+      data: {
+        originalUserId: placeholder.id,
+        originalNameSnapshot: ANONYMIZED_NAME,
+        originalEmployeeNumberSnapshot: ANONYMIZED_EMPLOYEE_NUMBER
+      }
     });
     await tx.returnRequest.updateMany({
       where: { currentHolderUserId: target.id },
-      data: { currentHolderUserId: placeholder.id }
+      data: {
+        currentHolderUserId: placeholder.id,
+        currentHolderNameSnapshot: ANONYMIZED_NAME,
+        currentHolderEmployeeNumberSnapshot: ANONYMIZED_EMPLOYEE_NUMBER
+      }
+    });
+    await tx.returnRequest.updateMany({
+      where: { returnExecutionConfirmedByUserId: target.id },
+      data: { returnExecutionConfirmedByUserId: null }
+    });
+
+    await tx.auditLog.updateMany({
+      where: { OR: [{ actorUserId: target.id }, { targetUserId: target.id }] },
+      data: { description: "Historisk hændelse vedrørende anonymiseret bruger" }
+    });
+    await tx.loginAttempt.deleteMany({
+      where: {
+        identifier: {
+          in: Array.from(
+            new Set([target.loginIdentifier, target.employeeNumber].filter((value): value is string => Boolean(value)))
+          )
+        }
+      }
     });
 
     await tx.user.delete({ where: { id: target.id } });
@@ -327,7 +405,7 @@ export async function deleteManagedUserAction(
         actorUserId: admin.id,
         actorRole: admin.role,
         action: "USER_DELETED",
-        description: `${target.name} (${target.employeeNumber ?? "uden medarbejdernummer"}) blev slettet`
+        description: "En bruger blev slettet og personhenførbare snapshots blev anonymiseret"
       }
     });
   });
@@ -335,5 +413,5 @@ export async function deleteManagedUserAction(
   revalidatePath("/admin");
   revalidatePath("/admin/brugere");
   revalidatePath("/vagtcentral");
-  return { ok: true, message: "Brugeren er slettet." };
+  return { ok: true, message: "Brugeren er slettet og historiske personhenførbare felter er anonymiseret." };
 }
