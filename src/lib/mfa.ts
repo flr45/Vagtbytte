@@ -196,6 +196,7 @@ function base32Encode(input: Buffer) {
     while (bits >= 5) {
       output += BASE32_ALPHABET[(value >>> (bits - 5)) & 31];
       bits -= 5;
+      value &= bits === 0 ? 0 : (1 << bits) - 1;
     }
   }
 
@@ -220,6 +221,7 @@ function base32Decode(input: string) {
     if (bits >= 8) {
       output.push((value >>> (bits - 8)) & 0xff);
       bits -= 8;
+      value &= bits === 0 ? 0 : (1 << bits) - 1;
     }
   }
 
