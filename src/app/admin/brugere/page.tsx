@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Prisma, UserRole } from "@prisma/client";
 import { TopBar } from "@/components/TopBar";
 import { formatDateTime } from "@/components/TransferSummary";
+import { resetUserMfaAction } from "@/lib/admin-mfa-actions";
 import { requireRole } from "@/lib/auth";
 import { listOperationalPortalGrantUserIds } from "@/lib/operativ-portal-access";
 import { prisma } from "@/lib/prisma";
@@ -20,7 +21,7 @@ export default async function UserOverviewPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  await requireRole(UserRole.ADMIN);
+  const currentAdmin = await requireRole(UserRole.ADMIN);
   const params = await searchParams;
   const query = one(params.q)?.trim() ?? "";
   const station = one(params.station)?.trim() ?? "";
@@ -38,13 +39,15 @@ export default async function UserOverviewPage({
         ? { isActive: false }
         : status === "admin"
           ? { hasAdminAccess: true }
-          : status === "no-email"
-            ? { email: null }
-            : status === "no-push"
-              ? { pushSubscriptions: { none: { revokedAt: null } } }
-              : status === "never-login"
-                ? { lastLoginAt: null }
-                : {}),
+          : status === "mfa"
+            ? { mfaEnabled: true }
+            : status === "no-email"
+              ? { email: null }
+              : status === "no-push"
+                ? { pushSubscriptions: { none: { revokedAt: null } } }
+                : status === "never-login"
+                  ? { lastLoginAt: null }
+                  : {}),
     ...(query
       ? {
           OR: [
@@ -69,6 +72,7 @@ export default async function UserOverviewPage({
         stationCode: true,
         isActive: true,
         hasAdminAccess: true,
+        mfaEnabled: true,
         receiveAlarmFollowUps: true,
         lastLoginAt: true,
         createdAt: true,
@@ -87,6 +91,7 @@ export default async function UserOverviewPage({
         email: true,
         isActive: true,
         hasAdminAccess: true,
+        mfaEnabled: true,
         lastLoginAt: true,
         _count: {
           select: {
@@ -113,6 +118,7 @@ export default async function UserOverviewPage({
   const activeCount = allUsers.filter((user) => user.isActive).length;
   const adminCount = allUsers.filter((user) => user.hasAdminAccess).length;
   const operationalCount = allUsers.filter((user) => user.hasOperationalPortalAccess).length;
+  const mfaCount = allUsers.filter((user) => user.mfaEnabled).length;
   const missingEmailCount = allUsers.filter((user) => !user.email).length;
   const missingPushCount = allUsers.filter((user) => user._count.pushSubscriptions === 0).length;
   const neverLoggedInCount = allUsers.filter((user) => !user.lastLoginAt).length;
@@ -128,13 +134,14 @@ export default async function UserOverviewPage({
         <section className="rounded-lg border border-brand-line bg-white p-5 shadow-sm">
           <h1 className="text-3xl font-black">Brugeroverblik</h1>
           <p className="mt-2 text-sm font-semibold text-zinc-600">
-            Se stationstilknytning, mail, sending 2+, administratoradgang, Operativ Portal, push-enheder og seneste login.
+            Se stationstilknytning, mail, MFA, administratoradgang, Operativ Portal, push-enheder og seneste login.
           </p>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-7">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-8">
             <Stat label="Brugere i alt" value={allUsers.length} />
             <Stat label="Aktive" value={activeCount} />
             <Stat label="Administrator" value={adminCount} />
             <Stat label="Operativ Portal" value={operationalCount} />
+            <Stat label="MFA aktiv" value={mfaCount} />
             <Stat label="Mangler mail" value={missingEmailCount} warning={missingEmailCount > 0} />
             <Stat label="Mangler push" value={missingPushCount} warning={missingPushCount > 0} />
             <Stat label="Aldrig logget ind" value={neverLoggedInCount} warning={neverLoggedInCount > 0} />
@@ -188,6 +195,7 @@ export default async function UserOverviewPage({
                 <option value="inactive">Deaktiverede</option>
                 <option value="admin">Administratoradgang</option>
                 <option value="operativ">Operativ Portal</option>
+                <option value="mfa">MFA aktiv</option>
                 <option value="no-email">Mangler mail</option>
                 <option value="no-push">Mangler push</option>
                 <option value="never-login">Aldrig logget ind</option>
@@ -206,10 +214,10 @@ export default async function UserOverviewPage({
             <p className="p-5 text-sm font-semibold text-zinc-600">Ingen brugere matcher filtrene.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1200px] border-collapse text-left text-sm">
+              <table className="w-full min-w-[1340px] border-collapse text-left text-sm">
                 <thead className="bg-zinc-50 text-xs uppercase text-zinc-600">
                   <tr>
-                    <th className="px-4 py-3">Navn</th><th className="px-4 py-3">Medarbejdernummer</th><th className="px-4 py-3">Mail</th><th className="px-4 py-3">Station</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Sending 2+</th><th className="px-4 py-3">Admin</th><th className="px-4 py-3">Operativ</th><th className="px-4 py-3">Push-enheder</th><th className="px-4 py-3">Seneste login</th>
+                    <th className="px-4 py-3">Navn</th><th className="px-4 py-3">Medarbejdernummer</th><th className="px-4 py-3">Mail</th><th className="px-4 py-3">Station</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Sending 2+</th><th className="px-4 py-3">Admin</th><th className="px-4 py-3">Operativ</th><th className="px-4 py-3">MFA</th><th className="px-4 py-3">Push-enheder</th><th className="px-4 py-3">Seneste login</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -223,6 +231,23 @@ export default async function UserOverviewPage({
                       <td className="px-4 py-3">{user.receiveAlarmFollowUps ? "Ja" : "Nej"}</td>
                       <td className="px-4 py-3">{user.hasAdminAccess ? "Ja" : "Nej"}</td>
                       <td className="px-4 py-3"><span className={user.hasOperationalPortalAccess ? "rounded-full bg-slate-900 px-2 py-1 text-xs font-black text-white" : "text-zinc-500"}>{user.hasOperationalPortalAccess ? "Adgang" : "Nej"}</span></td>
+                      <td className="px-4 py-3">
+                        {user.mfaEnabled ? (
+                          <div className="grid gap-2">
+                            <span className="font-bold text-emerald-700">Aktiv</span>
+                            {user.id !== currentAdmin.id ? (
+                              <form action={resetUserMfaAction}>
+                                <input name="userId" type="hidden" value={user.id} />
+                                <button className="focus-ring rounded-md border border-red-200 px-2 py-1 text-xs font-bold text-red-700 hover:bg-red-50" type="submit">
+                                  Nulstil MFA
+                                </button>
+                              </form>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="font-semibold text-zinc-500">Ikke opsat</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3"><span className={user._count.pushSubscriptions > 0 ? "font-bold text-emerald-700" : "font-bold text-red-700"}>{user._count.pushSubscriptions}</span></td>
                       <td className="px-4 py-3">{user.lastLoginAt ? formatDateTime(user.lastLoginAt) : "Aldrig"}</td>
                     </tr>

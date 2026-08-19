@@ -274,6 +274,10 @@ export async function restoreBackup(prisma, filePath, input = {}) {
   const tables = parsed.tables;
   await prisma.$transaction(
     async (tx) => {
+      // Slettejournalens trigger må ikke opfatte den kontrollerede tømning før restore
+      // som egentlige registreredes sletteanmodninger. Indstillingen gælder kun denne transaktion.
+      await tx.$executeRawUnsafe("SELECT set_config('sbr.restore_mode', '1', true)");
+
       await tx.pushDelivery.deleteMany();
       await tx.notification.deleteMany();
       await tx.pushSubscription.deleteMany();

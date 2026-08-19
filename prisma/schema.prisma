@@ -117,10 +117,16 @@ model User {
   alarmStations          String[]             @default([])
   receiveAlarmFollowUps  Boolean              @default(false)
   hasAdminAccess         Boolean              @default(false)
+  mfaEnabled             Boolean              @default(false)
+  mfaSecretEncrypted     String?
+  mfaRecoveryCodes       String[]             @default([])
+  mfaEnrolledAt          DateTime?
+  mfaLastUsedStep        Int?
   createdAt              DateTime             @default(now())
   updatedAt              DateTime             @updatedAt
   lastLoginAt            DateTime?
   sessions               Session[]
+  mfaChallenges          MfaChallenge[]
   passwordResetTokens    PasswordResetToken[]
   auditLogs              AuditLog[]           @relation("ActorAuditLogs")
   targetedAuditLogs      AuditLog[]           @relation("TargetAuditLogs")
@@ -137,6 +143,7 @@ model User {
   @@index([isActive])
   @@index([stationCode])
   @@index([hasAdminAccess])
+  @@index([mfaEnabled])
 }
 
 model Availability {
@@ -445,6 +452,30 @@ model Session {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+model MfaChallenge {
+  id                          String   @id @default(cuid())
+  userId                      String
+  tokenHash                   String   @unique
+  expiresAt                   DateTime
+  attemptCount                Int      @default(0)
+  setupSecretEncrypted        String?
+  setupRecoveryCodesEncrypted String?
+  createdAt                   DateTime @default(now())
+  user                        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model DataErasureTombstone {
+  id              String   @id
+  userFingerprint String   @unique
+  createdAt       DateTime @default(now())
+  lastAppliedAt   DateTime?
+
+  @@index([createdAt])
 }
 
 model AuditLog {

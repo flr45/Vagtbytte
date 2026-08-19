@@ -3,11 +3,13 @@ import { redirect } from "next/navigation";
 import { UserRole } from "@prisma/client";
 import { prisma } from "./prisma";
 import {
-  authenticateLogin,
   hashSessionToken,
+  newSessionToken,
   resolveCurrentUserFromSession,
   sessionCookieOptions,
+  sessionExpiry,
   shouldDeleteCookieOnLogout,
+  verifyLoginCredentials,
   type AuthRepository
 } from "./auth-core";
 import {
@@ -15,6 +17,7 @@ import {
   canManageOperationalPortal,
   hasOperationalPortalGrant
 } from "./operativ-portal-access";
+import { isMfaRequiredForUser } from "./mfa";
 import { roleHome } from "./roles";
 
 export const SESSION_COOKIE_NAME = "vagtoverdragelse_session";
@@ -70,20 +73,55 @@ export async function getIpAddress() {
   return h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? h.get("x-real-ip") ?? undefined;
 }
 
+// Legacy password-only login holdes kun for bagudkompatibilitet med ældre server-actions.
+// Konti, som er omfattet af MFA-politikken, må aldrig få en session gennem denne vej.
 export async function signIn(identifier: string, password: string) {
-  const result = await authenticateLogin({
+  const credentials = await verifyLoginCredentials({
     identifier,
     password,
     ipAddress: await getIpAddress(),
     repo: prismaAuthRepository
   });
 
-  if (result.ok) {
-    const cookieStore = await cookies();
-    cookieStore.set(SESSION_COOKIE_NAME, result.rawToken, sessionCookieOptions(result.expiresAt));
+  if (!credentials.ok) {
+    return credentials;
   }
 
-  return result;
+  if (isMfaRequiredForUser(credentials.user)) {
+    await prismaAuthRepository.audit({
+      actorUserId: credentials.user.id,
+      actorRole: credentials.user.role,
+      action: "LEGACY_LOGIN_BLOCKED_MFA_REQUIRED",
+      targetUserId: credentials.user.id,
+      description: "Password-only login blev afvist, fordi kontoen kræver MFA"
+    });
+    return {
+      ok: false as const,
+      reason: "INVALID" as const,
+      message: "Denne konto kræver MFA. Log ind via den normale login-side."
+    };
+  }
+
+  const rawToken = newSessionToken();
+  const expiresAt = sessionExpiry();
+  await prismaAuthRepository.createSession({
+    userId: credentials.user.id,
+    tokenHash: hashSessionToken(rawToken),
+    expiresAt
+  });
+  await prismaAuthRepository.markLogin(credentials.user.id);
+  await prismaAuthRepository.audit({
+    actorUserId: credentials.user.id,
+    actorRole: credentials.user.role,
+    action: "LOGIN_SUCCESS",
+    targetUserId: credentials.user.id,
+    description: "Bruger loggede ind"
+  });
+
+  const cookieStore = await cookies();
+  cookieStore.set(SESSION_COOKIE_NAME, rawToken, sessionCookieOptions(expiresAt));
+
+  return { ok: true as const, user: credentials.user, rawToken, expiresAt };
 }
 
 export async function getCurrentUser() {
