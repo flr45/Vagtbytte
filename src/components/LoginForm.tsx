@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
-import { loginAction } from "@/lib/actions";
+import { mfaLoginAction } from "@/lib/mfa-actions";
 import { ActionMessage } from "./ActionMessage";
 import { SubmitButton } from "./SubmitButton";
 
 export function LoginForm() {
-  const [state, action] = useActionState(loginAction, {});
+  const [state, action] = useActionState(mfaLoginAction, {});
 
   return (
     <form action={action} className="grid gap-5">
