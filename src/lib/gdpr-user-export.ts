@@ -1,4 +1,27 @@
-export type GdprExportPrisma = any;
+import type { Prisma, PrismaClient, ShiftTransfer } from "@prisma/client";
+
+export type GdprExportPrisma = PrismaClient;
+
+type ReturnRequestWithTransfer = Prisma.ReturnRequestGetPayload<{
+  include: { transfer: { select: { transferNumber: true } } };
+}>;
+
+type OperationalAccessRow = {
+  createdAt: Date;
+};
+
+type OperationalFavoriteRow = {
+  targetType: string;
+  targetId: string;
+  createdAt: Date;
+};
+
+type OperationalRecentRow = {
+  targetType: string;
+  targetId: string;
+  viewCount: number;
+  lastViewedAt: Date;
+};
 
 function safeFileComponent(value: string) {
   const normalized = value.normalize("NFKD").replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
@@ -19,7 +42,7 @@ function endpointOrigin(endpoint: string | null | undefined) {
   }
 }
 
-function exportTransfer(record: any, userId: string) {
+function exportTransfer(record: ShiftTransfer, userId: string) {
   const isGiver = record.giverUserId === userId;
   const isReceiver = record.receiverUserId === userId;
   const subjectSnapshot = isGiver
@@ -57,7 +80,7 @@ function exportTransfer(record: any, userId: string) {
   };
 }
 
-function exportReturnRequest(record: any, userId: string) {
+function exportReturnRequest(record: ReturnRequestWithTransfer, userId: string) {
   const roles = [
     record.createdByUserId === userId ? "CREATOR" : null,
     record.originalUserId === userId ? "ORIGINAL_USER" : null,
@@ -71,7 +94,7 @@ function exportReturnRequest(record: any, userId: string) {
 
   return {
     returnNumber: record.returnNumber,
-    transferNumber: record.transfer?.transferNumber ?? null,
+    transferNumber: record.transfer.transferNumber,
     subjectRoles: roles,
     subjectSnapshot,
     requestedReturnAt: iso(record.requestedReturnAt),
@@ -122,7 +145,9 @@ export async function buildGdprUserExport(
 
   if (!user) return null;
 
-  const identifiers = [user.loginIdentifier, user.employeeNumber].filter(Boolean);
+  const identifiers = [user.loginIdentifier, user.employeeNumber].filter(
+    (value): value is string => Boolean(value)
+  );
   const [
     sessions,
     mfaChallenges,
@@ -241,15 +266,15 @@ export async function buildGdprUserExport(
       orderBy: { createdAt: "desc" },
       select: { actorRole: true, action: true, description: true, createdAt: true, actorUserId: true, targetUserId: true }
     }),
-    prisma.$queryRawUnsafe(
+    prisma.$queryRawUnsafe<OperationalAccessRow[]>(
       'SELECT created_at AS "createdAt" FROM operational_portal_user_access WHERE user_id = $1 ORDER BY created_at DESC',
       userId
     ),
-    prisma.$queryRawUnsafe(
+    prisma.$queryRawUnsafe<OperationalFavoriteRow[]>(
       'SELECT target_type AS "targetType", target_id AS "targetId", created_at AS "createdAt" FROM operational_favorite WHERE user_id = $1 ORDER BY created_at DESC',
       userId
     ),
-    prisma.$queryRawUnsafe(
+    prisma.$queryRawUnsafe<OperationalRecentRow[]>(
       'SELECT target_type AS "targetType", target_id AS "targetId", view_count AS "viewCount", last_viewed_at AS "lastViewedAt" FROM operational_recent WHERE user_id = $1 ORDER BY last_viewed_at DESC',
       userId
     )
@@ -279,24 +304,24 @@ export async function buildGdprUserExport(
       hasOperationalPortalAccess: operationalAccess.length > 0
     },
     securityHistory: {
-      sessions: sessions.map((entry: any) => ({
+      sessions: sessions.map((entry) => ({
         createdAt: iso(entry.createdAt),
         lastSeenAt: iso(entry.lastSeenAt),
         expiresAt: iso(entry.expiresAt)
       })),
-      mfaChallenges: mfaChallenges.map((entry: any) => ({
+      mfaChallenges: mfaChallenges.map((entry) => ({
         createdAt: iso(entry.createdAt),
         expiresAt: iso(entry.expiresAt),
         attemptCount: entry.attemptCount
       })),
-      passwordResetRequests: resetTokens.map((entry: any) => ({
+      passwordResetRequests: resetTokens.map((entry) => ({
         createdAt: iso(entry.createdAt),
         expiresAt: iso(entry.expiresAt),
         usedAt: iso(entry.usedAt),
         requestedIp: entry.requestedIp
       })),
-      loginAttempts: loginAttempts.map((entry: any) => ({ ...entry, createdAt: iso(entry.createdAt) })),
-      pushDevices: pushSubscriptions.map((entry: any) => ({
+      loginAttempts: loginAttempts.map((entry) => ({ ...entry, createdAt: iso(entry.createdAt) })),
+      pushDevices: pushSubscriptions.map((entry) => ({
         endpointOrigin: endpointOrigin(entry.endpoint),
         userAgent: entry.userAgent,
         deviceName: entry.deviceName,
@@ -304,7 +329,7 @@ export async function buildGdprUserExport(
         updatedAt: iso(entry.updatedAt),
         lastUsedAt: iso(entry.lastUsedAt),
         revokedAt: iso(entry.revokedAt),
-        deliveries: entry.deliveries.map((delivery: any) => ({
+        deliveries: entry.deliveries.map((delivery) => ({
           status: delivery.status,
           attemptCount: delivery.attemptCount,
           sentAt: iso(delivery.sentAt),
@@ -315,7 +340,7 @@ export async function buildGdprUserExport(
       }))
     },
     workAndShiftData: {
-      availabilities: availabilities.map((entry: any) => ({
+      availabilities: availabilities.map((entry) => ({
         ...entry,
         availableFrom: iso(entry.availableFrom),
         availableUntil: iso(entry.availableUntil),
@@ -328,11 +353,11 @@ export async function buildGdprUserExport(
         createdAt: iso(entry.createdAt),
         updatedAt: iso(entry.updatedAt)
       })),
-      shiftTransfers: transfers.map((entry: any) => exportTransfer(entry, userId)),
-      returnRequests: returnRequests.map((entry: any) => exportReturnRequest(entry, userId))
+      shiftTransfers: transfers.map((entry) => exportTransfer(entry, userId)),
+      returnRequests: returnRequests.map((entry) => exportReturnRequest(entry, userId))
     },
     communications: {
-      notifications: notifications.map((entry: any) => ({
+      notifications: notifications.map((entry) => ({
         ...entry,
         scheduledFor: iso(entry.scheduledFor),
         publishedAt: iso(entry.publishedAt),
@@ -345,11 +370,11 @@ export async function buildGdprUserExport(
       }))
     },
     operationalPortal: {
-      accessGrantedAt: operationalAccess.map((entry: any) => iso(entry.createdAt)),
-      favorites: operationalFavorites.map((entry: any) => ({ ...entry, createdAt: iso(entry.createdAt) })),
-      recent: operationalRecent.map((entry: any) => ({ ...entry, lastViewedAt: iso(entry.lastViewedAt) }))
+      accessGrantedAt: operationalAccess.map((entry) => iso(entry.createdAt)),
+      favorites: operationalFavorites.map((entry) => ({ ...entry, createdAt: iso(entry.createdAt) })),
+      recent: operationalRecent.map((entry) => ({ ...entry, lastViewedAt: iso(entry.lastViewedAt) }))
     },
-    auditHistory: audits.map((entry: any) => ({
+    auditHistory: audits.map((entry) => ({
       subjectWasActor: entry.actorUserId === userId,
       subjectWasTarget: entry.targetUserId === userId,
       actorRole: entry.actorRole,
