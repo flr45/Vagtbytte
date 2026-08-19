@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import {
-  ALLOWED_PRODUCTION_AUDIT_ADVISORIES,
+  ALLOWED_NEXT_POSTCSS_ADVISORIES,
+  ALLOWED_PRISMA_CLI_ADVISORY,
   blockingProductionAuditFindings
 } from "./security-audit-core.mjs";
 
@@ -30,5 +31,5 @@ if (blocking.length > 0) {
 const totals = report?.metadata?.vulnerabilities ?? {};
 console.log("SECURITY_AUDIT_OK", {
   productionVulnerabilities: totals,
-  documentedException: [...ALLOWED_PRODUCTION_AUDIT_ADVISORIES]
+  documentedExceptions: [ALLOWED_PRISMA_CLI_ADVISORY, ...ALLOWED_NEXT_POSTCSS_ADVISORIES]
 });
