@@ -15,6 +15,7 @@ export type AuthUser = {
   alarmStations: string[];
   hasAdminAccess: boolean;
   hasOperationalPortalAccess?: boolean;
+  mfaEnabled?: boolean;
 };
 
 export type AuthRepository = {
@@ -50,9 +51,19 @@ export type SessionRecord = {
   user: SessionUser;
 };
 
+export type LoginFailure = {
+  ok: false;
+  message: string;
+  reason: "RATE_LIMITED" | "INVALID" | "INACTIVE";
+};
+
+export type CredentialResult =
+  | { ok: true; user: AuthUser; identifier: string }
+  | LoginFailure;
+
 export type LoginResult =
   | { ok: true; user: AuthUser; rawToken: string; expiresAt: Date }
-  | { ok: false; message: string; reason: "RATE_LIMITED" | "INVALID" | "INACTIVE" };
+  | LoginFailure;
 
 export function hashSessionToken(token: string) {
   const secret = process.env.AUTH_SECRET;
@@ -115,12 +126,12 @@ export function shouldDeleteCookieOnLogout(rawToken: string | undefined | null) 
   return Boolean(rawToken);
 }
 
-export async function authenticateLogin(input: {
+export async function verifyLoginCredentials(input: {
   identifier: string;
   password: string;
   ipAddress?: string;
   repo: AuthRepository;
-}): Promise<LoginResult> {
+}): Promise<CredentialResult> {
   const identifier = normalizeLoginIdentifier(input.identifier);
   const recentFailures = await input.repo.countRecentFailures(identifier, input.ipAddress);
 
@@ -150,7 +161,7 @@ export async function authenticateLogin(input: {
     });
     await input.repo.audit({
       action: "LOGIN_FAILED",
-      description: `Mislykket loginforsøg for ${identifier}`
+      description: "Mislykket loginforsøg"
     });
     return { ok: false, reason: "INVALID", message: "Forkert login eller adgangskode." };
   }
@@ -172,22 +183,41 @@ export async function authenticateLogin(input: {
     return { ok: false, reason: "INACTIVE", message: "Brugeren er deaktiveret." };
   }
 
-  const rawToken = newSessionToken();
-  const expiresAt = sessionExpiry();
-  await input.repo.createSession({ userId: user.id, tokenHash: hashSessionToken(rawToken), expiresAt });
-  await input.repo.markLogin(user.id);
   await input.repo.recordAttempt({
     identifier,
     ipAddress: input.ipAddress,
     wasSuccessful: true
   });
+
+  return { ok: true, user, identifier };
+}
+
+export async function authenticateLogin(input: {
+  identifier: string;
+  password: string;
+  ipAddress?: string;
+  repo: AuthRepository;
+}): Promise<LoginResult> {
+  const credentials = await verifyLoginCredentials(input);
+  if (!credentials.ok) {
+    return credentials;
+  }
+
+  const rawToken = newSessionToken();
+  const expiresAt = sessionExpiry();
+  await input.repo.createSession({
+    userId: credentials.user.id,
+    tokenHash: hashSessionToken(rawToken),
+    expiresAt
+  });
+  await input.repo.markLogin(credentials.user.id);
   await input.repo.audit({
-    actorUserId: user.id,
-    actorRole: user.role,
+    actorUserId: credentials.user.id,
+    actorRole: credentials.user.role,
     action: "LOGIN_SUCCESS",
-    targetUserId: user.id,
+    targetUserId: credentials.user.id,
     description: "Bruger loggede ind"
   });
 
-  return { ok: true, user, rawToken, expiresAt };
+  return { ok: true, user: credentials.user, rawToken, expiresAt };
 }
