@@ -4,8 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  DEFAULT_OPERATIONAL_BACKUP_MAX_BYTES,
   OPERATIONAL_BACKUP_TABLE_NAMES,
   cleanupPreparedOperationalFiles,
+  collectOperationalFilesFromTables,
+  configuredOperationalBackupMaxBytes,
   normalizeOperationalTables,
   prepareOperationalFiles,
   pruneOperationalFiles,
@@ -17,10 +20,10 @@ afterEach(async () => {
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-async function tempEnv() {
+async function tempEnv(extra = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "sbr-operativ-backup-"));
   tempRoots.push(root);
-  return { OPERATIV_PORTAL_DATA_DIRECTORY: root };
+  return { OPERATIV_PORTAL_DATA_DIRECTORY: root, ...extra };
 }
 
 function descriptor(kind, storageName, data) {
@@ -34,6 +37,23 @@ function descriptor(kind, storageName, data) {
 }
 
 describe("Operativ Portal backupfiler", () => {
+  it("bruger 512 MB som sikker standardgrænse", () => {
+    expect(configuredOperationalBackupMaxBytes({})).toBe(DEFAULT_OPERATIONAL_BACKUP_MAX_BYTES);
+    expect(DEFAULT_OPERATIONAL_BACKUP_MAX_BYTES).toBe(512 * 1024 * 1024);
+  });
+
+  it("afviser et snapshot over RAM-grænsen før filerne læses", async () => {
+    const env = await tempEnv({ BACKUP_MAX_OPERATIONAL_BYTES: String(16 * 1024 * 1024) });
+    const tables = normalizeOperationalTables({
+      operationalImages: [
+        { storage_name: "a.jpg", size_bytes: 10 * 1024 * 1024 },
+        { storage_name: "b.jpg", size_bytes: 10 * 1024 * 1024 }
+      ]
+    });
+
+    await expect(collectOperationalFilesFromTables(tables, env)).rejects.toThrow(/overskrider backupgrænsen/);
+  });
+
   it("forbereder manglende filer med korrekt indhold", async () => {
     const env = await tempEnv();
     const data = Buffer.from("billede");
