@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+export const DEFAULT_OPERATIONAL_BACKUP_MAX_BYTES = 512 * 1024 * 1024;
+
 export const OPERATIONAL_BACKUP_TABLE_NAMES = [
   "operationalVehicles",
   "operationalPlaces",
@@ -42,6 +44,16 @@ function storageDirectory(kind, env = process.env) {
   return path.join(storageRoot(env), kind === "image" ? "images" : "documents");
 }
 
+export function configuredOperationalBackupMaxBytes(env = process.env) {
+  const raw = String(env.BACKUP_MAX_OPERATIONAL_BYTES ?? "").trim();
+  if (!raw) return DEFAULT_OPERATIONAL_BACKUP_MAX_BYTES;
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed) || parsed < 16 * 1024 * 1024 || parsed > 8 * 1024 * 1024 * 1024) {
+    return DEFAULT_OPERATIONAL_BACKUP_MAX_BYTES;
+  }
+  return parsed;
+}
+
 function safeStorageName(value) {
   const name = String(value ?? "").trim();
   if (!name || name === "." || name === ".." || name.includes("\0") || name !== path.basename(name) || path.isAbsolute(name)) {
@@ -71,38 +83,68 @@ async function queryTable(prisma, config) {
   return rows.map((entry) => entry.row);
 }
 
-export async function collectOperationalBackup(prisma, env = process.env) {
+export async function collectOperationalTableData(prisma) {
   const entries = await Promise.all(
     OPERATIONAL_BACKUP_TABLE_NAMES.map(async (name) => [name, await queryTable(prisma, TABLE_CONFIG[name])])
   );
-  const tables = Object.fromEntries(entries);
-  const files = [];
-  const seen = new Set();
+  return Object.fromEntries(entries);
+}
 
-  for (const { kind, rows } of [
-    { kind: "image", rows: tables.operationalImages },
-    { kind: "document", rows: tables.operationalDocuments }
-  ]) {
-    for (const row of rows) {
-      const storageName = safeStorageName(row.storage_name);
-      const key = `${kind}:${storageName}`;
-      if (seen.has(key)) throw new Error(`Dubleret operativ storage-reference: ${storageName}`);
-      seen.add(key);
-      const filePath = storedPath(kind, storageName, env);
-      let data;
-      try {
-        data = await readFile(filePath);
-      } catch {
-        throw new Error(`Operativ backup kan ikke oprettes, fordi filen ${storageName} mangler.`);
-      }
-      const expectedSize = Number(row.size_bytes);
-      if (Number.isFinite(expectedSize) && expectedSize >= 0 && expectedSize !== data.length) {
-        throw new Error(`Operativ filstørrelse stemmer ikke for ${storageName}.`);
-      }
-      files.push({ kind, storageName, data });
+export async function collectOperationalFilesFromTables(tables, env = process.env) {
+  const fileRows = [
+    ...tables.operationalImages.map((row) => ({ kind: "image", row })),
+    ...tables.operationalDocuments.map((row) => ({ kind: "document", row }))
+  ];
+
+  let expectedTotalBytes = 0;
+  for (const { row } of fileRows) {
+    const size = Number(row.size_bytes);
+    if (!Number.isSafeInteger(size) || size < 0) {
+      throw new Error("Operativ Portal indeholder en ugyldig filstørrelse i databasen.");
+    }
+    expectedTotalBytes += size;
+    if (!Number.isSafeInteger(expectedTotalBytes)) {
+      throw new Error("Operativ Portal er for stor til den nuværende backupmotor.");
     }
   }
 
+  const maxBytes = configuredOperationalBackupMaxBytes(env);
+  if (expectedTotalBytes > maxBytes) {
+    const actualMb = Math.ceil(expectedTotalBytes / 1024 / 1024);
+    const maxMb = Math.floor(maxBytes / 1024 / 1024);
+    throw new Error(
+      `Operativ Portal indeholder ca. ${actualMb} MB filer og overskrider backupgrænsen på ${maxMb} MB. ` +
+      "Forøg BACKUP_MAX_OPERATIONAL_BYTES kun efter RAM-vurdering eller skift til streaming-backup."
+    );
+  }
+
+  const files = [];
+  const seen = new Set();
+  for (const { kind, row } of fileRows) {
+    const storageName = safeStorageName(row.storage_name);
+    const key = `${kind}:${storageName}`;
+    if (seen.has(key)) throw new Error(`Dubleret operativ storage-reference: ${storageName}`);
+    seen.add(key);
+    const filePath = storedPath(kind, storageName, env);
+    let data;
+    try {
+      data = await readFile(filePath);
+    } catch {
+      throw new Error(`Operativ backup kan ikke oprettes, fordi filen ${storageName} mangler.`);
+    }
+    const expectedSize = Number(row.size_bytes);
+    if (expectedSize !== data.length) {
+      throw new Error(`Operativ filstørrelse stemmer ikke for ${storageName}.`);
+    }
+    files.push({ kind, storageName, data });
+  }
+
+  return files;
+}
+
+export async function collectOperationalBackup(prisma, env = process.env) {
+  const tables = await collectOperationalTableData(prisma);
+  const files = await collectOperationalFilesFromTables(tables, env);
   return { tables, files };
 }
 
