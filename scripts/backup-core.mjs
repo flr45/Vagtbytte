@@ -10,12 +10,23 @@ import {
   isLegacyGzipBackup,
   loadBackupEncryptionKey
 } from "./backup-crypto.mjs";
+import { decodeBackupBundle, encodeBackupBundle } from "./backup-bundle.mjs";
+import {
+  OPERATIONAL_BACKUP_TABLE_NAMES,
+  cleanupPreparedOperationalFiles,
+  collectOperationalBackup,
+  deleteOperationalData,
+  prepareOperationalFiles,
+  pruneOperationalFiles,
+  restoreOperationalData
+} from "./operational-backup.mjs";
 
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
 
 export const BACKUP_FORMAT = "vagtbytte-backup";
-export const BACKUP_VERSION = 1;
+export const BACKUP_VERSION = 2;
+export const LEGACY_BACKUP_VERSION = 1;
 
 function backupDirectory() {
   return process.env.BACKUP_DIRECTORY || "/data/backups";
@@ -61,7 +72,7 @@ function manualFileName(date) {
   return `manual-${compactTimestamp(date)}-${randomUUID().slice(0, 8)}.vagtbackup.enc`;
 }
 
-export async function collectBackupData(prisma, generatedAt = new Date()) {
+async function collectBackupSnapshot(prisma, generatedAt = new Date(), env = process.env) {
   const [
     users,
     operationalPortalUserAccess,
@@ -76,7 +87,8 @@ export async function collectBackupData(prisma, generatedAt = new Date()) {
     alarmStatistics,
     auditLogs,
     emailReportSchedules,
-    emailReportDeliveries
+    emailReportDeliveries,
+    operational
   ] = await Promise.all([
     prisma.user.findMany({ orderBy: { createdAt: "asc" } }),
     prisma.$queryRawUnsafe(
@@ -93,31 +105,41 @@ export async function collectBackupData(prisma, generatedAt = new Date()) {
     prisma.alarmStatistic.findMany({ orderBy: { createdAt: "asc" } }),
     prisma.auditLog.findMany({ orderBy: { createdAt: "asc" } }),
     prisma.emailReportSchedule.findMany({ orderBy: { createdAt: "asc" } }),
-    prisma.emailReportDelivery.findMany({ orderBy: { createdAt: "asc" } })
+    prisma.emailReportDelivery.findMany({ orderBy: { createdAt: "asc" } }),
+    collectOperationalBackup(prisma, env)
   ]);
 
   return {
-    format: BACKUP_FORMAT,
-    version: BACKUP_VERSION,
-    generatedAt: generatedAt.toISOString(),
-    application: "Vagtbytte",
-    tables: {
-      users,
-      operationalPortalUserAccess,
-      availabilities,
-      shiftTransfers,
-      returnRequests,
-      notifications,
-      pushSubscriptions,
-      pushDeliveries,
-      alarms,
-      alarmMessages,
-      alarmStatistics,
-      auditLogs,
-      emailReportSchedules,
-      emailReportDeliveries
-    }
+    data: {
+      format: BACKUP_FORMAT,
+      version: BACKUP_VERSION,
+      generatedAt: generatedAt.toISOString(),
+      application: "SBR Portal",
+      tables: {
+        users,
+        operationalPortalUserAccess,
+        availabilities,
+        shiftTransfers,
+        returnRequests,
+        notifications,
+        pushSubscriptions,
+        pushDeliveries,
+        alarms,
+        alarmMessages,
+        alarmStatistics,
+        auditLogs,
+        emailReportSchedules,
+        emailReportDeliveries,
+        ...operational.tables
+      }
+    },
+    files: operational.files
   };
+}
+
+export async function collectBackupData(prisma, generatedAt = new Date(), env = process.env) {
+  const snapshot = await collectBackupSnapshot(prisma, generatedAt, env);
+  return snapshot.data;
 }
 
 export async function createBackup(prisma, input = {}) {
@@ -138,9 +160,9 @@ export async function createBackup(prisma, input = {}) {
 
   try {
     const encryptionKey = await loadBackupEncryptionKey();
-    const data = await collectBackupData(prisma, now);
-    const json = Buffer.from(JSON.stringify(data), "utf8");
-    const compressed = await gzipAsync(json, { level: 9 });
+    const snapshot = await collectBackupSnapshot(prisma, now, input.env ?? process.env);
+    const payload = encodeBackupBundle(snapshot.data, snapshot.files);
+    const compressed = await gzipAsync(payload, { level: 9 });
     const encrypted = encryptCompressedBackup(compressed, encryptionKey);
     await writeFile(filePath, encrypted, { mode: 0o600 });
     const checksum = createHash("sha256").update(encrypted).digest("hex");
@@ -176,7 +198,7 @@ export async function createBackup(prisma, input = {}) {
         actorUserId: input.createdByUserId ?? null,
         actorRole: input.actorRole ?? null,
         action: kind === "AUTOMATIC" ? "BACKUP_AUTOMATIC_CREATED" : "BACKUP_MANUAL_CREATED",
-        description: `${kind === "AUTOMATIC" ? "Automatisk" : "Manuel"} krypteret backup blev oprettet: ${fileName}`
+        description: `${kind === "AUTOMATIC" ? "Automatisk" : "Manuel"} krypteret v2-backup med Operativ Portal blev oprettet: ${fileName}`
       }
     }).catch(() => null);
 
@@ -241,29 +263,23 @@ export async function readBackupFile(filePath) {
   } else if (isLegacyGzipBackup(stored)) {
     compressed = stored;
   } else {
-    throw new Error("Filen er ikke en understøttet Vagtbytte-backup.");
+    throw new Error("Filen er ikke en understøttet SBR Portal-backup.");
   }
 
-  let json;
+  let payload;
   try {
-    json = await gunzipAsync(compressed);
+    payload = await gunzipAsync(compressed);
   } catch {
     throw new Error("Backupfilens komprimerede indhold er beskadiget.");
   }
 
-  let parsed;
-  try {
-    parsed = JSON.parse(json.toString("utf8"));
-  } catch {
-    throw new Error("Backupfilens data er ikke gyldig JSON.");
-  }
-
-  validateBackup(parsed);
-  return { parsed, stored, encrypted };
+  const decoded = decodeBackupBundle(payload);
+  validateBackup(decoded.parsed, decoded.bundled);
+  return { ...decoded, stored, encrypted };
 }
 
 export async function restoreBackup(prisma, filePath, input = {}) {
-  const { parsed, stored, encrypted } = await readBackupFile(filePath);
+  const { parsed, files, stored, encrypted, bundled } = await readBackupFile(filePath);
   if (input.expectedSha256) {
     const actual = createHash("sha256").update(stored).digest("hex");
     if (actual !== input.expectedSha256) {
@@ -272,45 +288,70 @@ export async function restoreBackup(prisma, filePath, input = {}) {
   }
 
   const tables = parsed.tables;
-  await prisma.$transaction(
-    async (tx) => {
-      // Slettejournalens trigger må ikke opfatte den kontrollerede tømning før restore
-      // som egentlige registreredes sletteanmodninger. Indstillingen gælder kun denne transaktion.
-      await tx.$executeRawUnsafe("SELECT set_config('sbr.restore_mode', '1', true)");
+  const includesOperationalPortal = parsed.version >= BACKUP_VERSION && bundled;
+  let createdOperationalFiles = [];
 
-      await tx.pushDelivery.deleteMany();
-      await tx.notification.deleteMany();
-      await tx.pushSubscription.deleteMany();
-      await tx.returnRequest.deleteMany();
-      await tx.shiftTransfer.deleteMany();
-      await tx.availability.deleteMany();
-      await tx.alarmMessage.deleteMany();
-      await tx.alarm.deleteMany();
-      await tx.alarmStatistic.deleteMany();
-      await tx.auditLog.deleteMany();
-      await tx.emailReportDelivery.deleteMany();
-      await tx.emailReportSchedule.deleteMany();
-      await tx.session.deleteMany();
-      await tx.loginAttempt.deleteMany();
-      await tx.user.deleteMany();
+  if (includesOperationalPortal) {
+    createdOperationalFiles = await prepareOperationalFiles(files, input.env ?? process.env);
+  }
 
-      await createMany(tx.user, tables.users);
-      await createOperationalPortalAccessRows(tx, tables.operationalPortalUserAccess);
-      await createMany(tx.alarm, tables.alarms);
-      await createMany(tx.alarmStatistic, tables.alarmStatistics);
-      await createMany(tx.alarmMessage, tables.alarmMessages);
-      await createMany(tx.availability, tables.availabilities);
-      await createMany(tx.shiftTransfer, tables.shiftTransfers);
-      await createMany(tx.returnRequest, tables.returnRequests);
-      await createMany(tx.emailReportSchedule, tables.emailReportSchedules);
-      await createMany(tx.emailReportDelivery, tables.emailReportDeliveries);
-      await createMany(tx.notification, tables.notifications);
-      await createMany(tx.pushSubscription, tables.pushSubscriptions);
-      await createMany(tx.pushDelivery, tables.pushDeliveries);
-      await createMany(tx.auditLog, tables.auditLogs);
-    },
-    { maxWait: 15000, timeout: 180000 }
-  );
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        // Slettejournalens trigger må ikke opfatte den kontrollerede tømning før restore
+        // som egentlige registreredes sletteanmodninger. Indstillingen gælder kun denne transaktion.
+        await tx.$executeRawUnsafe("SELECT set_config('sbr.restore_mode', '1', true)");
+
+        if (includesOperationalPortal) {
+          await deleteOperationalData(tx);
+        }
+
+        await tx.pushDelivery.deleteMany();
+        await tx.notification.deleteMany();
+        await tx.pushSubscription.deleteMany();
+        await tx.returnRequest.deleteMany();
+        await tx.shiftTransfer.deleteMany();
+        await tx.availability.deleteMany();
+        await tx.alarmMessage.deleteMany();
+        await tx.alarm.deleteMany();
+        await tx.alarmStatistic.deleteMany();
+        await tx.auditLog.deleteMany();
+        await tx.emailReportDelivery.deleteMany();
+        await tx.emailReportSchedule.deleteMany();
+        await tx.session.deleteMany();
+        await tx.loginAttempt.deleteMany();
+        await tx.user.deleteMany();
+
+        await createMany(tx.user, tables.users);
+        await createOperationalPortalAccessRows(tx, tables.operationalPortalUserAccess);
+        if (includesOperationalPortal) {
+          await restoreOperationalData(tx, tables);
+        }
+        await createMany(tx.alarm, tables.alarms);
+        await createMany(tx.alarmStatistic, tables.alarmStatistics);
+        await createMany(tx.alarmMessage, tables.alarmMessages);
+        await createMany(tx.availability, tables.availabilities);
+        await createMany(tx.shiftTransfer, tables.shiftTransfers);
+        await createMany(tx.returnRequest, tables.returnRequests);
+        await createMany(tx.emailReportSchedule, tables.emailReportSchedules);
+        await createMany(tx.emailReportDelivery, tables.emailReportDeliveries);
+        await createMany(tx.notification, tables.notifications);
+        await createMany(tx.pushSubscription, tables.pushSubscriptions);
+        await createMany(tx.pushDelivery, tables.pushDeliveries);
+        await createMany(tx.auditLog, tables.auditLogs);
+      },
+      { maxWait: 15000, timeout: 180000 }
+    );
+  } catch (error) {
+    if (includesOperationalPortal) {
+      await cleanupPreparedOperationalFiles(createdOperationalFiles);
+    }
+    throw error;
+  }
+
+  if (includesOperationalPortal) {
+    await pruneOperationalFiles(files, input.env ?? process.env);
+  }
 
   const actorExists = input.createdByUserId
     ? await prisma.user.findUnique({ where: { id: input.createdByUserId }, select: { id: true } })
@@ -320,13 +361,16 @@ export async function restoreBackup(prisma, filePath, input = {}) {
       actorUserId: actorExists?.id ?? null,
       actorRole: actorExists ? input.actorRole ?? null : null,
       action: "BACKUP_RESTORED",
-      description: `${encrypted ? "Krypteret" : "Ældre ukrypteret"} backup fra ${parsed.generatedAt} blev gendannet${input.actorName ? ` af ${input.actorName}` : ""}`
+      description: `${encrypted ? "Krypteret" : "Ældre ukrypteret"} backup fra ${parsed.generatedAt} blev gendannet${includesOperationalPortal ? " inklusive Operativ Portal" : ""}${input.actorName ? ` af ${input.actorName}` : ""}`
     }
   });
 
   return {
     generatedAt: parsed.generatedAt,
     encrypted,
+    version: parsed.version,
+    operationalPortalIncluded: includesOperationalPortal,
+    restoredFiles: includesOperationalPortal ? files.length : 0,
     restoredTables: Object.fromEntries(
       Object.entries(tables).map(([name, rows]) => [name, Array.isArray(rows) ? rows.length : 0])
     )
@@ -372,12 +416,25 @@ async function createOperationalPortalAccessRows(tx, rows) {
   }
 }
 
-function validateBackup(value) {
-  if (!value || value.format !== BACKUP_FORMAT || value.version !== BACKUP_VERSION) {
-    throw new Error("Filen er ikke en understøttet Vagtbytte-backup.");
+function validateBackup(value, bundled) {
+  if (
+    !value ||
+    value.format !== BACKUP_FORMAT ||
+    ![LEGACY_BACKUP_VERSION, BACKUP_VERSION].includes(value.version)
+  ) {
+    throw new Error("Filen er ikke en understøttet SBR Portal-backup.");
   }
   if (!value.tables || !Array.isArray(value.tables.users)) {
     throw new Error("Backupfilen mangler nødvendige data.");
+  }
+
+  if (value.version === BACKUP_VERSION) {
+    if (!bundled) throw new Error("En v2-backup skal bruge det integritetsbeskyttede bundle-format.");
+    for (const table of OPERATIONAL_BACKUP_TABLE_NAMES) {
+      if (!Array.isArray(value.tables[table])) {
+        throw new Error(`V2-backupen mangler den operative tabel ${table}.`);
+      }
+    }
   }
 
   const optionalTables = [

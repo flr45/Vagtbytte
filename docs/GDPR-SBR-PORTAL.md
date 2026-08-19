@@ -8,7 +8,7 @@ SBR Portal skal udvikles efter principperne om databeskyttelse gennem design og 
 
 ## Datakategorier i systemet
 
-SBR Portal/Vagtbytte behandler blandt andet:
+SBR Portal behandler blandt andet:
 
 - brugeridentitet: navn, medarbejdernummer, login-id, e-mail og eventuelt telefonnummer
 - stationstilknytning, roller og adgangsrettigheder
@@ -45,13 +45,19 @@ Fristerne er tekniske defaults, ikke en juridisk konklusion. Hvis en anden frist
 
 ### Brugersletning og backup-restore
 
-Når en brandmandsbruger slettes, skal systemet ikke blot fjerne login-kontoen. Historiske personhenførbare snapshots i vagtbytter og retursager anonymiseres, relaterede notifikationer fjernes, direkte loginhistorik for den pågældende slettes, og auditbeskrivelser knyttet til brugeren neutraliseres.
+Når en brandmandsbruger slettes, fjernes login-kontoen, historiske personhenførbare snapshots i vagtbytter og retursager anonymiseres, relaterede notifikationer fjernes, direkte loginhistorik for den pågældende slettes, og auditbeskrivelser knyttet til brugeren neutraliseres.
 
 Ved brugersletning opretter databasen desuden et minimalt slettefingeraftryk baseret på en envejs-fingerprint af det interne bruger-id. Fingeraftrykket indeholder ikke navn, mail eller medarbejdernummer og ligger uden for backupindholdet. Hvis en administreret backup senere forsøger at gendanne den tidligere slettede bruger, anvendes fingeraftrykket automatisk ved afslutningen af restore-transaktionen, og de gendannede personhenførbare oplysninger anonymiseres/slettes igen.
 
 Restore-flowet markerer den kontrollerede tømning af databasen som restore-mode, så eksisterende aktive brugere ikke fejlagtigt registreres som slettede under selve gendannelsen.
 
-Denne beskyttelse forudsætter, at slettefingeraftrykket stadig findes. Derfor skal retention for slettefingeraftryk altid være længere end retention for administrerede backups. Ældre, manuelt kopierede eller eksterne backups uden for den administrerede retention skal håndteres organisatorisk og må ikke gendannes ukontrolleret.
+Nye backupfiler bruger format v2. De indeholder både de almindelige databaseposter og hele Operativ Portals databasehierarki samt de fysiske billeder og dokumenter i samme krypterede pakke. Hver fysisk fil har SHA-256-kontrolsum og størrelse i manifestet, og restore afvises før databaseændringer, hvis filintegritet eller 1:1-forholdet mellem database og filpakke ikke stemmer.
+
+V2-restore forbereder og kontrollerer filer før database-transaktionen. Hvis databasetransaktionen fejler, fjernes kun de filer, som restore selv nåede at oprette. Først efter en vellykket database-restore fjernes gamle filer, som ikke findes i det gendannede snapshot.
+
+Ældre v1-backups kan fortsat gendannes. Da de aldrig indeholdt Operativ Portals databasehierarki eller fysiske filer, lader en v1-restore Operativ Portal urørt i stedet for at slette indhold, som backupen ikke kan genskabe.
+
+Den nuværende v2-motor samler operative filer i hukommelsen før komprimering og kryptering. Derfor er standardgrænsen `BACKUP_MAX_OPERATIONAL_BYTES=536870912` (512 MiB). Grænsen bør ikke hæves uden en konkret RAM-vurdering; hvis indholdet vokser væsentligt, skal backupformatet omlægges til streaming.
 
 Historiske hændelser kan bevares i anonymiseret form, når det fortsat er nødvendigt for systemets funktion, dokumentation eller statistik.
 
@@ -72,6 +78,14 @@ Der genereres 10 recovery-koder. De vises kun under opsætningen og gemmes deref
 
 Administrator kan nulstille MFA for en bruger ved dokumenteret lockout. En nulstilling fjerner secret/recovery-koder, lukker aktive sessioner og auditlogges. Brugeren bliver derefter tvunget gennem ny MFA-opsætning ved næste login, hvis MFA-politikken gælder for kontoen.
 
+### Operative uploads
+
+Operative uploads kontrolleres efter filens faktiske bytes og ikke kun browserens MIME-type. Serveren validerer de understøttede JPEG-, PNG-, WebP-, PDF-, Word- og Excel-formater før permanent lagring.
+
+JPEG-, PNG- og WebP-billeder renses for unødvendig EXIF/GPS/XMP/IPTC-/kommentarmetadata uden at sende filen til en ekstern billedtjeneste. Uploadede filer gemmes med begrænsede filrettigheder (`0600`). Storage-filnavne behandles som potentielt fjendtligt input ved download og sletning, så path traversal og absolutte stier afvises.
+
+PDF og billeder kan vises inline efter autentifikation. Office-dokumenter leveres som download (`attachment`) for at reducere browserens angrebsflade.
+
 ### Offline-data
 
 Operativ offline-cache er opt-in og må kun aktiveres på en betroet enhed. SBR Portal må ikke automatisk cache beskyttet operativt indhold alene fordi en bruger besøger en side.
@@ -84,6 +98,14 @@ Offline-cachen:
 - ryddes ved autentifikationsfejl og ved login-flow
 - kan ryddes manuelt af brugeren
 - efterlades ikke som delvis cache, hvis en synkronisering fejler
+
+### GDPR-brugerudtræk
+
+Administrator kan generere et internt JSON-udtræk for en bruger fra Brugeroverblik. Udtrækket samler relevante konto-, login-, MFA-status-, vagt-, notifikations-, audit- og Operativ Portal-data og auditlogger selve genereringen.
+
+Udtrækket udelader sikkerhedscredentials, herunder password-hash, session-/reset-token hashes, MFA-secret, recovery-hashes, MFA-challenge secrets/tokens, push-kryptografinøgler og den fulde push-endpoint-URL. Kun push-providerens origin medtages.
+
+Udtrækket er et hjælpeværktøj og markeres som en intern kladde, der kræver menneskelig gennemgang før udlevering. Kommentarer, notifikationer og sagskontekst kan indeholde oplysninger om andre personer og skal vurderes i den konkrete indsigtsanmodning.
 
 ## Sikkerhed
 
@@ -98,9 +120,13 @@ Følgende er en del af den tekniske baseline:
 - kortlivet HttpOnly MFA-challenge-cookie
 - login-rate-limit, MFA-forsøgsgrænse og audit
 - TLS/HTTPS og HSTS i produktion
+- håndhævet Content-Security-Policy med begrænsede eksterne kilder
 - `no-store` på beskyttede operative sider/dokumenter, bortset fra den eksplicitte og tidsbegrænsede offline-funktion
-- krypterede backups med begrænset retention
+- faktisk filtypekontrol og metadata-rensning ved operative uploads
+- filstorage med path-traversal-beskyttelse og begrænsede filrettigheder
+- krypterede v2-backups med database, Operativ Portal og filintegritetskontrol
 - restore-sikker slettejournal, der ikke er en del af de administrerede backupfiler
+- production dependency security gate i CI, som stopper nye high/critical advisories med kun snævert dokumenterede undtagelser
 - ingen fuld rå alarmtekst i push-notifikationer på låseskærmen
 
 ## Krav før systemet kan betegnes som organisatorisk GDPR-klargjort
@@ -120,23 +146,11 @@ Den dataansvarlige skal udfylde og godkende følgende:
 
 ## Åbne tekniske højprioriteter
 
-De tidligere P0-punkter MFA og restore-sikker brugersletning er implementeret. De væsentligste resterende tekniske punkter er:
-
-### P1 – metadata i billeder og dokumenter
-
-Uploadede billeder bør re-encodes eller renses for unødvendig EXIF/XMP/GPS-metadata. Filvalidering skal baseres på faktisk filindhold og ikke alene browserens MIME-type. Dokumentuploads bør gennemgås for samme princip og eventuelt malware-scanning afhængigt af miljøet.
+De tidligere P0-punkter MFA og restore-sikker brugersletning samt uploadvalidering, billedmetadata-rensning, CSP og brugerudtræk er implementeret. De væsentligste resterende tekniske punkter er:
 
 ### P1 – datakryptering på persistent filstorage
 
-Operative billeder og dokumenter ligger i persistent storage. Der skal dokumenteres kryptering på lagermediet eller implementeres applikations-/volume-kryptering, hvis infrastrukturen ikke allerede leverer dette.
-
-### P1 – CSP
-
-Der bør implementeres en testet Content-Security-Policy, som er kompatibel med Next.js-applikationen og ikke kræver unødigt brede `unsafe-*` undtagelser.
-
-### P1 – databruger-eksport
-
-Admin bør have et værktøj, der kan samle de personoplysninger, som knytter sig til en bestemt bruger, så organisationen kan håndtere indsigtsanmodninger effektivt. En sådan eksport er et hjælpeværktøj og erstatter ikke den dataansvarliges juridiske vurdering af en konkret indsigtsanmodning.
+Operative billeder og dokumenter ligger i persistent storage. Der skal dokumenteres, om hostens disk/volume er krypteret ved hvile, eller implementeres volume-/applikationskryptering, hvis infrastrukturen ikke allerede leverer dette. Backupfilerne er separat krypteret med AES-256-GCM.
 
 ### P1 – retention for arbejds-/vagthistorik
 
@@ -145,6 +159,14 @@ Availability, ShiftTransfer og ReturnRequest indeholder arbejdsrelateret histori
 ### P1 – recovery- og nødprocedure for systemkonti
 
 Der skal dokumenteres en organisatorisk nødprocedure for MFA-lockout på de primære ADMIN/VC-systemkonti, herunder identitetskontrol, hvem der må gennemføre reset, og hvordan handlingen efterkontrolleres. Recovery-koder er den primære tekniske fallback.
+
+### P1 – reel restore-øvelse og streaming-backup ved vækst
+
+Backup/restore er dækket af unit-/buildtests, men organisationen skal periodisk gennemføre en kontrolleret restore-øvelse på et isoleret miljø. Hvis Operativ Portals filsamling nærmer sig den konfigurerede RAM-grænse, skal backupmotoren ændres til et streamet format i stedet for blot at hæve grænsen.
+
+### P2 – malware-scanning af dokumentuploads
+
+Filtypekontrol og billedmetadata-rensning reducerer risikoen, men dokumentuploads bliver ikke antivirusscannet. Hvis trusselsmodellen, antallet af uploadere eller dokumentkilder ændrer sig, bør lokal malware-scanning vurderes.
 
 ## Kontrol efter deployment
 
@@ -157,12 +179,17 @@ Efter hver ændring i databeskyttelsesfunktionerne skal følgende kontrolleres:
 - slettefingeraftrykkenes retention er længere end backupretentionen
 - gamle offline-caches kan ikke læses efter udløb
 - logout/login-fejl rydder lokal operativ cache
-- backups er krypterede, kan gendannes og følger retention
+- nye backups oprettes som krypterede v2-pakker og indeholder Operativ Portals databasehierarki samt alle refererede billeder/dokumenter
+- en manipuleret eller ufuldstændig v2-backup afvises før databaseændringer
+- en v1-backup lader Operativ Portal urørt
+- direkte restore fra serverens backupliste fungerer for store backupfiler uden web-upload
+- worker- og web-containeren har samme Operativ Portal-volume monteret
 - adgang til Operativ Portal afvises uden korrekt grant
 - privilegerede og Operativ Portal-brugere bliver tvunget gennem MFA
 - en brugt TOTP-kode kan ikke genbruges i samme tidsstep
 - en recovery-kode forsvinder efter første brug
 - admin-MFA-reset lukker eksisterende sessioner og kræver ny MFA-opsætning
+- GDPR-brugerudtræk indeholder ikke passwords, MFA-secrets, token hashes eller push-kryptografinøgler
 
 ## Referencer
 
