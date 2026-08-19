@@ -1,6 +1,6 @@
 {
-  "name": "SBR Fire App",
-  "short_name": "SBR Fire",
+  "name": "SBR Portal",
+  "short_name": "SBR Portal",
   "description": "Alarm, vagter og operativ viden samlet for Slagelse Brand og Redning",
   "id": "/",
   "start_url": "/app",
@@ -26,7 +26,7 @@
   ],
   "shortcuts": [
     {
-      "name": "SBR Fire Hjem",
+      "name": "SBR Portal Hjem",
       "short_name": "Hjem",
       "url": "/app"
     },
