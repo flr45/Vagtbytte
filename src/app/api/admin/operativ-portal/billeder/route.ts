@@ -6,12 +6,14 @@ import { UserRole } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth";
 import { resolveOperationalTargets } from "@/lib/operativ-portal-content";
 import {
-  ALLOWED_OPERATIONAL_IMAGE_TYPES,
   MAX_OPERATIONAL_IMAGE_BYTES,
   OPERATIONAL_IMAGE_DIRECTORY,
-  imageExtensionForMimeType,
   safeOriginalFileName
 } from "@/lib/operativ-portal";
+import {
+  sanitizeOperationalImageMetadata,
+  validateOperationalImageUpload
+} from "@/lib/operativ-upload-validation";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -56,8 +58,20 @@ export async function POST(request: Request) {
   if (vehicleId === undefined || placeId === undefined || itemId === undefined || !vehicleId) return NextResponse.json({ error: "Den valgte placering er ugyldig." }, { status: 400 });
   if (!(file instanceof File) || file.size === 0) return NextResponse.json({ error: "Vælg et billede." }, { status: 400 });
   if (file.size > MAX_OPERATIONAL_IMAGE_BYTES) return NextResponse.json({ error: "Billedet må højst fylde 12 MB." }, { status: 413 });
-  if (!ALLOWED_OPERATIONAL_IMAGE_TYPES.has(file.type)) return NextResponse.json({ error: "Brug JPEG, PNG eller WebP." }, { status: 415 });
   if (suppliedTitle.length > 180 || suppliedAltText.length > 300) return NextResponse.json({ error: "Titel eller alternativ tekst er for lang." }, { status: 400 });
+
+  const originalBuffer = Buffer.from(await file.arrayBuffer());
+  const validated = validateOperationalImageUpload(originalBuffer, file.type);
+  if (!validated) {
+    return NextResponse.json(
+      { error: "Filens faktiske billedformat matcher ikke den angivne type. Brug et gyldigt JPEG-, PNG- eller WebP-billede." },
+      { status: 415 }
+    );
+  }
+  const sanitizedBuffer = sanitizeOperationalImageMetadata(originalBuffer, validated.mimeType);
+  if (!sanitizedBuffer) {
+    return NextResponse.json({ error: "Billedfilen er beskadiget eller kan ikke valideres sikkert." }, { status: 415 });
+  }
 
   const targets = await resolveOperationalTargets({ vehicleId, placeId, itemId });
   if (!targets?.vehicleId) return NextResponse.json({ error: "Køretøjet, rummet eller udstyret blev ikke fundet." }, { status: 404 });
@@ -66,16 +80,14 @@ export async function POST(request: Request) {
   const defaultTitle = path.basename(originalName, path.extname(originalName)).slice(0, 180) || "Billede";
   const title = suppliedTitle || defaultTitle;
   const altText = suppliedAltText || title;
-  const extension = imageExtensionForMimeType(file.type);
-  if (!extension) return NextResponse.json({ error: "Billedformatet er ikke understøttet." }, { status: 415 });
 
   const imageId = randomUUID();
-  const storageName = `${randomUUID()}${extension}`;
+  const storageName = `${randomUUID()}${validated.extension}`;
   const filePath = path.join(OPERATIONAL_IMAGE_DIRECTORY, storageName);
   const makeCover = requestedCover || !(await hasTargetImage(targets));
 
   await mkdir(OPERATIONAL_IMAGE_DIRECTORY, { recursive: true });
-  await writeFile(filePath, Buffer.from(await file.arrayBuffer()), { flag: "wx" });
+  await writeFile(filePath, sanitizedBuffer, { flag: "wx", mode: 0o600 });
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -89,7 +101,7 @@ export async function POST(request: Request) {
           (id, vehicle_id, place_id, item_id, title, alt_text, original_name, storage_name, mime_type, size_bytes, is_cover)
         VALUES
           (${imageId}, ${targets.vehicleId}, ${targets.placeId}, ${targets.itemId}, ${title}, ${altText},
-           ${originalName}, ${storageName}, ${file.type}, ${file.size}, ${makeCover})
+           ${originalName}, ${storageName}, ${validated.mimeType}, ${sanitizedBuffer.length}, ${makeCover})
       `;
       await tx.auditLog.create({
         data: {
