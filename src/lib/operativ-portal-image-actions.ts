@@ -1,7 +1,6 @@
 "use server";
 
 import { unlink } from "node:fs/promises";
-import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { UserRole } from "@prisma/client";
 import { z } from "zod";
@@ -11,6 +10,7 @@ import {
   getOperationalImage,
   type OperationalImage
 } from "./operativ-portal";
+import { operationalStoredFilePath } from "./operativ-storage";
 import { prisma } from "./prisma";
 
 const uuidSchema = z.string().uuid();
@@ -83,7 +83,11 @@ export async function deleteOperationalImageAction(formData: FormData) {
   if (!image) return;
 
   await prisma.$executeRaw`DELETE FROM operational_image WHERE id = ${image.id}`;
-  await unlink(path.join(OPERATIONAL_IMAGE_DIRECTORY, image.storageName)).catch(() => undefined);
+  try {
+    await unlink(operationalStoredFilePath(OPERATIONAL_IMAGE_DIRECTORY, image.storageName));
+  } catch {
+    // Databaseposten er slettet. En manglende/ugyldig filreference må ikke kunne slette uden for storage.
+  }
 
   if (image.isCover) {
     if (image.itemId) {
