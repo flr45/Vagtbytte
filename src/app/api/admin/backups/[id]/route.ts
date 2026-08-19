@@ -37,8 +37,8 @@ export async function GET(
     if (!fileStats.isFile()) throw new Error("Ikke en fil");
 
     const nodeStream = createReadStream(filePath);
-    const webStream = Readable.toWeb(nodeStream) as ReadableStream<Uint8Array>;
-    return new Response(webStream, {
+    const webStream = Readable.toWeb(nodeStream);
+    return new Response(webStream as unknown as BodyInit, {
       status: 200,
       headers: {
         "Content-Type": backup.fileName.endsWith(".enc") ? "application/octet-stream" : "application/gzip",
