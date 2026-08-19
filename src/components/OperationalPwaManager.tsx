@@ -16,6 +16,7 @@ type SyncStatus = {
 
 const OFFLINE_ENABLED_KEY = "sbr-operativ-offline-enabled";
 const OFFLINE_SYNCED_AT_KEY = "sbr-operativ-offline-synced-at";
+const OFFLINE_MAX_AGE_HOURS = 24;
 
 export function OperationalPwaManager() {
   const [online, setOnline] = useState(true);
@@ -63,7 +64,7 @@ export function OperationalPwaManager() {
         localStorage.setItem(OFFLINE_ENABLED_KEY, "1");
         localStorage.setItem(OFFLINE_SYNCED_AT_KEY, value);
         setSyncedAt(value);
-        setSyncStatus({ state: "done", current: Number(data.total || 0), total: Number(data.total || 0), message: "Offline-indhold er opdateret." });
+        setSyncStatus({ state: "done", current: Number(data.total || 0), total: Number(data.total || 0), message: `Offline-indhold er opdateret og udløber automatisk efter ${OFFLINE_MAX_AGE_HOURS} timer.` });
       }
       if (data.type === "OPERATIONAL_SYNC_ERROR") {
         setSyncStatus({ state: "error", message: String(data.message || "Offline-synkronisering mislykkedes.") });
@@ -73,6 +74,12 @@ export function OperationalPwaManager() {
         localStorage.removeItem(OFFLINE_SYNCED_AT_KEY);
         setSyncedAt(null);
         setSyncStatus({ state: "idle" });
+      }
+      if (data.type === "OPERATIONAL_CACHE_EXPIRED") {
+        localStorage.removeItem(OFFLINE_ENABLED_KEY);
+        localStorage.removeItem(OFFLINE_SYNCED_AT_KEY);
+        setSyncedAt(null);
+        setSyncStatus({ state: "idle", message: "Offline-data blev automatisk slettet efter 24 timer." });
       }
     };
 
@@ -153,7 +160,7 @@ export function OperationalPwaManager() {
         <div className="mb-2 w-[min(92vw,340px)] rounded-xl border border-white/10 bg-[#0b1013]/98 p-4 text-white shadow-2xl backdrop-blur">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[.14em] text-red-500">SBR Fire App</p>
+              <p className="text-[10px] font-black uppercase tracking-[.14em] text-red-500">SBR Portal</p>
               <h2 className="mt-1 text-base font-black">App & offline</h2>
             </div>
             <button className="grid size-9 place-items-center rounded-lg bg-white/5 text-slate-400" onClick={() => setOpen(false)} type="button" aria-label="Luk">×</button>
@@ -175,8 +182,11 @@ export function OperationalPwaManager() {
             <button className="min-h-11 rounded-lg bg-[#b70f18] px-4 text-sm font-black text-white disabled:opacity-40" disabled={!online || syncStatus.state === "syncing"} onClick={() => void requestOfflineSync()} type="button">
               {syncedAt ? "Opdatér offline-indhold" : "Synkronisér til offline"}
             </button>
+            <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-[11px] leading-5 text-amber-100/80">
+              Offline-synkronisering gemmer beskyttet operativt indhold lokalt på denne enhed. Brug kun funktionen på en enhed, du selv kontrollerer. Data slettes automatisk efter {OFFLINE_MAX_AGE_HOURS} timer og kan altid ryddes manuelt.
+            </p>
             {installPrompt && !installed ? (
-              <button className="min-h-11 rounded-lg border border-white/10 bg-[#151b1f] px-4 text-sm font-black" onClick={() => void installApp()} type="button">Installér SBR Fire App</button>
+              <button className="min-h-11 rounded-lg border border-white/10 bg-[#151b1f] px-4 text-sm font-black" onClick={() => void installApp()} type="button">Installér SBR Portal</button>
             ) : null}
             {!installed && !installPrompt ? (
               <p className="rounded-lg bg-white/5 p-3 text-xs leading-5 text-slate-400">På iPhone/iPad: brug Del-menuen i Safari og vælg <strong className="text-slate-200">Føj til hjemmeskærm</strong>.</p>
