@@ -13,7 +13,7 @@ export function ManualBackupForm({ disabled = false }: { disabled?: boolean }) {
       <div>
         <h2 className="text-lg font-black">Opret manuel backup</h2>
         <p className="mt-1 text-sm font-semibold text-zinc-600">
-          Backupen indeholder brugere, stationer, alarmer, statistik, vagter, vagtbytter og indstillinger og krypteres før den gemmes.
+          Nye v2-backups indeholder bruger- og vagtdata samt hele Operativ Portal, inklusive billeder og dokumenter, i én krypteret pakke.
         </p>
       </div>
       {disabled ? (
@@ -66,13 +66,13 @@ export function RestoreBackupForm() {
       }}
     >
       <div>
-        <h2 className="text-lg font-black text-red-950">Gendan fra backup</h2>
+        <h2 className="text-lg font-black text-red-950">Gendan ekstern backupfil</h2>
         <p className="mt-1 text-sm font-semibold text-red-900">
-          Alle nuværende Vagtbytte-data erstattes af indholdet i backupfilen. Krypterede backups kræver den samme nøgle, som de blev oprettet med. Ældre gzip-backups understøttes fortsat.
+          Brug denne vej til en backupfil, der ikke allerede ligger på serveren. Upload er begrænset til 100 MB for at beskytte webprocessens hukommelse. Større v2-backups bør gendannes direkte fra listen over gemte backups.
         </p>
       </div>
       <label className="grid gap-2 text-sm font-bold text-red-950">
-        Vagtbytte-backupfil
+        SBR Portal-backupfil
         <input
           accept=".enc,.vagtbackup.enc,.gz,.vagtbackup.gz,application/octet-stream,application/gzip"
           className="focus-ring rounded-lg border border-red-200 bg-white p-3"
@@ -87,8 +87,36 @@ export function RestoreBackupForm() {
       </label>
       <ActionMessage message={message} ok={ok} />
       <button className="app-button-danger" disabled={busy} type="submit">
-        {busy ? "Dekrypterer og gendanner…" : "Gendan backup"}
+        {busy ? "Dekrypterer og gendanner…" : "Gendan uploadet backup"}
       </button>
     </form>
+  );
+}
+
+export function StoredBackupRestoreButton({ backupId }: { backupId: string }) {
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <button
+      className="focus-ring min-h-10 rounded-md border border-red-200 px-3 text-sm font-bold text-red-700 hover:bg-red-50 disabled:opacity-50"
+      disabled={busy}
+      onClick={async () => {
+        if (!window.confirm("Gendan denne backup? Nuværende data erstattes, og du bliver logget ud.")) return;
+        setBusy(true);
+        try {
+          const response = await fetch(`/api/admin/backups/${backupId}/restore`, { method: "POST" });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error ?? "Gendannelsen fejlede");
+          window.alert(data.message ?? "Backupen er gendannet.");
+          window.location.href = "/login";
+        } catch (error) {
+          window.alert(error instanceof Error ? error.message : "Gendannelsen fejlede");
+          setBusy(false);
+        }
+      }}
+      type="button"
+    >
+      {busy ? "Gendanner…" : "Gendan"}
+    </button>
   );
 }
