@@ -22,6 +22,35 @@ describe("production security audit", () => {
     expect(result).toEqual([]);
   });
 
+  it("tillader kun de kendte PostCSS-advisories i Nexts build-time kopi", () => {
+    const result = blockingProductionAuditFindings(report({
+      postcss: {
+        severity: "high",
+        nodes: ["node_modules/next/node_modules/postcss"],
+        via: [
+          { url: "https://github.com/advisories/GHSA-qx2v-qp2m-jg93" },
+          { url: "https://github.com/advisories/GHSA-6g55-p6wh-862q" },
+          { url: "https://github.com/advisories/GHSA-fxqj-rqcc-2cmp" },
+          { url: "https://github.com/advisories/GHSA-r28c-9q8g-f849" }
+        ]
+      }
+    }));
+
+    expect(result).toEqual([]);
+  });
+
+  it("blokerer PostCSS-undtagelsen hvis pakken ligger uden for Next", () => {
+    const result = blockingProductionAuditFindings(report({
+      postcss: {
+        severity: "high",
+        nodes: ["node_modules/postcss"],
+        via: [{ url: "https://github.com/advisories/GHSA-qx2v-qp2m-jg93" }]
+      }
+    }));
+
+    expect(result).toHaveLength(1);
+  });
+
   it("blokerer en ny advisory på Prisma selv", () => {
     const result = blockingProductionAuditFindings(report({
       prisma: {
