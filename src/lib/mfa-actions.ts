@@ -62,6 +62,10 @@ export async function setupMfaAction(
   _state: MfaActionState,
   formData: FormData
 ): Promise<MfaActionState> {
+  if (formData.get("recoverySaved") !== "on") {
+    return { ok: false, message: "Gem recovery-koderne, før MFA aktiveres." };
+  }
+
   const code = String(formData.get("code") ?? "").trim();
   if (!/^\d{6}$/.test(code)) {
     return { ok: false, message: "Indtast den sekscifrede kode fra din authenticator-app." };
