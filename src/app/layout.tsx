@@ -5,12 +5,12 @@ import "./globals.css";
 import "./sbr-interactions.css";
 
 export const metadata: Metadata = {
-  title: "SBR Fire App",
+  title: "SBR Portal",
   description: "Alarm, vagter og operativ viden samlet for Slagelse Brand og Redning",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "SBR Fire",
+    title: "SBR Portal",
     statusBarStyle: "black-translucent"
   },
   icons: {

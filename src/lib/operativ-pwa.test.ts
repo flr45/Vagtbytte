@@ -2,12 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-describe("SBR Fire App PWA", () => {
+describe("SBR Portal Operativ PWA", () => {
   it("har et installerbart manifest med korrekt scope og ikoner", () => {
     const manifestPath = path.join(process.cwd(), "public", "operativ-manifest.webmanifest");
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
 
-    expect(manifest.name).toBe("SBR Fire App");
+    expect(manifest.name).toBe("SBR Portal – Operativ");
     expect(manifest.start_url).toBe("/admin/operativ-portal/");
     expect(manifest.scope).toBe("/admin/operativ-portal/");
     expect(manifest.display).toBe("standalone");
