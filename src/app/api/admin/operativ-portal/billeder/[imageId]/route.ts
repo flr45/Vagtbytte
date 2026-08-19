@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { NextResponse } from "next/server";
 import { canAccessOperationalPortal, getCurrentUser } from "@/lib/auth";
 import { OPERATIONAL_IMAGE_DIRECTORY, getOperationalImage } from "@/lib/operativ-portal";
+import { operationalContentDisposition, operationalStoredFilePath } from "@/lib/operativ-storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,18 +32,18 @@ export async function GET(request: Request, { params }: RouteProps) {
   }
 
   try {
-    const data = await readFile(path.join(OPERATIONAL_IMAGE_DIRECTORY, image.storageName));
+    const data = await readFile(operationalStoredFilePath(OPERATIONAL_IMAGE_DIRECTORY, image.storageName));
     return new Response(data, {
       headers: {
         "Cache-Control": IMAGE_CACHE_CONTROL,
         ETag: etag,
         "Content-Type": image.mimeType,
         "Content-Length": String(data.byteLength),
-        "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(image.originalName)}`,
+        "Content-Disposition": operationalContentDisposition(image.mimeType, encodeURIComponent(image.originalName)),
         "X-Content-Type-Options": "nosniff"
       }
     });
   } catch {
-    return NextResponse.json({ error: "Billedfilen mangler på serveren." }, { status: 410 });
+    return NextResponse.json({ error: "Billedfilen mangler eller har en ugyldig storage-reference." }, { status: 410 });
   }
 }
