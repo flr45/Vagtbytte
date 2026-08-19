@@ -136,6 +136,9 @@ export default async function UserOverviewPage({
           <p className="mt-2 text-sm font-semibold text-zinc-600">
             Se stationstilknytning, mail, MFA, administratoradgang, Operativ Portal, push-enheder og seneste login.
           </p>
+          <p className="mt-2 text-xs font-semibold text-zinc-500">
+            GDPR-udtræk er interne kladder og skal gennemgås før udlevering, fordi sagskommentarer og notifikationer kan indeholde oplysninger om andre personer.
+          </p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-8">
             <Stat label="Brugere i alt" value={allUsers.length} />
             <Stat label="Aktive" value={activeCount} />
@@ -214,10 +217,10 @@ export default async function UserOverviewPage({
             <p className="p-5 text-sm font-semibold text-zinc-600">Ingen brugere matcher filtrene.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1340px] border-collapse text-left text-sm">
+              <table className="w-full min-w-[1480px] border-collapse text-left text-sm">
                 <thead className="bg-zinc-50 text-xs uppercase text-zinc-600">
                   <tr>
-                    <th className="px-4 py-3">Navn</th><th className="px-4 py-3">Medarbejdernummer</th><th className="px-4 py-3">Mail</th><th className="px-4 py-3">Station</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Sending 2+</th><th className="px-4 py-3">Admin</th><th className="px-4 py-3">Operativ</th><th className="px-4 py-3">MFA</th><th className="px-4 py-3">Push-enheder</th><th className="px-4 py-3">Seneste login</th>
+                    <th className="px-4 py-3">Navn</th><th className="px-4 py-3">Medarbejdernummer</th><th className="px-4 py-3">Mail</th><th className="px-4 py-3">Station</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Sending 2+</th><th className="px-4 py-3">Admin</th><th className="px-4 py-3">Operativ</th><th className="px-4 py-3">MFA</th><th className="px-4 py-3">Push-enheder</th><th className="px-4 py-3">Seneste login</th><th className="px-4 py-3">GDPR</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -250,6 +253,14 @@ export default async function UserOverviewPage({
                       </td>
                       <td className="px-4 py-3"><span className={user._count.pushSubscriptions > 0 ? "font-bold text-emerald-700" : "font-bold text-red-700"}>{user._count.pushSubscriptions}</span></td>
                       <td className="px-4 py-3">{user.lastLoginAt ? formatDateTime(user.lastLoginAt) : "Aldrig"}</td>
+                      <td className="px-4 py-3">
+                        <a
+                          className="focus-ring inline-flex min-h-9 items-center rounded-md border border-zinc-200 px-3 text-xs font-bold text-zinc-800 hover:bg-zinc-50"
+                          href={`/api/admin/brugere/${user.id}/gdpr-export`}
+                        >
+                          Hent udtræk
+                        </a>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
