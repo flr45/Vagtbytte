@@ -9,6 +9,7 @@ const JPEG = Buffer.from([0xff, 0xd8, 0xff]);
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const PDF = Buffer.from("%PDF-", "ascii");
 const OLE = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+const JPEG_EOI = Buffer.from([0xff, 0xd9]);
 
 const IMAGE_TYPES: Record<string, ValidatedOperationalUpload> = {
   "image/jpeg": { mimeType: "image/jpeg", extension: ".jpg" },
@@ -39,7 +40,8 @@ function isWebp(buffer: Buffer) {
   return (
     buffer.length >= 12 &&
     buffer.subarray(0, 4).toString("ascii") === "RIFF" &&
-    buffer.subarray(8, 12).toString("ascii") === "WEBP"
+    buffer.subarray(8, 12).toString("ascii") === "WEBP" &&
+    buffer.readUInt32LE(4) + 8 === buffer.length
   );
 }
 
@@ -110,4 +112,124 @@ export function validateOperationalDocumentUpload(
   }
 
   return null;
+}
+
+export function sanitizeOperationalImageMetadata(buffer: Buffer, mimeType: string): Buffer | null {
+  if (mimeType === "image/jpeg") return sanitizeJpeg(buffer);
+  if (mimeType === "image/png") return sanitizePng(buffer);
+  if (mimeType === "image/webp") return sanitizeWebp(buffer);
+  return null;
+}
+
+function sanitizeJpeg(buffer: Buffer) {
+  if (!startsWith(buffer, JPEG)) return null;
+
+  const parts: Buffer[] = [buffer.subarray(0, 2)];
+  let offset = 2;
+
+  while (offset < buffer.length) {
+    const markerStart = offset;
+    if (buffer[offset] !== 0xff) return null;
+    while (offset < buffer.length && buffer[offset] === 0xff) offset += 1;
+    if (offset >= buffer.length) return null;
+
+    const marker = buffer[offset];
+    offset += 1;
+
+    if (marker === 0xda) {
+      if (offset + 2 > buffer.length) return null;
+      const segmentLength = buffer.readUInt16BE(offset);
+      if (segmentLength < 2 || offset + segmentLength > buffer.length) return null;
+      const scanStart = offset + segmentLength;
+      const eoi = buffer.indexOf(JPEG_EOI, scanStart);
+      if (eoi < 0) return null;
+      parts.push(buffer.subarray(markerStart, eoi + JPEG_EOI.length));
+      return Buffer.concat(parts);
+    }
+
+    if (marker === 0xd9) {
+      parts.push(buffer.subarray(markerStart, offset));
+      return Buffer.concat(parts);
+    }
+
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      parts.push(buffer.subarray(markerStart, offset));
+      continue;
+    }
+
+    if (offset + 2 > buffer.length) return null;
+    const segmentLength = buffer.readUInt16BE(offset);
+    const segmentEnd = offset + segmentLength;
+    if (segmentLength < 2 || segmentEnd > buffer.length) return null;
+
+    const containsPersonalMetadata = marker === 0xe1 || marker === 0xed || marker === 0xfe;
+    if (!containsPersonalMetadata) parts.push(buffer.subarray(markerStart, segmentEnd));
+    offset = segmentEnd;
+  }
+
+  return null;
+}
+
+function sanitizePng(buffer: Buffer) {
+  if (!startsWith(buffer, PNG)) return null;
+
+  const parts: Buffer[] = [buffer.subarray(0, PNG.length)];
+  const strippedChunks = new Set(["tEXt", "zTXt", "iTXt", "eXIf"]);
+  let offset = PNG.length;
+  let sawIend = false;
+
+  while (offset < buffer.length) {
+    if (offset + 12 > buffer.length) return null;
+    const dataLength = buffer.readUInt32BE(offset);
+    const chunkEnd = offset + 12 + dataLength;
+    if (chunkEnd > buffer.length) return null;
+    const type = buffer.subarray(offset + 4, offset + 8).toString("ascii");
+
+    if (!strippedChunks.has(type)) parts.push(buffer.subarray(offset, chunkEnd));
+    offset = chunkEnd;
+
+    if (type === "IEND") {
+      sawIend = true;
+      break;
+    }
+  }
+
+  if (!sawIend || offset !== buffer.length) return null;
+  return Buffer.concat(parts);
+}
+
+function sanitizeWebp(buffer: Buffer) {
+  if (!isWebp(buffer)) return null;
+
+  const chunks: Buffer[] = [];
+  let offset = 12;
+
+  while (offset < buffer.length) {
+    if (offset + 8 > buffer.length) return null;
+    const type = buffer.subarray(offset, offset + 4).toString("ascii");
+    const dataLength = buffer.readUInt32LE(offset + 4);
+    const paddedLength = dataLength + (dataLength % 2);
+    const chunkEnd = offset + 8 + paddedLength;
+    if (chunkEnd > buffer.length) return null;
+
+    if (type !== "EXIF" && type !== "XMP ") {
+      if (type === "VP8X" && dataLength >= 1) {
+        const copy = Buffer.from(buffer.subarray(offset, chunkEnd));
+        copy[8] &= ~0x0c;
+        chunks.push(copy);
+      } else {
+        chunks.push(buffer.subarray(offset, chunkEnd));
+      }
+    }
+
+    offset = chunkEnd;
+  }
+
+  if (offset !== buffer.length) return null;
+  const body = Buffer.concat(chunks);
+  const header = Buffer.alloc(12);
+  header.write("RIFF", 0, "ascii");
+  header.writeUInt32LE(body.length + 4, 4);
+  header.write("WEBP", 8, "ascii");
+  return Buffer.concat([header, body]);
 }
