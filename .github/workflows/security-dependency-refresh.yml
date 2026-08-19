@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   refresh:
-    if: github.actor != 'github-actions[bot]'
+    if: github.actor != 'github-actions[bot]' && contains(github.event.head_commit.message, '[refresh-deps]')
     runs-on: ubuntu-latest
     steps:
       - name: Check out branch
@@ -23,28 +23,20 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install current dependencies
-        run: npm ci
-
-      - name: Patch framework dependencies
-        run: |
-          npm install --save-prod --save-exact next@15.5.23 prisma@6.19.3
-          npm install --save-dev --save-exact eslint-config-next@15.5.23
-          npm pkg set overrides.next.postcss=8.5.26
-          npm pkg set overrides.next.sharp=0.35.3
-          npm install
+      - name: Resolve locked dependencies
+        run: npm install
 
       - name: Show resulting production audit
         run: npm audit --omit=dev --audit-level=high || true
 
-      - name: Commit refreshed manifests
+      - name: Commit refreshed lockfile
         run: |
-          if git diff --quiet -- package.json package-lock.json; then
-            echo "Ingen manifestændringer."
+          if git diff --quiet -- package-lock.json; then
+            echo "Ingen lockfilændringer."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json package-lock.json
-          git commit -m "Opdatér Next og transitive sikkerhedspatches"
+          git add package-lock.json
+          git commit -m "Opdatér låste npm-sikkerhedsafhængigheder"
           git push origin HEAD:agent/predeploy-security-hardening
