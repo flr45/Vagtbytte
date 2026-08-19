@@ -9,11 +9,14 @@ import {
   resolveOperationalTargets
 } from "@/lib/operativ-portal-content";
 import {
-  ALLOWED_OPERATIONAL_DOCUMENT_TYPES,
   MAX_OPERATIONAL_DOCUMENT_BYTES,
   OPERATIONAL_DOCUMENT_DIRECTORY,
   safeOriginalFileName
 } from "@/lib/operativ-portal";
+import {
+  sanitizeOperationalImageMetadata,
+  validateOperationalDocumentUpload
+} from "@/lib/operativ-upload-validation";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -64,11 +67,22 @@ export async function POST(request: Request) {
   if (file.size > MAX_OPERATIONAL_DOCUMENT_BYTES) {
     return NextResponse.json({ error: "Filen må højst fylde 25 MB." }, { status: 413 });
   }
-  if (!ALLOWED_OPERATIONAL_DOCUMENT_TYPES.has(file.type)) {
+
+  const originalName = safeOriginalFileName(file.name);
+  const originalBuffer = Buffer.from(await file.arrayBuffer());
+  const validated = validateOperationalDocumentUpload(originalBuffer, file.type, originalName);
+  if (!validated) {
     return NextResponse.json(
-      { error: "Filtypen er ikke tilladt. Brug PDF, Word, Excel, JPG, PNG eller WebP." },
+      { error: "Filens faktiske indhold matcher ikke den angivne filtype. Brug en gyldig PDF-, Word-, Excel-, JPEG-, PNG- eller WebP-fil." },
       { status: 415 }
     );
+  }
+
+  const storedBuffer = validated.mimeType.startsWith("image/")
+    ? sanitizeOperationalImageMetadata(originalBuffer, validated.mimeType)
+    : originalBuffer;
+  if (!storedBuffer) {
+    return NextResponse.json({ error: "Filen er beskadiget eller kan ikke valideres sikkert." }, { status: 415 });
   }
 
   const targets = await resolveOperationalTargets({ vehicleId, placeId, itemId });
@@ -77,13 +91,11 @@ export async function POST(request: Request) {
   }
 
   const documentId = randomUUID();
-  const originalName = safeOriginalFileName(file.name);
-  const extension = path.extname(originalName).toLowerCase().slice(0, 12);
-  const storageName = `${randomUUID()}${extension}`;
+  const storageName = `${randomUUID()}${validated.extension}`;
   const filePath = path.join(OPERATIONAL_DOCUMENT_DIRECTORY, storageName);
 
   await mkdir(OPERATIONAL_DOCUMENT_DIRECTORY, { recursive: true });
-  await writeFile(filePath, Buffer.from(await file.arrayBuffer()), { flag: "wx" });
+  await writeFile(filePath, storedBuffer, { flag: "wx", mode: 0o600 });
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -93,7 +105,7 @@ export async function POST(request: Request) {
            original_name, storage_name, mime_type, size_bytes)
         VALUES
           (${documentId}, ${targets.vehicleId}, ${targets.placeId}, ${targets.itemId},
-           ${title}, ${description}, ${category}, ${originalName}, ${storageName}, ${file.type}, ${file.size})
+           ${title}, ${description}, ${category}, ${originalName}, ${storageName}, ${validated.mimeType}, ${storedBuffer.length})
       `;
       await tx.auditLog.create({
         data: {
