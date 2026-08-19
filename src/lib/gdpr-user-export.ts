@@ -276,14 +276,12 @@ export async function buildGdprUserExport(
     reviewNotice:
       "Dette er et internt hjælpeudtræk. Kommentarer, notifikationer og sagskontekst kan indeholde oplysninger om andre personer og skal vurderes før udlevering.",
     excludedSecuritySecrets: [
-      "passwordHash",
-      "session token hashes",
-      "password-reset token hashes",
-      "MFA secret",
-      "MFA recovery-code hashes",
-      "MFA challenge secrets/tokens",
-      "push p256dh/auth keys",
-      "full push endpoint"
+      "adgangskode-credentials",
+      "autentifikations- og nulstillingstokens",
+      "MFA-hemmeligheder og recovery-credentials",
+      "kortlivede MFA-challenge-credentials",
+      "push-kryptografinøgler",
+      "fuld privat push-endpoint-adresse"
     ],
     user: {
       ...user,
