@@ -1,6 +1,8 @@
-const OPERATIONAL_CACHE = "sbr-operativ-v0.10";
-const STATIC_CACHE = "sbr-static-v0.10";
+const OPERATIONAL_CACHE = "sbr-operativ-v0.11";
+const STATIC_CACHE = "sbr-static-v0.11";
 const OFFLINE_FALLBACK = "/offline-operativ.html";
+const OPERATIONAL_CACHE_META_PATH = "/__sbr-operativ-cache-meta__";
+const OPERATIONAL_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const STATIC_ASSETS = [
   OFFLINE_FALLBACK,
   "/operativ-manifest.webmanifest",
@@ -66,35 +68,42 @@ self.addEventListener("fetch", (event) => {
 });
 
 async function networkFirstOperational(request) {
-  const cache = await caches.open(OPERATIONAL_CACHE);
-  const key = normalizedCacheRequest(request.url);
+  const cache = await getUsableOperationalCache();
   try {
     const response = await fetch(request);
     if (isAuthenticationFailure(response)) {
       await clearOperationalCache(false);
       return response;
     }
-    if (response.ok && !response.redirected) {
-      await cache.put(key, response.clone());
+    if (cache && response.ok && !response.redirected) {
+      await cache.put(normalizedCacheRequest(request.url), response.clone());
     }
     return response;
   } catch {
-    return (await cache.match(key, { ignoreVary: true })) || (await caches.match(OFFLINE_FALLBACK));
+    if (cache) {
+      const cached = await cache.match(normalizedCacheRequest(request.url), { ignoreVary: true });
+      if (cached) return cached;
+    }
+    return (await caches.match(OFFLINE_FALLBACK)) || new Response("Offline", { status: 503 });
   }
 }
 
 async function cacheFirstOperationalAsset(request) {
-  const cache = await caches.open(OPERATIONAL_CACHE);
-  const key = normalizedCacheRequest(request.url);
-  const cached = await cache.match(key, { ignoreVary: true });
-  if (cached) return cached;
+  const cache = await getUsableOperationalCache();
+  if (cache) {
+    const cached = await cache.match(normalizedCacheRequest(request.url), { ignoreVary: true });
+    if (cached) return cached;
+  }
+
   try {
-    const response = await fetch(request);
+    const response = await fetch(request, { cache: "no-store" });
     if (isAuthenticationFailure(response)) {
       await clearOperationalCache(false);
       return response;
     }
-    if (response.ok && !response.redirected) await cache.put(key, response.clone());
+    if (cache && response.ok && !response.redirected) {
+      await cache.put(normalizedCacheRequest(request.url), response.clone());
+    }
     return response;
   } catch {
     return new Response("Offline", { status: 503, statusText: "Offline" });
@@ -126,6 +135,10 @@ async function syncOperationalOffline() {
     const urls = Array.isArray(payload.urls)
       ? payload.urls.filter((value) => typeof value === "string" && (isOperationalPath(value) || value.startsWith("/api/admin/operativ-portal/billeder/")))
       : [];
+
+    // Offline-data er opt-in. En ny synkronisering erstatter den tidligere cache,
+    // så gamle eller fjernede ressourcer ikke bliver liggende på enheden.
+    await caches.delete(OPERATIONAL_CACHE);
     const cache = await caches.open(OPERATIONAL_CACHE);
     let completed = 0;
 
@@ -150,13 +163,64 @@ async function syncOperationalOffline() {
       await notifyClients({ type: "OPERATIONAL_SYNC_PROGRESS", current: completed, total: urls.length });
     }
 
-    await notifyClients({ type: "OPERATIONAL_SYNC_DONE", total: urls.length, counts: payload.counts || null });
+    await markOperationalCacheEnabled(cache);
+    await notifyClients({
+      type: "OPERATIONAL_SYNC_DONE",
+      total: urls.length,
+      counts: payload.counts || null,
+      expiresInMs: OPERATIONAL_CACHE_MAX_AGE_MS
+    });
   } catch (error) {
+    // Delvist synkroniserede data må ikke efterlades som en skjult offline-cache.
+    await caches.delete(OPERATIONAL_CACHE);
     await notifyClients({
       type: "OPERATIONAL_SYNC_ERROR",
       message: error instanceof Error ? error.message : "Offline-synkronisering mislykkedes."
     });
   }
+}
+
+async function markOperationalCacheEnabled(cache) {
+  const key = operationalCacheMetaRequest();
+  const payload = JSON.stringify({ enabled: true, syncedAt: Date.now() });
+  await cache.put(
+    key,
+    new Response(payload, {
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" }
+    })
+  );
+}
+
+async function getUsableOperationalCache() {
+  const cache = await caches.open(OPERATIONAL_CACHE);
+  const meta = await cache.match(operationalCacheMetaRequest());
+  if (!meta) return null;
+
+  try {
+    const payload = await meta.json();
+    const syncedAt = Number(payload && payload.syncedAt);
+    const enabled = Boolean(payload && payload.enabled);
+    if (!enabled || !Number.isFinite(syncedAt)) {
+      await clearOperationalCache(false);
+      return null;
+    }
+    if (Date.now() - syncedAt > OPERATIONAL_CACHE_MAX_AGE_MS) {
+      await clearOperationalCache(false);
+      await notifyClients({ type: "OPERATIONAL_CACHE_EXPIRED" });
+      return null;
+    }
+    return cache;
+  } catch {
+    await clearOperationalCache(false);
+    return null;
+  }
+}
+
+function operationalCacheMetaRequest() {
+  return new Request(new URL(OPERATIONAL_CACHE_META_PATH, self.location.origin).href, {
+    method: "GET",
+    credentials: "same-origin"
+  });
 }
 
 async function clearOperationalCache(notify) {
