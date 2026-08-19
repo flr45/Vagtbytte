@@ -1,6 +1,6 @@
 {
-  "name": "SBR Fire App",
-  "short_name": "SBR Fire",
+  "name": "SBR Portal – Operativ",
+  "short_name": "SBR Operativ",
   "description": "Operativ køretøjs-, rum- og udstyrsguide for Slagelse Brand og Redning",
   "id": "/admin/operativ-portal/",
   "start_url": "/admin/operativ-portal/",
