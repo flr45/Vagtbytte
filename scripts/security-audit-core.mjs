@@ -1,8 +1,13 @@
-export const ALLOWED_PRODUCTION_AUDIT_ADVISORIES = new Set([
-  "GHSA-ggr8-5vv4-36mx"
+export const ALLOWED_PRISMA_CLI_ADVISORY = "GHSA-GGR8-5VV4-36MX";
+
+export const ALLOWED_NEXT_POSTCSS_ADVISORIES = new Set([
+  "GHSA-QX2V-QP2M-JG93",
+  "GHSA-6G55-P6WH-862Q",
+  "GHSA-FXQJ-RQCC-2CMP",
+  "GHSA-R28C-9Q8G-F849"
 ]);
 
-export const ALLOWED_PRODUCTION_AUDIT_PACKAGES = new Set([
+const ALLOWED_PRISMA_CHAIN = new Set([
   "deepmerge-ts",
   "@prisma/config",
   "prisma"
@@ -13,6 +18,31 @@ function advisoryId(entry) {
   const text = `${entry.url ?? ""} ${entry.title ?? ""} ${entry.source ?? ""}`;
   const match = text.match(/GHSA-[0-9a-z-]+/i);
   return match?.[0]?.toUpperCase() ?? null;
+}
+
+function isAllowedPrismaCliFinding(packageName, vulnerability, directAdvisories, viaPackages) {
+  if (!ALLOWED_PRISMA_CHAIN.has(packageName)) return false;
+  if (viaPackages.some((name) => !ALLOWED_PRISMA_CHAIN.has(name))) return false;
+
+  if (directAdvisories.length > 0) {
+    return directAdvisories.every((entry) => advisoryId(entry) === ALLOWED_PRISMA_CLI_ADVISORY);
+  }
+
+  return viaPackages.length > 0;
+}
+
+function isAllowedNextBuildPostcssFinding(packageName, vulnerability, directAdvisories, viaPackages) {
+  if (packageName !== "postcss" || viaPackages.length > 0 || directAdvisories.length === 0) return false;
+
+  const nodes = Array.isArray(vulnerability?.nodes) ? vulnerability.nodes : [];
+  if (nodes.length === 0 || nodes.some((node) => node !== "node_modules/next/node_modules/postcss")) {
+    return false;
+  }
+
+  return directAdvisories.every((entry) => {
+    const id = advisoryId(entry);
+    return Boolean(id && ALLOWED_NEXT_POSTCSS_ADVISORIES.has(id));
+  });
 }
 
 export function blockingProductionAuditFindings(report) {
@@ -30,20 +60,15 @@ export function blockingProductionAuditFindings(report) {
     const directAdvisories = via.filter((entry) => entry && typeof entry === "object");
     const viaPackages = via.filter((entry) => typeof entry === "string");
 
-    const packageAllowed = ALLOWED_PRODUCTION_AUDIT_PACKAGES.has(packageName);
-    const advisoriesAllowed = directAdvisories.every((entry) => {
-      const id = advisoryId(entry);
-      return Boolean(id && ALLOWED_PRODUCTION_AUDIT_ADVISORIES.has(id));
-    });
-    const viaPackagesAllowed = viaPackages.every((name) => ALLOWED_PRODUCTION_AUDIT_PACKAGES.has(name));
-    const hasKnownChain =
-      directAdvisories.some((entry) => ALLOWED_PRODUCTION_AUDIT_ADVISORIES.has(advisoryId(entry))) ||
-      viaPackages.length > 0;
+    const allowed =
+      isAllowedPrismaCliFinding(packageName, vulnerability, directAdvisories, viaPackages) ||
+      isAllowedNextBuildPostcssFinding(packageName, vulnerability, directAdvisories, viaPackages);
 
-    if (!packageAllowed || !advisoriesAllowed || !viaPackagesAllowed || !hasKnownChain) {
+    if (!allowed) {
       blocking.push({
         package: packageName,
         severity,
+        nodes: Array.isArray(vulnerability?.nodes) ? vulnerability.nodes : [],
         via: via.map((entry) =>
           typeof entry === "string"
             ? entry
