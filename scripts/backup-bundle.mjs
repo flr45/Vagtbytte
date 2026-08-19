@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { validateOperationalBackupFiles } from "./operational-backup.mjs";
 
 const BUNDLE_MAGIC = Buffer.from("SBRBND2\0", "ascii");
 const LENGTH_BYTES = 4;
@@ -36,6 +37,7 @@ function normalizeFiles(files) {
 
 export function encodeBackupBundle(data, files = []) {
   const normalized = normalizeFiles(files);
+  validateOperationalBackupFiles(data?.tables ?? {}, normalized);
   const manifest = {
     ...data,
     files: normalized.map(({ kind, storageName, sizeBytes, sha256: digest }) => ({
@@ -124,5 +126,6 @@ export function decodeBackupBundle(buffer) {
     throw new Error("Backupbundlen indeholder uventede ekstra bytes.");
   }
 
+  validateOperationalBackupFiles(parsed.tables ?? {}, files);
   return { parsed, files, bundled: true };
 }
