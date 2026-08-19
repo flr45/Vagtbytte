@@ -1,17 +1,4 @@
-export type GdprExportPrisma = {
-  user: { findUnique(args: unknown): Promise<any> };
-  session: { findMany(args: unknown): Promise<any[]> };
-  mfaChallenge: { findMany(args: unknown): Promise<any[]> };
-  passwordResetToken: { findMany(args: unknown): Promise<any[]> };
-  loginAttempt: { findMany(args: unknown): Promise<any[]> };
-  availability: { findMany(args: unknown): Promise<any[]> };
-  shiftTransfer: { findMany(args: unknown): Promise<any[]> };
-  returnRequest: { findMany(args: unknown): Promise<any[]> };
-  notification: { findMany(args: unknown): Promise<any[]> };
-  pushSubscription: { findMany(args: unknown): Promise<any[]> };
-  auditLog: { findMany(args: unknown): Promise<any[]> };
-  $queryRawUnsafe<T = unknown>(query: string, ...values: unknown[]): Promise<T>;
-};
+export type GdprExportPrisma = any;
 
 function safeFileComponent(value: string) {
   const normalized = value.normalize("NFKD").replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
@@ -292,24 +279,24 @@ export async function buildGdprUserExport(
       hasOperationalPortalAccess: operationalAccess.length > 0
     },
     securityHistory: {
-      sessions: sessions.map((entry) => ({
+      sessions: sessions.map((entry: any) => ({
         createdAt: iso(entry.createdAt),
         lastSeenAt: iso(entry.lastSeenAt),
         expiresAt: iso(entry.expiresAt)
       })),
-      mfaChallenges: mfaChallenges.map((entry) => ({
+      mfaChallenges: mfaChallenges.map((entry: any) => ({
         createdAt: iso(entry.createdAt),
         expiresAt: iso(entry.expiresAt),
         attemptCount: entry.attemptCount
       })),
-      passwordResetRequests: resetTokens.map((entry) => ({
+      passwordResetRequests: resetTokens.map((entry: any) => ({
         createdAt: iso(entry.createdAt),
         expiresAt: iso(entry.expiresAt),
         usedAt: iso(entry.usedAt),
         requestedIp: entry.requestedIp
       })),
-      loginAttempts: loginAttempts.map((entry) => ({ ...entry, createdAt: iso(entry.createdAt) })),
-      pushDevices: pushSubscriptions.map((entry) => ({
+      loginAttempts: loginAttempts.map((entry: any) => ({ ...entry, createdAt: iso(entry.createdAt) })),
+      pushDevices: pushSubscriptions.map((entry: any) => ({
         endpointOrigin: endpointOrigin(entry.endpoint),
         userAgent: entry.userAgent,
         deviceName: entry.deviceName,
@@ -328,7 +315,7 @@ export async function buildGdprUserExport(
       }))
     },
     workAndShiftData: {
-      availabilities: availabilities.map((entry) => ({
+      availabilities: availabilities.map((entry: any) => ({
         ...entry,
         availableFrom: iso(entry.availableFrom),
         availableUntil: iso(entry.availableUntil),
@@ -341,11 +328,11 @@ export async function buildGdprUserExport(
         createdAt: iso(entry.createdAt),
         updatedAt: iso(entry.updatedAt)
       })),
-      shiftTransfers: transfers.map((entry) => exportTransfer(entry, userId)),
-      returnRequests: returnRequests.map((entry) => exportReturnRequest(entry, userId))
+      shiftTransfers: transfers.map((entry: any) => exportTransfer(entry, userId)),
+      returnRequests: returnRequests.map((entry: any) => exportReturnRequest(entry, userId))
     },
     communications: {
-      notifications: notifications.map((entry) => ({
+      notifications: notifications.map((entry: any) => ({
         ...entry,
         scheduledFor: iso(entry.scheduledFor),
         publishedAt: iso(entry.publishedAt),
@@ -358,11 +345,11 @@ export async function buildGdprUserExport(
       }))
     },
     operationalPortal: {
-      accessGrantedAt: operationalAccess.map((entry) => iso(entry.createdAt)),
-      favorites: operationalFavorites.map((entry) => ({ ...entry, createdAt: iso(entry.createdAt) })),
-      recent: operationalRecent.map((entry) => ({ ...entry, lastViewedAt: iso(entry.lastViewedAt) }))
+      accessGrantedAt: operationalAccess.map((entry: any) => iso(entry.createdAt)),
+      favorites: operationalFavorites.map((entry: any) => ({ ...entry, createdAt: iso(entry.createdAt) })),
+      recent: operationalRecent.map((entry: any) => ({ ...entry, lastViewedAt: iso(entry.lastViewedAt) }))
     },
-    auditHistory: audits.map((entry) => ({
+    auditHistory: audits.map((entry: any) => ({
       subjectWasActor: entry.actorUserId === userId,
       subjectWasTarget: entry.targetUserId === userId,
       actorRole: entry.actorRole,
