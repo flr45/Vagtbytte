@@ -1,0 +1,48 @@
+name: One-time security dependency refresh
+
+on:
+  push:
+    branches: ["agent/predeploy-security-hardening"]
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/predeploy-security-hardening
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install current dependencies
+        run: npm ci
+
+      - name: Patch framework and move Prisma CLI to build-only dependencies
+        run: |
+          npm install --save-exact next@15.5.22
+          npm install --save-dev --save-exact eslint-config-next@15.5.22 prisma@6.19.3
+          npm audit fix --omit=dev || true
+
+      - name: Show resulting production audit
+        run: npm audit --omit=dev --audit-level=high || true
+
+      - name: Commit refreshed manifests
+        run: |
+          if git diff --quiet -- package.json package-lock.json; then
+            echo "Ingen manifestændringer."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "Opdatér sikkerhedspatches i npm-afhængigheder"
+          git push origin HEAD:agent/predeploy-security-hardening
