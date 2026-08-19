@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { UserRole } from "@prisma/client";
-import { ManualBackupForm, RestoreBackupForm } from "@/components/BackupControls";
+import { ManualBackupForm, RestoreBackupForm, StoredBackupRestoreButton } from "@/components/BackupControls";
 import { TopBar } from "@/components/TopBar";
 import { formatDateTime } from "@/components/TransferSummary";
 import { requireRole } from "@/lib/auth";
@@ -42,6 +42,9 @@ export default async function BackupsPage() {
           <p className="mt-2 text-sm font-semibold text-zinc-600">
             Der oprettes automatisk en backup hver nat omkring kl. 03.00. De 30 seneste automatiske backups bevares.
           </p>
+          <p className="mt-2 text-sm font-semibold text-zinc-600">
+            Nye v2-backups samler databasen og Operativ Portals billeder/dokumenter i én krypteret pakke med SHA-256-integritetskontrol pr. fil.
+          </p>
 
           <div
             className={`mt-4 rounded-lg border p-4 ${
@@ -66,7 +69,7 @@ export default async function BackupsPage() {
             <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4">
               <p className="font-black text-amber-950">{legacyCount} ældre ukrypteret backup{legacyCount === 1 ? "" : "s"}</p>
               <p className="mt-1 text-sm font-semibold text-amber-900">
-                De kan fortsat gendannes, men bør slettes fra alle lagringssteder, når den første krypterede backup er kontrolleret og gemt sikkert.
+                De kan fortsat gendannes, men bør slettes fra alle lagringssteder, når den første krypterede v2-backup er kontrolleret og gemt sikkert.
               </p>
             </div>
           ) : null}
@@ -92,12 +95,15 @@ export default async function BackupsPage() {
         <section className="overflow-hidden rounded-lg border border-brand-line bg-white">
           <div className="border-b border-brand-line p-4">
             <h2 className="text-xl font-black">Seneste backups</h2>
+            <p className="mt-1 text-sm font-semibold text-zinc-600">
+              Direkte gendannelse læser filen fra backupmappen på serveren og undgår web-uploadgrænsen.
+            </p>
           </div>
           {backups.length === 0 ? (
             <p className="p-5 text-sm font-semibold text-zinc-600">Der er ikke oprettet backups endnu.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[860px] border-collapse text-left text-sm">
+              <table className="w-full min-w-[980px] border-collapse text-left text-sm">
                 <thead className="bg-zinc-50 text-xs uppercase text-zinc-600">
                   <tr>
                     <th className="px-4 py-3">Tidspunkt</th>
@@ -131,9 +137,12 @@ export default async function BackupsPage() {
                         <td className="max-w-xs break-all px-4 py-3 text-xs">{backup.fileName}</td>
                         <td className="px-4 py-3">
                           {backup.status === "READY" ? (
-                            <a className="app-button-secondary min-h-10 px-3 text-sm" href={`/api/admin/backups/${backup.id}`}>
-                              Hent
-                            </a>
+                            <div className="flex flex-wrap gap-2">
+                              <a className="app-button-secondary min-h-10 px-3 text-sm" href={`/api/admin/backups/${backup.id}`}>
+                                Hent
+                              </a>
+                              <StoredBackupRestoreButton backupId={backup.id} />
+                            </div>
                           ) : "—"}
                         </td>
                       </tr>
