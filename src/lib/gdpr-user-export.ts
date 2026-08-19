@@ -241,15 +241,15 @@ export async function buildGdprUserExport(
       orderBy: { createdAt: "desc" },
       select: { actorRole: true, action: true, description: true, createdAt: true, actorUserId: true, targetUserId: true }
     }),
-    prisma.$queryRawUnsafe<any[]>(
+    prisma.$queryRawUnsafe(
       'SELECT created_at AS "createdAt" FROM operational_portal_user_access WHERE user_id = $1 ORDER BY created_at DESC',
       userId
     ),
-    prisma.$queryRawUnsafe<any[]>(
+    prisma.$queryRawUnsafe(
       'SELECT target_type AS "targetType", target_id AS "targetId", created_at AS "createdAt" FROM operational_favorite WHERE user_id = $1 ORDER BY created_at DESC',
       userId
     ),
-    prisma.$queryRawUnsafe<any[]>(
+    prisma.$queryRawUnsafe(
       'SELECT target_type AS "targetType", target_id AS "targetId", view_count AS "viewCount", last_viewed_at AS "lastViewedAt" FROM operational_recent WHERE user_id = $1 ORDER BY last_viewed_at DESC',
       userId
     )
