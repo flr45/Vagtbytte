@@ -26,10 +26,10 @@ jobs:
       - name: Install current dependencies
         run: npm ci
 
-      - name: Patch framework and move Prisma CLI to build-only dependencies
+      - name: Patch framework dependencies
         run: |
           npm install --save-exact next@15.5.22
-          npm install --save-dev --save-exact eslint-config-next@15.5.22 prisma@6.19.3
+          npm install --save-dev --save-exact eslint-config-next@15.5.22
           npm audit fix --omit=dev || true
 
       - name: Show resulting production audit
