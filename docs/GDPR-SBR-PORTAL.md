@@ -14,6 +14,7 @@ SBR Portal/Vagtbytte behandler blandt andet:
 - stationstilknytning, roller og adgangsrettigheder
 - vagttilgængelighed, vagtbytter, retursager og kommentarer
 - login- og sikkerhedsdata, herunder IP-adresse, loginforsøg, sessioner og auditlogs
+- MFA-data: krypteret TOTP-secret, hashed recovery-koder og kortlivede MFA-challenges
 - push-enheder og push-leveringsoplysninger
 - alarmdata, herunder afsendernummer og rå alarmtekst
 - brugerens favoritter og senest viste elementer i Operativ Portal
@@ -35,16 +36,41 @@ Standardfristerne i systemet er konfigurerbare og skal godkendes af den dataansv
 | Almindelige notifikationer | 180 dage |
 | Auditlogs | 365 dage |
 | Operativ Portal “senest set” | 30 dage |
+| Restore-sikre slettefingeraftryk | 365 dage |
 | Udløbne sessioner | slettes automatisk |
+| Udløbne MFA-challenges | slettes automatisk |
 | Udløbne password-reset-tokens | slettes automatisk |
 
-Fristerne er tekniske defaults, ikke en juridisk konklusion. Hvis en anden frist vælges, skal formålet og nødvendigheden dokumenteres.
+Fristerne er tekniske defaults, ikke en juridisk konklusion. Hvis en anden frist vælges, skal formålet og nødvendigheden dokumenteres. Slettefingeraftryk skal som minimum bevares længere end den ældste backup, der lovligt kan gendannes.
 
-### Brugersletning
+### Brugersletning og backup-restore
 
 Når en brandmandsbruger slettes, skal systemet ikke blot fjerne login-kontoen. Historiske personhenførbare snapshots i vagtbytter og retursager anonymiseres, relaterede notifikationer fjernes, direkte loginhistorik for den pågældende slettes, og auditbeskrivelser knyttet til brugeren neutraliseres.
 
+Ved brugersletning opretter databasen desuden et minimalt slettefingeraftryk baseret på en envejs-fingerprint af det interne bruger-id. Fingeraftrykket indeholder ikke navn, mail eller medarbejdernummer og ligger uden for backupindholdet. Hvis en administreret backup senere forsøger at gendanne den tidligere slettede bruger, anvendes fingeraftrykket automatisk ved afslutningen af restore-transaktionen, og de gendannede personhenførbare oplysninger anonymiseres/slettes igen.
+
+Restore-flowet markerer den kontrollerede tømning af databasen som restore-mode, så eksisterende aktive brugere ikke fejlagtigt registreres som slettede under selve gendannelsen.
+
+Denne beskyttelse forudsætter, at slettefingeraftrykket stadig findes. Derfor skal retention for slettefingeraftryk altid være længere end retention for administrerede backups. Ældre, manuelt kopierede eller eksterne backups uden for den administrerede retention skal håndteres organisatorisk og må ikke gendannes ukontrolleret.
+
 Historiske hændelser kan bevares i anonymiseret form, når det fortsat er nødvendigt for systemets funktion, dokumentation eller statistik.
+
+### Multifaktorautentifikation
+
+SBR Portal har TOTP-baseret MFA, kompatibel med almindelige authenticator-apps. Som standard håndhæves MFA for:
+
+- administratorer
+- Vagtcentral-brugere
+- brugere med administratoradgang
+- brugere med adgang til Operativ Portal
+
+Håndhævelsen kan sættes til alle brugere via `MFA_ENFORCEMENT_MODE=all`. `off` er kun tiltænkt en dokumenteret nødprocedure.
+
+MFA er bygget uden ekstern QR-/provisioning-tjeneste. Opsætningen viser en manuel TOTP-nøgle direkte i den autentificerede opsætningssession. TOTP-secret lagres krypteret med AES-256-GCM. En særskilt MFA-krypteringsnøgle kan konfigureres; ellers afledes en domæneadskilt nøgle fra `AUTH_SECRET`.
+
+Der genereres 10 recovery-koder. De vises kun under opsætningen og gemmes derefter kun som domæneadskilte HMAC-hashes. Hver recovery-kode kan kun bruges én gang. TOTP-koder har replay-beskyttelse via senest anvendte tidsstep. En MFA-challenge udløber efter 10 minutter og låses efter fem mislykkede MFA-forsøg.
+
+Administrator kan nulstille MFA for en bruger ved dokumenteret lockout. En nulstilling fjerner secret/recovery-koder, lukker aktive sessioner og auditlogges. Brugeren bliver derefter tvunget gennem ny MFA-opsætning ved næste login, hvis MFA-politikken gælder for kontoen.
 
 ### Offline-data
 
@@ -61,16 +87,20 @@ Offline-cachen:
 
 ## Sikkerhed
 
-Følgende er allerede en del af eller skal være en del af baselinen:
+Følgende er en del af den tekniske baseline:
 
 - individuelle brugere og rollebaseret adgang
 - særskilt adgangsgrant til Operativ Portal
 - password hashing
+- MFA for privilegerede og Operativ Portal-brugere som standard
+- krypterede TOTP-secrets og hashed engangs-recovery-koder
 - HttpOnly-session-cookie, SameSite og Secure i produktion
-- login-rate-limit og audit
+- kortlivet HttpOnly MFA-challenge-cookie
+- login-rate-limit, MFA-forsøgsgrænse og audit
 - TLS/HTTPS og HSTS i produktion
 - `no-store` på beskyttede operative sider/dokumenter, bortset fra den eksplicitte og tidsbegrænsede offline-funktion
 - krypterede backups med begrænset retention
+- restore-sikker slettejournal, der ikke er en del af de administrerede backupfiler
 - ingen fuld rå alarmtekst i push-notifikationer på låseskærmen
 
 ## Krav før systemet kan betegnes som organisatorisk GDPR-klargjort
@@ -86,17 +116,11 @@ Den dataansvarlige skal udfylde og godkende følgende:
 7. **Risikovurdering og DPIA-screening** – systemets internetadgang, medarbejderdata, rå alarmtekst, operative filer og mobil/offline-funktion skal indgå i en konkret risikovurdering. Der skal gennemføres DPIA, hvis behandlingen sandsynligvis medfører høj risiko.
 8. **Rettighedsprocedure** – procedure for indsigt, rettelse, sletning/anonymisering, begrænsning og øvrige relevante registreredes rettigheder.
 9. **Sikkerhedsbrud** – intern procedure for registrering, risikovurdering, eskalering og eventuel anmeldelse inden for GDPR-fristen.
-10. **Periodisk kontrol** – test af adgangsrettigheder, slettejobs, backup/restore, logs, sikkerhedsheaders og offline-cache.
+10. **Periodisk kontrol** – test af adgangsrettigheder, MFA, slettejobs, backup/restore, logs, sikkerhedsheaders og offline-cache.
 
 ## Åbne tekniske højprioriteter
 
-### P0 – MFA
-
-Internetadgang til SBR Portal skal beskyttes med multifaktorautentifikation eller en dokumenteret tilsvarende sikkerhedsforanstaltning, når risikovurderingen viser det nødvendigt. Administratorer skal prioriteres først, men målet er MFA for alle brugere med adgang til beskyttelsesværdigt operativt/personhenførbart indhold.
-
-### P0 – sletning efter backup-restore
-
-En backup kan indeholde oplysninger, der er blevet slettet efter backup-tidspunktet. Restore-flowet skal derfor have en persistent, dataminimeret slette-/anonymiseringsjournal, som ikke overskrives af restore, og som genanvender relevante sletninger/anonymiseringer umiddelbart efter en gendannelse.
+De tidligere P0-punkter MFA og restore-sikker brugersletning er implementeret. De væsentligste resterende tekniske punkter er:
 
 ### P1 – metadata i billeder og dokumenter
 
@@ -118,6 +142,10 @@ Admin bør have et værktøj, der kan samle de personoplysninger, som knytter si
 
 Availability, ShiftTransfer og ReturnRequest indeholder arbejdsrelateret historik. Der skal fastsættes en dokumenteret retention for aktive og afsluttede poster. Først derefter bør den automatiske slette/anonymiseringsmotor udvides til disse tabeller.
 
+### P1 – recovery- og nødprocedure for systemkonti
+
+Der skal dokumenteres en organisatorisk nødprocedure for MFA-lockout på de primære ADMIN/VC-systemkonti, herunder identitetskontrol, hvem der må gennemføre reset, og hvordan handlingen efterkontrolleres. Recovery-koder er den primære tekniske fallback.
+
 ## Kontrol efter deployment
 
 Efter hver ændring i databeskyttelsesfunktionerne skal følgende kontrolleres:
@@ -125,12 +153,16 @@ Efter hver ændring i databeskyttelsesfunktionerne skal følgende kontrolleres:
 - slettejobbet kører og rapporterer forventede tal
 - poster ældre end fristerne er faktisk væk fra databasen
 - slettede brugere kan ikke genskabes som personhenførbare gennem normal brugerflade
+- en gammel administreret backup genindfører ikke en tidligere slettet bruger efter restore
+- slettefingeraftrykkenes retention er længere end backupretentionen
 - gamle offline-caches kan ikke læses efter udløb
 - logout/login-fejl rydder lokal operativ cache
 - backups er krypterede, kan gendannes og følger retention
-- en restore genindfører ikke data, der retteligt er slettet/anonymiseret
 - adgang til Operativ Portal afvises uden korrekt grant
-- alle internetvendte privilegerede konti er beskyttet med MFA, når MFA-fasen er gennemført
+- privilegerede og Operativ Portal-brugere bliver tvunget gennem MFA
+- en brugt TOTP-kode kan ikke genbruges i samme tidsstep
+- en recovery-kode forsvinder efter første brug
+- admin-MFA-reset lukker eksisterende sessioner og kræver ny MFA-opsætning
 
 ## Referencer
 
