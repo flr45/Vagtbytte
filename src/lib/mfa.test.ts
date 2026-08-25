@@ -70,15 +70,15 @@ describe("MFA-politik", () => {
     hasOperationalPortalAccess: false
   };
 
-  it("kræver MFA for admin, VC og Operativ Portal som standard", () => {
+  it("kræver kun MFA for ADMIN og brugere med administratoradgang som standard", () => {
     expect(isMfaRequiredForUser({ ...firefighter, role: UserRole.ADMIN }, {})).toBe(true);
-    expect(isMfaRequiredForUser({ ...firefighter, role: UserRole.VC }, {})).toBe(true);
     expect(isMfaRequiredForUser({ ...firefighter, hasAdminAccess: true }, {})).toBe(true);
-    expect(isMfaRequiredForUser({ ...firefighter, hasOperationalPortalAccess: true }, {})).toBe(true);
+    expect(isMfaRequiredForUser({ ...firefighter, role: UserRole.VC }, {})).toBe(false);
+    expect(isMfaRequiredForUser({ ...firefighter, hasOperationalPortalAccess: true }, {})).toBe(false);
     expect(isMfaRequiredForUser(firefighter, {})).toBe(false);
   });
 
-  it("kan håndhæves for alle via miljøkonfiguration", () => {
+  it("kan håndhæves for alle eller slås fra via miljøkonfiguration", () => {
     expect(isMfaRequiredForUser(firefighter, { MFA_ENFORCEMENT_MODE: "all" })).toBe(true);
     expect(isMfaRequiredForUser({ ...firefighter, role: UserRole.ADMIN }, { MFA_ENFORCEMENT_MODE: "off" })).toBe(false);
   });
