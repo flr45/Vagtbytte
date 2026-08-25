@@ -173,16 +173,11 @@ export function isMfaRequiredForUser(
   },
   env: NodeJS.ProcessEnv = process.env
 ) {
-  const mode = String(env.MFA_ENFORCEMENT_MODE ?? "privileged").trim().toLowerCase();
+  const mode = String(env.MFA_ENFORCEMENT_MODE ?? "admin").trim().toLowerCase();
   if (mode === "off") return false;
   if (mode === "all") return true;
 
-  return (
-    user.role === "ADMIN" ||
-    user.role === "VC" ||
-    Boolean(user.hasAdminAccess) ||
-    Boolean(user.hasOperationalPortalAccess)
-  );
+  return user.role === "ADMIN" || Boolean(user.hasAdminAccess);
 }
 
 function base32Encode(input: Buffer) {
